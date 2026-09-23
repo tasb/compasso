@@ -284,22 +284,40 @@ compasso::done          test guide section attached; human closes
 
 ### 5.2 Story flow
 
+`/compasso:story <iid>` (`skills/story/SKILL.md`). Run files (story, logs, findings, MR body) live in `.compasso/runs/<iid>/`, which is gitignored.
+
 ```
-pull story → open hard dependencies? → stop, name the next unblocked story
-→ move to In Progress, worktree + branch story/<iid>-<slug>
-→ tester: failing tests (unit; e2e when the story's tests include it) → record test hashes
-→ builder: go green
-→ verify.sh: tests, lint, typecheck, build, the story's Verify commands, e2e (gate) + coverage.sh (warning)
-→ review loop (max 3 rounds):
-     reviewer and security run in parallel on the diff
-     findings: blocker | major | minor
-     builder fixes blocker + major → verify.sh → re-review changed hunks
-     only security may resolve a security finding
-     minors → new tracker items, not riders
-→ shipper: commits, MR "Closes #<iid>", MR body = summary + how to test
-→ approval: human (default) | approver agent (if enabled and no open security finding)
-→ learnings captured (max 2 per story)
+gitlab.sh story → stop if not an open task, if a Depends on / Blocked by item is open
+                  (naming the blocker's assignee), if Acceptance or Verify is missing,
+                  or if owner::human (unless the user confirms)
+→ branch story/<iid>-<slug> from origin/<default>; state compasso::building
+→ tester: failing tests (unit; e2e when the story's tests include it)
+  → confirm they fail → commit them on their own (TESTS) → test-hashes record
+→ builder: go green → test-hashes verify (violation: restore from TESTS, one retry)
+  → verify.sh (gate; 3 attempts)
+→ coverage.sh --min <story ?? feature ?? epic ?? project> (warning)
+→ review loop, max 3 rounds:
+     reviewer and security run in parallel on the diff; findings.json
+     review-gate --for review: open blocker/major blocks; a security finding is
+       resolved only when security verified it
+     builder fixes → verify again → reviewer re-reads changed hunks, security re-checks its findings
+     still blocked after round 3: stop, no merge request
+→ shipper: commits, changes.md, minor findings → follow-up tasks under the feature
+→ mr-body.sh → open-mr ("Closes #<iid>") → state compasso::in-review
+→ approval: human (default) | approver agent → gitlab.sh merge, refused on any open security finding
 ```
+
+States on a story: `compasso::building` → `compasso::in-review` → closed by the merge.
+
+`/compasso:review <mr>` runs the same review and security review on any merge request, posts the findings as a comment (`review-gate.sh --comment`), and fixes them only when the user agrees to push to that branch.
+
+### Merge request pipeline
+
+`ci.sh` generates `.gitlab/compasso.gitlab-ci.yml` from the config; the repo includes it from `.gitlab-ci.yml`. On merge request pipelines it runs `compasso-verify` (test, lint, typecheck, build), `compasso-e2e`, `compasso-coverage` + `compasso-coverage-check` (diff-cover at the project threshold, exit 3 allowed to fail) and GitLab SAST and Secret Detection. The pipeline uses the project threshold; the story's own threshold is applied by the local run and shown in the MR.
+
+### Test files
+
+`test_paths` in the config says what counts as a test file. The builder may not add, change or remove any of them; `test-hashes.sh` checks after every builder turn.
 
 ### 5.3 Sprint flow
 
@@ -389,7 +407,7 @@ docs/SPEC.md
 2. `plan.yaml` + `plan-check` + `/compasso:plan` push
 3. Story flow with `verify.sh`, `coverage.sh` and the review/security loop
 4. Feature flow (comment Q&A) and sprint flow (waves, test guide)
-5. Codex target generator and installer
+5. Codex target generator and installer; learnings (Harmonia's memory: captured by the shipper at the end of a story, recalled at session start)
 6. Later: webhook receiver
 
 ## 12. Verified on gitlab.com Free (2026-09-23)

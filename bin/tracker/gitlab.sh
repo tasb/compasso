@@ -4,6 +4,13 @@
 #   gitlab.sh check         --repo R   the tracker gate: auth, project, role, tier -> JSON on stdout
 #   gitlab.sh ensure-labels --repo R   create Compasso's labels that are missing (idempotent)
 #   gitlab.sh push-plan     --repo R   create or update .compasso/plan.yaml in GitLab; ids are written back
+#   gitlab.sh story         --repo R --iid N                      a story, its resolved coverage and open dependencies -> JSON
+#   gitlab.sh set-state     --repo R --iid N --state S            S: building | in-review; drops the other compasso:: states
+#   gitlab.sh open-mr       --repo R --iid N --branch B --body-file F   create or update the story's MR -> JSON {iid, web_url}
+#   gitlab.sh followup      --repo R --parent N --title T --body-file F  a task under N for a minor finding -> iid
+#   gitlab.sh merge         --repo R --mr N                       merge when the pipeline succeeds (approvals.merge: agent only)
+#   gitlab.sh mr-info       --repo R --mr N                       branches, author and the issues it closes -> JSON
+#   gitlab.sh comment       --repo R --mr N --body-file F         post F as a comment on the merge request
 #
 # Exit: 0 ok | 1 config/usage | 2 not logged in | 3 project not found or no access
 #       4 role below Developer | 5 tier cannot be detected (set tracker.tier)
@@ -11,10 +18,17 @@ set -u
 
 BIN="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CMD="${1:-}"; shift || true
-REPO="."
+REPO="." IID="" STATE="" BRANCH="" BODY="" TITLE="" PARENT="" MR=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --repo) REPO="$2"; shift 2 ;;
+    --iid) IID="$2"; shift 2 ;;
+    --state) STATE="$2"; shift 2 ;;
+    --branch) BRANCH="$2"; shift 2 ;;
+    --body-file) BODY="$2"; shift 2 ;;
+    --title) TITLE="$2"; shift 2 ;;
+    --parent) PARENT="$2"; shift 2 ;;
+    --mr) MR="$2"; shift 2 ;;
     *) echo "gitlab: unknown argument '$1'" >&2; exit 1 ;;
   esac
 done
@@ -34,6 +48,7 @@ LABELS='compasso::new|#6699cc|Feature waiting for the planner
 compasso::clarifying|#f0ad4e|Planner asked questions; waiting for answers in comments
 compasso::plan-review|#9b59b6|Breakdown posted; waiting for plan approval
 compasso::building|#1f75cb|Stories being built
+compasso::in-review|#3498db|Story merge request open; waiting for approval
 compasso::verifying|#e67e22|Feature integration, e2e and bug fixing
 compasso::done|#2da160|Delivered; test guide attached
 type::epic|#34495e|One per sprint
@@ -156,10 +171,10 @@ upsert_issue() { # iid-or-empty title description milestone type assignee-id-or-
   [ -n "$who" ] && assign="assignee_ids=$who"
   if [ -z "$iid" ]; then
     out="$(api -X POST "projects/$PID/issues" -f title="$title" -f description="$desc" \
-      -f milestone_id="$ms" -f issue_type="$type" -f labels="$(IFS=,; echo "$*")" ${assign:+-f "$assign"})"
+      ${ms:+-f "milestone_id=$ms"} -f issue_type="$type" -f labels="$(IFS=,; echo "$*")" ${assign:+-f "$assign"})"
   else
     out="$(api -X PUT "projects/$PID/issues/$iid" -f title="$title" -f description="$desc" \
-      -f milestone_id="$ms" -f add_labels="$(IFS=,; echo "$*")" ${assign:+-f "$assign"})"
+      ${ms:+-f "milestone_id=$ms"} -f add_labels="$(IFS=,; echo "$*")" ${assign:+-f "$assign"})"
   fi
   printf '%s' "$out" | jq -r 'if .iid then "\(.iid) \(.id)" else empty end'
 }
@@ -282,9 +297,131 @@ push_plan() {
 }
 
 
+# ---------- story flow ----------
+need() { for v in "$@"; do eval "[ -n \"\$$v\" ]" || { echo "gitlab: $CMD needs --$(echo "$v" | tr 'A-Z_' 'a-z-')" >&2; exit 1; }; done; }
+
+parent_iid() { # work item id -> parent iid, or empty
+  api graphql -f query="query { workItem(id: \"gid://gitlab/WorkItem/$1\") { widgets { ... on WorkItemWidgetHierarchy { parent { iid } } } } }" |
+    jq -r '[.data.workItem.widgets[]? | .parent?.iid // empty][0] // empty'
+}
+
+story() {
+  local issue parsed feature="" fcov="null" epic="" ecov="null" ms open='[]' d dj kind
+  need IID
+  check >/dev/null || return $?
+  issue="$(api "projects/$PID/issues/$IID")"
+  [ -n "$(jq -r '.iid // empty' <<<"$issue" 2>/dev/null)" ] || { echo "gitlab: no work item #$IID in $PROJECT" >&2; return 1; }
+  parsed="$(jq -r '.description // ""' <<<"$issue" | jq -Rs -f "$BIN/parse.jq")"
+
+  feature="$(parent_iid "$(jq -r .id <<<"$issue")")"
+  [ -n "$feature" ] && fcov="$(api "projects/$PID/issues/$feature" | jq -r '.description // ""' | jq -Rs -f "$BIN/parse.jq" | jq .coverage)"
+  ms="$(jq -r '.milestone.title // empty' <<<"$issue")"
+  if [ -n "$ms" ]; then
+    dj="$(api "projects/$PID/issues?milestone=$ms&labels=type::epic&state=all" | jq '.[0] // empty')"
+    if [ -n "$dj" ]; then
+      epic="$(jq -r .iid <<<"$dj")"
+      ecov="$(jq -r '.description // ""' <<<"$dj" | jq -Rs -f "$BIN/parse.jq" | jq .coverage)"
+    fi
+  fi
+
+  for d in $(jq -r '.depends_on[]' <<<"$parsed") $(jq -r '.blocked_by[] | "b\(.)"' <<<"$parsed"); do
+    dj="$(api "projects/$PID/issues/${d#b}")" || { echo "gitlab: #${d#b} referenced by #$IID does not exist" >&2; return 1; }
+    [ "$(jq -r .state <<<"$dj")" = opened ] || continue
+    kind=depends_on; [ "${d#b}" = "$d" ] || kind=blocked_by
+    open="$(jq -c --argjson i "${d#b}" --arg t "$(jq -r .title <<<"$dj")" --arg k "$kind" '. + [{iid: $i, title: $t, kind: $k}]' <<<"$open")"
+  done
+
+  jq -n --argjson issue "$issue" --argjson s "$parsed" --arg feature "$feature" --argjson fcov "$fcov" \
+        --arg epic "$epic" --argjson ecov "$ecov" --argjson open "$open" --argjson dflt "$(cfg .coverage.min_changed)" '{
+    iid: $issue.iid, id: $issue.id, title: $issue.title, state: $issue.state, type: $issue.issue_type,
+    labels: $issue.labels, milestone: ($issue.milestone.title // null),
+    feature: (if $feature == "" then null else ($feature | tonumber) end),
+    epic: (if $epic == "" then null else ($epic | tonumber) end),
+    story: $s,
+    coverage_min: ([$s.coverage, $fcov, $ecov, $dflt] | map(select(. != null)) | first),
+    open_dependencies: $open
+  }'
+}
+
+set_state() {
+  local all="compasso::new compasso::clarifying compasso::plan-review compasso::building compasso::in-review compasso::verifying compasso::done"
+  need IID STATE
+  case " $all " in *" compasso::$STATE "*) : ;; *) echo "gitlab: unknown state '$STATE'" >&2; return 1 ;; esac
+  api -X PUT "projects/$PID/issues/$IID" -f add_labels="compasso::$STATE" \
+    -f remove_labels="$(printf '%s\n' $all | grep -vx "compasso::$STATE" | paste -sd, -)" >/dev/null ||
+    { echo "gitlab: could not set #$IID to $STATE" >&2; return 1; }
+  echo "gitlab: #$IID is $STATE"
+}
+
+open_mr() {
+  local title target mr out
+  need IID BRANCH BODY
+  [ -f "$BODY" ] || { echo "gitlab: no body file $BODY" >&2; return 1; }
+  title="$(api "projects/$PID/issues/$IID" | jq -r '.title // empty')"
+  [ -n "$title" ] || { echo "gitlab: no work item #$IID" >&2; return 1; }
+  target="$(api "projects/$PID" | jq -r .default_branch)"
+  mr="$(api "projects/$PID/merge_requests?source_branch=$BRANCH&state=opened" | jq -r '.[0].iid // empty')"
+  if [ -n "$mr" ]; then
+    out="$(api -X PUT "projects/$PID/merge_requests/$mr" -f description="$(cat "$BODY")")"
+  else
+    out="$(api -X POST "projects/$PID/merge_requests" -f source_branch="$BRANCH" -f target_branch="$target" \
+      -f title="$title" -f description="$(cat "$BODY")" -f remove_source_branch=true)"
+  fi
+  printf '%s' "$out" | jq -e -c '{iid, web_url}' 2>/dev/null || { echo "gitlab: could not open the merge request for $BRANCH" >&2; return 1; }
+}
+
+followup() {
+  local res pj
+  need PARENT TITLE BODY
+  pj="$(api "projects/$PID/issues/$PARENT")"
+  [ -n "$(jq -r '.iid // empty' <<<"$pj" 2>/dev/null)" ] || { echo "gitlab: no work item #$PARENT" >&2; return 1; }
+  res="$(upsert_issue "" "$TITLE" "$(cat "$BODY")" "$(jq -r '.milestone.id // ""' <<<"$pj")" task "" owner::either)"
+  [ -n "$res" ] || { echo "gitlab: could not create the follow-up" >&2; return 1; }
+  api graphql -f query="mutation { workItemUpdate(input: { id: \"gid://gitlab/WorkItem/${res#* }\", hierarchyWidget: { parentId: \"gid://gitlab/WorkItem/$(jq -r .id <<<"$pj")\" } }) { errors } }" |
+    jq -e '(.data.workItemUpdate.errors // ["no response"]) | length == 0' >/dev/null ||
+    { echo "gitlab: created #${res% *} but could not attach it to #$PARENT" >&2; return 1; }
+  echo "${res% *}"
+}
+
+merge() {
+  need MR
+  [ "$(cfg .approvals.merge)" = agent ] || { echo "gitlab: approvals.merge is human - a person merges this merge request" >&2; return 1; }
+  [ -n "$BODY" ] && [ -f "$BODY" ] || { echo "gitlab: merge needs --body-file with the review findings" >&2; return 1; }
+  "$BIN/review-gate.sh" --findings "$BODY" --for merge || return 1
+  api -X PUT "projects/$PID/merge_requests/$MR/merge" -f merge_when_pipeline_succeeds=true >/dev/null ||
+    { echo "gitlab: could not merge !$MR" >&2; return 1; }
+  echo "gitlab: !$MR merges when its pipeline succeeds"
+}
+
+
+mr_info() {
+  local mr closes
+  need MR
+  mr="$(api "projects/$PID/merge_requests/$MR")"
+  [ -n "$(jq -r '.iid // empty' <<<"$mr" 2>/dev/null)" ] || { echo "gitlab: no merge request !$MR in $PROJECT" >&2; return 1; }
+  closes="$(api "projects/$PID/merge_requests/$MR/closes_issues" | jq -c '[.[].iid]')" || closes='[]'
+  jq -c --argjson closes "$closes" '{iid, title, state, source_branch, target_branch, web_url, author: .author.username, draft, closes: $closes}' <<<"$mr"
+}
+
+comment() {
+  need MR BODY
+  [ -f "$BODY" ] || { echo "gitlab: no body file $BODY" >&2; return 1; }
+  api -X POST "projects/$PID/merge_requests/$MR/notes" -f body="$(cat "$BODY")" | jq -e -r '.id' >/dev/null ||
+    { echo "gitlab: could not comment on !$MR" >&2; return 1; }
+  echo "gitlab: commented on !$MR"
+}
+
+
 case "$CMD" in
   check) check ;;
   ensure-labels) ensure_labels ;;
   push-plan) push_plan ;;
-  *) echo "usage: gitlab.sh check|ensure-labels|push-plan --repo R" >&2; exit 1 ;;
+  story) story ;;
+  set-state) set_state ;;
+  open-mr) open_mr ;;
+  followup) followup ;;
+  merge) merge ;;
+  mr-info) mr_info ;;
+  comment) comment ;;
+  *) echo "usage: gitlab.sh check|ensure-labels|push-plan|story|set-state|open-mr|followup|merge|mr-info|comment --repo R ..." >&2; exit 1 ;;
 esac

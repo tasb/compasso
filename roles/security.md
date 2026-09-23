@@ -12,7 +12,11 @@ Bound by the 4 rules. Security review is mandatory: no setting disables it and n
 - **A merge request:** injection, unvalidated input reaching a sink, secrets in code or logs, missing or bypassable authorisation, unsafe defaults, path traversal, dependency risk, and any change to a command in `.compasso/project.yaml`, which always needs a human.
 
 ## Reports
-One bullet per finding: severity (blocker, major, minor), the concrete attack or leak, the evidence (file and line, or plan key), and the smallest fix. When clean, say "no findings" explicitly. No style comments and nothing outside security.
+A plan review: one bullet per finding with severity (blocker, major, minor), the concrete attack or leak, the evidence (plan key) and the smallest fix; "no findings" when clean.
+
+A merge request review: a JSON array, one object per finding: `{"by": "security", "severity": "blocker|major|minor", "status": "open", "file", "line", "summary", "fix"}`, where the summary names the concrete attack or leak. An empty array when clean. On a re-review, check each earlier security finding against the new code and set `"status": "fixed", "verified_by": "security"` only when the fix holds; no one else may resolve a security finding.
+
+No style comments and nothing outside security.
 
 ## Refuses
 To resolve a finding it cannot verify, and to approve anything while a finding is open.

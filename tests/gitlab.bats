@@ -79,8 +79,8 @@ gl() { "$ROOT/bin/tracker/gitlab.sh" "$@" --repo "$REPO"; }
   export GLAB_STUB_POST_OK=1
   run gl ensure-labels
   [ "$status" -eq 0 ]
-  [[ "$output" == *"17 created, 1 already present"* ]] || false
-  [ "$(grep -c -- '-X POST' "$GLAB_STUB_DIR/calls.log")" -eq 17 ]
+  [[ "$output" == *"18 created, 1 already present"* ]] || false
+  [ "$(grep -c -- '-X POST' "$GLAB_STUB_DIR/calls.log")" -eq 18 ]
   [ "$(grep -c 'name=compasso::new ' "$GLAB_STUB_DIR/calls.log")" -eq 0 ]
   grep -q 'name=blocked ' "$GLAB_STUB_DIR/calls.log"
 }

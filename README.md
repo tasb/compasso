@@ -22,6 +22,11 @@ bin/tracker/gitlab.sh ensure-labels --repo .             # create Compasso's lab
 bin/issue-templates.sh --repo .                          # install the work-item formats as issue templates
 bin/plan-check.sh --repo .                               # check .compasso/plan.yaml: sizes, dependencies, capacity
 bin/tracker/gitlab.sh push-plan --repo .                 # create or update the plan in GitLab
+bin/tracker/gitlab.sh story --repo . --iid 8           # a story, its coverage threshold and open dependencies
+bin/verify.sh --repo . --run DIR --story F               # the verify gate
+bin/coverage.sh --repo . --base origin/main --run DIR    # changed-line coverage (warning)
+bin/review-gate.sh --findings F [--for merge]           # do review findings still block?
+bin/ci.sh --repo .                                       # generate the merge request pipeline
 ```
 
 ## Develop

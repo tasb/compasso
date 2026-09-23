@@ -21,6 +21,10 @@ Ask one topic at a time, show the default, and accept "default" as an answer. Ne
 
    **Coverage.** Find the repo's coverage command and the Cobertura or LCOV file it writes, and the product-code paths (for example `src/**`). Default threshold: 80% of changed lines; below it is a warning, never a block. Without a command, every merge request shows coverage as "not measured" - say so.
 
+   **Tests.** Show `test_paths` (what counts as a test file; the builder may never change these) and adjust it to the repo's layout.
+
+   **Pipeline.** Ask for the CI image that has the repo's toolchain (`ci.image`, for example the image the repo's CI already uses), then run `bash ${CLAUDE_PLUGIN_ROOT}/bin/ci.sh --repo .` and add `include: [{ local: .gitlab/compasso.gitlab-ci.yml }]` to `.gitlab-ci.yml` (create it if missing). The file runs the verify gate, e2e, changed-line coverage as a warning, and GitLab SAST and Secret Detection on every merge request.
+
 6. **Approvals.** Plan approval: `human` (default) or `auto`. Merge approval: `human` (default) or `agent`. State plainly that security review runs on every plan and merge request regardless, and that no approval mode passes an open security finding.
 
 7. **Harnesses and models.** Ask which harnesses the team uses: `claude`, `codex`, or both. Show the model table for each chosen harness from the config and ask whether to change any role. The `security` and `approver` roles have a floor: no fast-tier model and no low effort. Remove the `models.<harness>` block of a harness that is not used.
@@ -37,4 +41,6 @@ Ask one topic at a time, show the default, and accept "default" as an answer. Ne
 
 11. **Issue templates.** `bash ${CLAUDE_PLUGIN_ROOT}/bin/issue-templates.sh --repo .` installs the Epic, Feature, Story and Bug formats into `.gitlab/issue_templates/`. Report any template it kept because the repo already has its own version.
 
-12. Hand back: a summary of the config, a reminder to commit `.compasso/project.yaml` and `.gitlab/issue_templates/`, and the next command (`/compasso:plan` or `/compasso:feature <iid>`).
+12. **Ignore run files.** Add `.compasso/runs/` to `.gitignore`: story runs keep logs and findings there.
+
+13. Hand back: a summary of the config, a reminder to commit `.compasso/project.yaml`, `.gitlab/` and `.gitlab-ci.yml`, and the next command (`/compasso:plan` or `/compasso:feature <iid>`).

@@ -48,20 +48,29 @@ case "$method $path" in
   "PUT projects/"*"/issues/"*)
     i="${path##*/}"; [ -n "${desc+x}" ] && printf '%s\n' "$desc" > "$D/desc/$i.md"; issue_json "$i" ;;
   "POST projects/"*"/time_estimate?"*) echo '{}' ;;
+  "GET projects/"*"/issues?"*) cat "$D/issue-query.json" 2>/dev/null || echo '[]' ;;
+  "GET projects/"*"/merge_requests?"*) cat "$D/mr-query.json" 2>/dev/null || echo '[]' ;;
+  "GET projects/"*"/merge_requests/"*"/closes_issues") cat "$D/closes.json" 2>/dev/null || echo '[]' ;;
+  "GET projects/"*"/merge_requests/"*) cat "$D/mr-${path##*/}.json" 2>/dev/null || { echo '{"message":"404"}'; exit 1; } ;;
+  "POST projects/"*"/merge_requests") echo '{"iid":31,"web_url":"https://gitlab.example/mr/31"}' ;;
+  "PUT projects/"*"/merge_requests/"*"/merge") echo '{"state":"opened"}' ;;
+  "PUT projects/"*"/merge_requests/"*) echo "{\"iid\":${path##*/},\"web_url\":\"https://gitlab.example/mr/${path##*/}\"}" ;;
+  "POST projects/"*"/notes") echo '{"id":900}' ;;
   "GET projects/"*"/links") echo '[]' ;;
+  "GET projects/"*"/issues/"*) cat "$D/issues/${path##*/}.json" 2>/dev/null || { echo '{"message":"404"}'; exit 1; } ;;
   "POST projects/"*"/links") echo '{}' ;;
   *" graphql")   # parents live in parent/<child id>; GitLab refuses to re-assign an assigned item
     q="${f_query:-}"; mkdir -p "$D/parent"
     child="$(printf '%s' "$q" | sed -E 's/.*id: "gid:\/\/gitlab\/WorkItem\/([0-9]+)".*/\1/')"
     case "$q" in
       query*) p="$(cat "$D/parent/$child" 2>/dev/null)"
-              if [ -n "$p" ]; then printf '{"data":{"workItem":{"widgets":[{},{"parent":{"id":"gid://gitlab/WorkItem/%s"}}]}}}\n' "$p"
+              if [ -n "$p" ]; then printf '{"data":{"workItem":{"widgets":[{},{"parent":{"id":"gid://gitlab/WorkItem/%s","iid":"%s"}}]}}}\n' "$p" "$((p - 1000))"
               else echo '{"data":{"workItem":{"widgets":[{},{"parent":null}]}}}'; fi ;;
       *) if [ -e "$D/parent/$child" ]; then echo '{"data":{"workItemUpdate":{"errors":["Work item(s) already assigned"]}}}'
          else printf '%s' "$q" | sed -E 's/.*parentId: "gid:\/\/gitlab\/WorkItem\/([0-9]+)".*/\1/' > "$D/parent/$child"
               echo '{"data":{"workItemUpdate":{"errors":[]}}}'; fi ;;
     esac ;;
   "GET projects/"*)
-    echo '{"id":7,"namespace":{"id":9},"permissions":{"project_access":{"access_level":40},"group_access":null}}' ;;
+    echo '{"id":7,"default_branch":"main","namespace":{"id":9},"permissions":{"project_access":{"access_level":40},"group_access":null}}' ;;
   *) echo '{"message":"404 Not Found"}'; exit 1 ;;
 esac
