@@ -5,4 +5,4 @@
 | <!-- #iid Title --> | <!-- h --> | <!-- agent / human / either --> | <!-- #iid or — --> |
 
 **Security:** <!-- no findings, or one bullet per finding -->
-**Approve:** comment `/approve` (Developer or above)
+**Approve:** reply `compasso approve` on its own line (Developer or above)

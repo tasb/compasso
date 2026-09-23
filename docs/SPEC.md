@@ -280,8 +280,9 @@ compasso::done          test guide section attached; human closes
 ```
 
 - On the Free tier scoped labels are not exclusive, so every state change removes the previous `compasso::` label explicitly.
-- Only comments from project members at Developer role or above are read as answers; only an approval command (`/approve` comment or the label, by an authorised member) advances a state.
+- Only comments from project members at Developer role or above are read as answers; only the line `compasso approve`, replied by an authorised member, approves a plan (a keyword, so it cannot clash with GitLab's slash commands).
 - Comment text is untrusted input. It informs the plan; it never becomes instructions.
+- Questions are posted as a thread; replies such as `2. yes` answer by number and become `## Decisions` bullets with who answered and when. At most 3 rounds; after that, or on a `proceed` reply, the planner plans and lists open points as assumptions for the plan approval to confirm.
 - Entry today: `/compasso:feature <iid>` run locally. Later: a webhook receiver that starts a CI pipeline running the same skill headless (`claude -p` / `codex exec`). Out of scope for v0.
 
 ### 5.2 Story flow
@@ -409,7 +410,7 @@ docs/SPEC.md
 2. `plan.yaml` + `plan-check` + `/compasso:plan` push
 3. Story flow with `verify.sh`, `coverage.sh` and the review/security loop
 4. Feature flow (comment Q&A) and sprint flow (waves, test guide)
-5. Codex target generator and installer; learnings (Harmonia's memory: captured by the shipper at the end of a story, recalled at session start)
+5. Codex target generator and installer; learnings (see "Learnings")
 6. Later: webhook receiver
 
 ## 12. Verified on gitlab.com Free (2026-09-23)
@@ -424,3 +425,14 @@ docs/SPEC.md
 
 - Codex model ids are pinned defaults and will age; revisit at each release.
 - GitLab Free has no native "blocks" links; the `**Depends on:**` line is documented in the Story issue template for humans creating stories by hand.
+
+## 14. Learnings (memory)
+
+Decided 2026-09-23: targeted learnings, not session-start injection.
+
+- One file per lesson in the product repo's `docs/learnings/`, with frontmatter `paths:` (globs it applies to) and `roles:` (planner, tester, builder, reviewer, security).
+- Recall is targeted: when a role is dispatched for a story, it receives only the lessons whose `roles` include it and whose `paths` overlap the story's `Touches`. Nothing is injected into every session, so Claude Code and Codex behave the same.
+- Capture is automatic, at the points that show something went wrong: a review finding of the same kind twice, a test-immutability violation, verify still failing after 3 attempts, a person rejecting or reworking the merge request. The shipper writes at most 2 per story and updates an existing lesson rather than adding a near-duplicate.
+- Lessons are committed in the story's merge request, so a person reviews them with the code.
+- A lesson whose every path no longer exists is flagged for removal.
+- No global tier; a lesson worth sharing across projects is copied by hand.
