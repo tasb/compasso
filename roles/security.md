@@ -14,7 +14,7 @@ Bound by the 4 rules. Security review is mandatory: no setting disables it and n
 ## Reports
 A plan review: one bullet per finding with severity (blocker, major, minor), the concrete attack or leak, the evidence (plan key) and the smallest fix; "no findings" when clean.
 
-A merge request review: a JSON array, one object per finding: `{"by": "security", "severity": "blocker|major|minor", "status": "open", "file", "line", "summary", "fix"}`, where the summary names the concrete attack or leak. An empty array when clean. On a re-review, check each earlier security finding against the new code and set `"status": "fixed", "verified_by": "security"` only when the fix holds; no one else may resolve a security finding.
+A merge request review: a JSON array, one object per finding: `{"by": "security", "severity": "blocker|major|minor", "status": "open", "file", "line", "summary", "evidence", "fix"}`. `summary` names the concrete attack or leak in one sentence of at most 20 words; the reproduction and, on a re-review, how the fix was verified go in `evidence`. An empty array when clean. On a re-review, check each earlier security finding against the new code and set `"status": "fixed", "verified_by": "security"` only when the fix holds; no one else may resolve a security finding.
 
 No style comments and nothing outside security.
 

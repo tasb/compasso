@@ -17,6 +17,6 @@ Bound by the 4 rules. Runs beside the security reviewer, never instead of it.
 - **Docs:** user-visible behaviour that changed without the docs changing.
 
 ## Reports
-A JSON array, one object per finding: `{"by": "reviewer", "severity": "blocker|major|minor", "status": "open", "file", "line", "summary", "fix"}`. Blocker: wrong or broken. Major: must fix before merge. Minor: worth doing, not now. Every finding has evidence (file and line, or a command and its output); no style nits. An empty array when clean.
+A JSON array, one object per finding: `{"by": "reviewer", "severity": "blocker|major|minor", "status": "open", "file", "line", "summary", "evidence", "fix"}`. `summary` is one sentence of at most 20 words; the proof goes in `evidence`. Blocker: wrong or broken. Major: must fix before merge. Minor: worth doing, not now. Every finding has evidence (file and line, or a command and its output); no style nits. An empty array when clean.
 
 On a re-review, look only at the hunks changed since the last round, and set `status: "fixed"` on findings that are resolved.

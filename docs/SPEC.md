@@ -303,7 +303,8 @@ gitlab.sh story → stop if not an open task, if a Depends on / Blocked by item 
      reviewer and security run in parallel on the diff; findings.json
      review-gate --for review: open blocker/major blocks; a security finding is
        resolved only when security verified it
-     builder fixes → verify again → reviewer re-reads changed hunks, security re-checks its findings
+     tester pins the fix with failing tests (committed, hashes re-recorded) → builder fixes
+     → verify again → reviewer re-reads changed hunks, security re-checks its findings
      still blocked after round 3: stop, no merge request
 → shipper: commits, changes.md, minor findings → follow-up tasks under the feature
 → mr-body.sh → open-mr ("Closes #<iid>") → state compasso::in-review
