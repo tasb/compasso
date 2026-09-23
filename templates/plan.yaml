@@ -1,0 +1,33 @@
+# Compasso sprint plan. Written by /compasso:plan; checked by bin/plan-check.sh.
+# `gitlab` fields are filled in by the push; never edit them by hand.
+epic:
+  key: E-1
+  goal: ""
+  sprint: { name: "", start: "", end: "" }   # dates as YYYY-MM-DD
+  # coverage: 85                              # optional % of changed lines for this sprint
+  risks: []
+  gitlab: { milestone: null, issue: null }
+
+features:
+  - key: F-1
+    title: ""
+    goal: ""
+    scope: []            # what to build, one item each
+    acceptance: []       # "Given ..., When ..., Then ..."
+    decisions: []
+    gitlab: null
+    stories:
+      - key: S-1
+        title: ""
+        as: ""
+        want: ""
+        so_that: ""
+        acceptance: []
+        verify: []       # commands that pass when the story is done
+        tests: [unit]    # unit, or unit and e2e
+        touches: []      # path globs the story changes
+        depends_on: []   # story keys in this plan, or "#iid" for existing items
+        owner: agent     # agent | human | either
+        estimate_h: 4
+        # blocked: ""    # external dependency, if any
+        gitlab: null

@@ -1,0 +1,76 @@
+epic:
+  key: E-1
+  goal: Customers can see and download their invoices without contacting support.
+  sprint: { name: 2026-S20, start: "2026-10-05", end: "2026-10-16" }
+  risks: [PDF service is owned by another team]
+  gitlab: { milestone: null, issue: null }
+features:
+  - key: F-1
+    title: Invoice history
+    goal: Customers see their last 24 months of invoices, newest first.
+    scope: [Invoice list, Filter by year]
+    acceptance: ["Given 3 invoices, When I open Billing, Then I see 3 rows, newest first"]
+    decisions: []
+    gitlab: null
+    stories:
+      - key: S-1
+        title: Invoice list API
+        as: a customer
+        want: an invoice list API
+        so_that: the Billing page can show my history
+        acceptance: ["Given 3 invoices, When GET /invoices, Then 200 with 3 items, newest first"]
+        verify: ["npm test -- billing/api"]
+        tests: [unit, e2e]
+        touches: ["src/billing/api/**"]
+        depends_on: []
+        owner: agent
+        estimate_h: 4
+        gitlab: null
+      - key: S-2
+        title: Invoice list UI
+        as: a customer
+        want: an invoice list page
+        so_that: I can find an invoice quickly
+        acceptance: ["Given 3 invoices, When I open Billing, Then I see 3 rows"]
+        verify: ["npx playwright test billing/list"]
+        tests: [unit, e2e]
+        touches: ["src/billing/ui/**"]
+        depends_on: [S-1]
+        owner: human
+        estimate_h: 6
+        gitlab: null
+      - key: S-3
+        title: Year filter
+        as: a customer
+        want: to filter invoices by year
+        so_that: I find last year's invoices
+        acceptance: ["Given invoices in 2025 and 2026, When ?year=2025, Then only 2025 items"]
+        verify: ["npm test -- billing/api/filter"]
+        tests: [unit]
+        touches: ["src/billing/api/filter/**"]
+        depends_on: [S-1]
+        owner: either
+        estimate_h: 4
+        coverage: 90
+        gitlab: null
+  - key: F-2
+    title: Invoice PDF download
+    goal: Customers download any invoice as a PDF.
+    scope: [Download button]
+    acceptance: ["Given an invoice, When I click Download, Then a PDF is saved"]
+    gitlab: null
+    stories:
+      - key: S-4
+        title: PDF endpoint
+        as: a customer
+        want: a PDF endpoint
+        so_that: I can keep invoices offline
+        acceptance: ["Given an invoice, When GET /invoices/1.pdf, Then 200 application/pdf"]
+        verify: ["npm test -- billing/pdf"]
+        tests: [unit]
+        touches: ["src/billing/pdf/**"]
+        depends_on: ["#12"]
+        owner: agent
+        estimate_h: 8
+        blocked: Waiting for PDF service credentials
+        gitlab: null
