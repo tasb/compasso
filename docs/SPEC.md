@@ -409,7 +409,7 @@ docs/SPEC.md
 1. `setup` + GitLab adapter (both tiers) + `project.yaml` schema incl. models
 2. `plan.yaml` + `plan-check` + `/compasso:plan` push
 3. Story flow with `verify.sh`, `coverage.sh` and the review/security loop
-4. Feature flow (comment Q&A) and sprint flow (waves, test guide)
+4. Feature flow (Q&A in the agent, recorded as comments) and sprint flow (waves, test guide)
 5. Codex target generator and installer; learnings (see "Learnings")
 6. Optional hardening: `/compasso:harden` (mutation testing, section 16)
 7. v2: see section 15
