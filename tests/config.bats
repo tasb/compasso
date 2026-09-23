@@ -128,3 +128,10 @@ setup() { setup_repo; }
   run "$ROOT/bin/config.sh" validate --repo "$REPO"
   [ "$status" -eq 0 ]
 }
+
+@test "test_paths must list at least one pattern" {
+  cfg_set 'del(.test_paths)'
+  run "$ROOT/bin/config.sh" validate --repo "$REPO"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"test_paths must list at least one pattern"* ]] || false
+}

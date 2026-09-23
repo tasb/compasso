@@ -71,6 +71,8 @@ validate() {
     err "limits.story_target_hours must be a positive integer"
   fi
 
+  [ "$(yq -r '.test_paths | length' "$CFG" 2>/dev/null)" -ge 1 ] 2>/dev/null || err "test_paths must list at least one pattern"
+
   v="$(val .coverage.min_changed)"
   is_int "$v" && [ "$v" -le 100 ] || err "coverage.min_changed must be an integer from 0 to 100"
   [ -z "$(val .coverage.command)" ] || [ -n "$(val .coverage.report)" ] || err "coverage.report is required when coverage.command is set"

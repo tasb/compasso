@@ -24,11 +24,23 @@ commands:                     # the repo's own commands; empty means "not applic
   build: ""
   e2e: ""
 
+test_paths:                   # what counts as a test file: the builder may not add, change or remove these
+  - "tests/**"
+  - "test/**"
+  - "e2e/**"
+  - "**/*.test.*"
+  - "**/*.spec.*"
+  - "**/*_test.*"
+  - "**/test_*.py"
+
 coverage:                     # line coverage of changed lines; below the threshold is a warning, never a block
   command: ""                 # the repo's own command; empty means "not measured"
   report: ""                  # the Cobertura or LCOV file the command writes
   min_changed: 80             # default %; an Epic, Feature or Story can override with a "**Coverage:** N%" line
   paths: []                   # product-code globs; a changed file here missing from the report counts as uncovered
+
+ci:
+  image: ""                   # the image with the repo's toolchain, for the merge request pipeline
 
 approvals:
   plan: human                 # human | auto  (auto still requires a clean security review of the plan)
