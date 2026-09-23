@@ -171,3 +171,13 @@ findings() { echo "$1" > "$BATS_TEST_TMPDIR/findings.json"; }
   [ "$status" -eq 0 ]
   grep -q "POST projects/acme%2Fapp/merge_requests/31/notes" "$FAKE_GL/calls.log"
 }
+
+@test "story: key lines parse the same whether they end in \\ or are separated by blank lines" {
+  issue 8 task "t" opened $'**Tests:** unit, e2e\\\n**Touches:** `src/a/**`, `src/b/**`\\\n**Blocked by:** #13\\\n**Coverage:** 90%'
+  issue 13 task "b" closed ""
+  a="$(gl story --iid 8 | jq -c '.story | {tests, touches, blocked_by, coverage}')"
+  issue 8 task "t" opened $'**Tests:** unit, e2e\n\n**Touches:** `src/a/**`, `src/b/**`\n\n**Blocked by:** #13\n\n**Coverage:** 90%'
+  b="$(gl story --iid 8 | jq -c '.story | {tests, touches, blocked_by, coverage}')"
+  [ "$a" = '{"tests":["unit","e2e"],"touches":["src/a/**","src/b/**"],"blocked_by":[13],"coverage":90}' ]
+  [ "$a" = "$b" ]
+}

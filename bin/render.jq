@@ -35,7 +35,7 @@ def hours: (. | tostring) + "h";
     ]
   elif .kind == "feature" then
     [
-      ([ "**Goal:** \($i.goal)", ($i | coverage_line) ] | join("\n")),
+      ([ "**Goal:** \($i.goal)", ($i | coverage_line) ] | join("\\\n")),
       section("Scope"; $i.scope | bullets),
       section("Acceptance"; $i.acceptance | checks),
       section("Decisions"; ($i.decisions // []) | if length > 0 then bullets else "" end),
@@ -47,11 +47,11 @@ def hours: (. | tostring) + "h";
       "**As** \($i.as) **I want** \($i.want) **so that** \($i.so_that).",
       section("Acceptance"; $i.acceptance | checks),
       section("Verify"; $i.verify | map("`\(.)`") | bullets),
-      ([ "**Tests:** \($i.tests | join(", "))"
-         + (if ($i.touches // []) | length > 0 then " · **Touches:** \($i.touches | map("`\(.)`") | join(", "))" else "" end),
+      ([ "**Tests:** \($i.tests | join(", "))",
+         (if ($i.touches // []) | length > 0 then "**Touches:** \($i.touches | map("`\(.)`") | join(", "))" else empty end),
          (if $ctx.tier == "free" and ($deps | length) > 0 then "**Depends on:** \($deps | join(", "))" else empty end),
          (if ($i.blocked_by // []) | length > 0 then "**Blocked by:** \(($i.blocked_by | map("#\($ctx.iids[.] // .)") | join(", ")))" else empty end),
-         ($i | coverage_line) ] | join("\n")),
+         ($i | coverage_line) ] | join("\\\n")),
       ($i | key_line)
     ]
   end

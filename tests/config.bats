@@ -135,3 +135,18 @@ setup() { setup_repo; }
   [ "$status" -eq 1 ]
   [[ "$output" == *"test_paths must list at least one pattern"* ]] || false
 }
+
+@test "upgrade adds keys a newer Compasso introduced and keeps every value" {
+  cfg_set 'del(.test_paths) | del(.ci) | .sprint.weeks = 3 | .models.claude.builder.model = "opus"'
+  run "$ROOT/bin/config.sh" validate --repo "$REPO"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"config.sh upgrade"* ]] || false
+  run "$ROOT/bin/config.sh" upgrade --repo "$REPO"
+  [ "$status" -eq 0 ]
+  [ "$(yq -r '.test_paths | length' "$CFG")" -gt 0 ]
+  [ "$(yq -r '.ci.image' "$CFG")" = "" ]
+  [ "$(yq -r .sprint.weeks "$CFG")" = 3 ]
+  [ "$(yq -r .models.claude.builder.model "$CFG")" = opus ]
+  [ "$(yq -r .tracker.project "$CFG")" = acme/app ]
+  "$ROOT/bin/config.sh" validate --repo "$REPO"
+}

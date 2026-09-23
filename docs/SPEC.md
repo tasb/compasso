@@ -105,6 +105,7 @@ Rules for every description:
 2. What people filter on is a label: `owner::agent|human|either`, `severity::blocker|major|minor`.
 3. Fixed section order. Omit an empty optional section; never write "N/A".
 4. Describe only what to do. Bullets, one idea each, at most 20 words. No introductions, no restating the title.
+   Key lines (`**Goal:**`, `**Tests:**`, `**Depends on:**`...) each sit on their own line: Compasso ends each one but the last with `\` (a line break in GitLab); the issue templates separate them with blank lines so an optional one can be deleted cleanly.
 5. Items Compasso writes carry one hidden line for idempotent pushes: `<!-- compasso:key=S-1 -->`.
 
 The formats ship as GitLab issue templates in `templates/issue_templates/`; `setup` installs them into the product repo's `.gitlab/issue_templates/`.
@@ -159,8 +160,9 @@ The formats ship as GitLab issue templates in `templates/issue_templates/`; `set
 - `npm test -- billing/api`
 - `npx playwright test billing/list`
 
-**Tests:** unit, e2e · **Touches:** `src/billing/api/**`
-**Depends on:** #440
+**Tests:** unit, e2e\
+**Touches:** `src/billing/api/**`\
+**Depends on:** #440\
 **Blocked by:** #452
 ```
 

@@ -68,7 +68,8 @@ iid_of() { K="$1" yq -r '(.features[] | select(.key == strenv(K)) | .gitlab), (.
 ## Verify
 - \`npx playwright test billing/list\`
 
-**Tests:** unit, e2e · **Touches:** \`src/billing/ui/**\`
+**Tests:** unit, e2e\\
+**Touches:** \`src/billing/ui/**\`\\
 **Depends on:** #$(iid_of S-1)
 
 <!-- compasso:key=S-2 -->
@@ -79,7 +80,7 @@ EOF
 @test "optional story lines appear only when set" {
   push >/dev/null
   grep -qx '\*\*Coverage:\*\* 90%' "$FAKE_GL/desc/$(iid_of S-3).md"
-  grep -qx '\*\*Depends on:\*\* #12' "$FAKE_GL/desc/$(iid_of S-4).md"
+  grep -qx '\*\*Depends on:\*\* #12\\' "$FAKE_GL/desc/$(iid_of S-4).md"
   grep -qx "\*\*Blocked by:\*\* #$(iid_of B-1)" "$FAKE_GL/desc/$(iid_of S-4).md"
   [ "$(grep -c 'Coverage\|Blocked\|Depends' "$FAKE_GL/desc/$(iid_of S-1).md")" -eq 0 ]
 }
@@ -225,4 +226,10 @@ EOF2
   first_label="$(grep -n 'POST projects/acme%2Fapp/labels name=type::blocker' "$FAKE_GL/calls.log" | cut -d: -f1)"
   first_use="$(grep -n 'labels=type::blocker' "$FAKE_GL/calls.log" | head -1 | cut -d: -f1)"
   [ -n "$first_label" ] && [ "$first_label" -lt "$first_use" ]
+}
+
+@test "a feature's coverage goes on its own line under the goal" {
+  yq -i '.features[0].coverage = 85' "$PLAN"
+  push >/dev/null
+  [ "$(head -2 "$FAKE_GL/desc/$(iid_of F-1).md")" = $'**Goal:** Customers see their last 24 months of invoices, newest first.\\\n**Coverage:** 85%' ]
 }

@@ -2,6 +2,7 @@
 # Compasso project configuration: .compasso/project.yaml
 #
 #   config.sh init     --repo R [--project ns/name]   copy the template (refuses to overwrite)
+#   config.sh upgrade  --repo R                       add keys a newer Compasso introduced; never changes a value
 #   config.sh validate --repo R                       print every problem, exit 1 if any
 #   config.sh get      --repo R <yq-path>             print one value
 #
@@ -71,7 +72,7 @@ validate() {
     err "limits.story_target_hours must be a positive integer"
   fi
 
-  [ "$(yq -r '.test_paths | length' "$CFG" 2>/dev/null)" -ge 1 ] 2>/dev/null || err "test_paths must list at least one pattern"
+  [ "$(yq -r '.test_paths | length' "$CFG" 2>/dev/null)" -ge 1 ] 2>/dev/null || err "test_paths must list at least one pattern (run: config.sh upgrade)"
 
   v="$(val .coverage.min_changed)"
   is_int "$v" && [ "$v" -le 100 ] || err "coverage.min_changed must be an integer from 0 to 100"
@@ -113,7 +114,12 @@ case "$CMD" in
     [ -n "$PROJECT" ] && P="$PROJECT" yq -i '.tracker.project = strenv(P)' "$CFG"
     echo "config: wrote $CFG"
     ;;
+  upgrade)
+    need_cfg
+    T="$ROOT/templates/project.yaml" yq -i '. *n load(strenv(T))' "$CFG" || exit 1
+    echo "config: $CFG has every current key"
+    ;;
   validate) need_cfg; validate ;;
   get) need_cfg; [ -n "$ARG" ] || { echo "config: get needs a path" >&2; exit 1; }; val "$ARG" ;;
-  *) echo "usage: config.sh init|validate|get --repo R" >&2; exit 1 ;;
+  *) echo "usage: config.sh init|upgrade|validate|get --repo R" >&2; exit 1 ;;
 esac

@@ -7,6 +7,8 @@ Connect this repository to Compasso. Every other Compasso command refuses to run
 
 Ask one topic at a time, show the default, and accept "default" as an answer. Never invent values the user did not confirm.
 
+0. **Upgrade.** If `.compasso/project.yaml` exists, first run `bash ${CLAUDE_PLUGIN_ROOT}/bin/config.sh upgrade --repo .` so keys added by a newer Compasso are present.
+
 1. **GitLab login.** Run `glab auth status --hostname <host>` (default host `gitlab.com`). If it is not logged in, stop and tell the user to run `! glab auth login --hostname <host> --web` (the `!` prefix runs it in this session; never ask for a token in chat), then continue when they confirm.
 
 2. **Config file.** If `.compasso/project.yaml` exists, read it and treat every question below as "keep or change". Otherwise ask for the GitLab project (`namespace/project`); propose the one from `git remote -v` when it points at GitLab. Then run:
