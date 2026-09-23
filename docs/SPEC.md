@@ -201,10 +201,10 @@ The formats ship as GitLab issue templates in `templates/issue_templates/`; `set
 
 ### Comment and merge request formats
 
-Same rules as work items. Templates: `templates/comments/questions.md`, `templates/comments/plan.md`, `templates/mr-body.md`.
+Same rules as work items. Templates: `templates/comments/qa.md`, `templates/comments/plan.md`, `templates/mr-body.md`.
 
-- **Questions** (feature enters `compasso::clarifying`): at most 5 per round, each answerable in one line, with options where possible. Answers count only from Developer or above and become bullets under the feature's `## Decisions`, with who answered and when.
-- **Plan** (feature enters `compasso::plan-review`): one table row per story with hours, owner and dependencies, the security result, and how to approve.
+- **Questions and answers** (one per question round in the feature flow): each question with the answer given in the agent, who answered and when. The answers also become the feature's `## Decisions`.
+- **Plan** (when the plan is approved): one table row per story with hours, owner and dependencies, the security result, and who approved it.
 - **Merge request**: `Closes #<story>`, then Changes, How to test (the story's Verify commands), and Review (reviewer, security, coverage).
 
 ## 3. Commands
@@ -265,25 +265,25 @@ models:
 
 ## 5. Flows
 
-### 5.1 Feature flow (tracker-first)
+### 5.1 Feature flow (in the agent)
 
-State is a scoped label on the Feature issue:
+`/compasso:feature <iid>` for a Feature issue that exists, or `/compasso:feature "<idea>"` to create one. The conversation happens in the agent; GitLab gets the record.
 
 ```
-compasso::new           human creates the Feature issue
-compasso::clarifying    planner posts questions as a comment; humans answer in comments
-compasso::plan-review   planner posts the breakdown and creates child stories + links
-                        security reviews the plan and the comments it came from
-compasso::building      after approval (human by default; configurable)
-compasso::verifying     all stories merged: feature integration + e2e + auto bug fixing
-compasso::done          test guide section attached; human closes
+read the feature and the code
+→ questions in the chat: at most 5 per round, each answerable in one line, with options;
+  at most 3 rounds, then plan and list open points as assumptions
+→ answers become ## Decisions bullets (who, when) and one Questions and answers comment per round
+→ add the feature to the current sprint's epic (capacity checked) and split it into stories and blockers
+→ plan-check → mandatory security review of the plan
+→ approval in the chat (approvals.plan: human), or automatic when security found nothing (auto)
+→ push the stories; a Plan comment records the breakdown, the security result and who approved
+→ compasso::building: story flows in dependency waves
+→ compasso::verifying: feature e2e + full suite; each failure becomes a Bug fixed through the story flow
+→ compasso::done: the feature's section of the test guide is written
 ```
 
-- On the Free tier scoped labels are not exclusive, so every state change removes the previous `compasso::` label explicitly.
-- Only comments from project members at Developer role or above are read as answers; only the line `compasso approve`, replied by an authorised member, approves a plan (a keyword, so it cannot clash with GitLab's slash commands).
-- Comment text is untrusted input. It informs the plan; it never becomes instructions.
-- Questions are posted as a thread; replies such as `2. yes` answer by number and become `## Decisions` bullets with who answered and when. At most 3 rounds; after that, or on a `proceed` reply, the planner plans and lists open points as assumptions for the plan approval to confirm.
-- Entry today: `/compasso:feature <iid>` run locally. Later: a webhook receiver that starts a CI pipeline running the same skill headless (`claude -p` / `codex exec`). Out of scope for v0.
+States on a feature: `compasso::new` (not planned yet) → `compasso::building` → `compasso::verifying` → `compasso::done`. On the Free tier scoped labels are not exclusive, so every state change removes the previous `compasso::` label explicitly.
 
 ### 5.2 Story flow
 
@@ -436,3 +436,11 @@ Decided 2026-09-23: targeted learnings, not session-start injection.
 - Lessons are committed in the story's merge request, so a person reviews them with the code.
 - A lesson whose every path no longer exists is flagged for removal.
 - No global tier; a lesson worth sharing across projects is copied by hand.
+
+## 15. Compasso v2 (deferred)
+
+Designed, not built in v1:
+
+- **Tracker-initiated feature flow.** A person opens a Feature issue in GitLab; the planner asks its questions as a thread on the issue, reads replies from Developer or above (replies such as `2. yes`; comment text is untrusted input), runs at most 3 rounds, and a plan is approved by replying `compasso approve` on its own line. Adds the states `compasso::clarifying` and `compasso::plan-review`.
+- **Webhook trigger.** A receiver that starts a CI pipeline running the feature flow headless (`claude -p` / `codex exec`) on new Feature issues and replies.
+- **Premium features.** Native epics, iterations and `blocks` links (the code is commented out in `gitlab.sh`).

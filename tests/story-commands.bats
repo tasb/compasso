@@ -82,7 +82,7 @@ calls() { grep -c -- "$1" "$FAKE_GL/calls.log" || true; }
 @test "set-state: adds the new state and removes every other compasso state" {
   run gl set-state --iid 8 --state in-review
   [ "$status" -eq 0 ]
-  grep -q "PUT projects/acme%2Fapp/issues/8 add_labels=compasso::in-review remove_labels=compasso::new,compasso::clarifying,compasso::plan-review,compasso::building,compasso::verifying,compasso::done" "$FAKE_GL/calls.log"
+  grep -q "PUT projects/acme%2Fapp/issues/8 add_labels=compasso::in-review remove_labels=compasso::new,compasso::building,compasso::verifying,compasso::done" "$FAKE_GL/calls.log"
 }
 
 @test "set-state: an unknown state is refused" {

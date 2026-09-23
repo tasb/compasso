@@ -5,4 +5,5 @@
 | <!-- #iid Title --> | <!-- h --> | <!-- agent / human / either --> | <!-- #iid or — --> |
 
 **Security:** <!-- no findings, or one bullet per finding -->
-**Approve:** reply `compasso approve` on its own line (Developer or above)
+
+**Approved:** by @<!-- username --> in the agent, <!-- YYYY-MM-DD -->

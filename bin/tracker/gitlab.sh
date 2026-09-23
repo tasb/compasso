@@ -45,8 +45,6 @@ api() { glab api --hostname "$HOST" "$@"; }
 # Labels Compasso owns. Free tier does not make scoped labels exclusive, so
 # state changes must remove the previous compasso:: label explicitly.
 LABELS='compasso::new|#6699cc|Feature waiting for the planner
-compasso::clarifying|#f0ad4e|Planner asked questions; waiting for answers in comments
-compasso::plan-review|#9b59b6|Breakdown posted; waiting for plan approval
 compasso::building|#1f75cb|Stories being built
 compasso::in-review|#3498db|Story merge request open; waiting for approval
 compasso::verifying|#e67e22|Feature integration, e2e and bug fixing
@@ -344,7 +342,7 @@ story() {
 }
 
 set_state() {
-  local all="compasso::new compasso::clarifying compasso::plan-review compasso::building compasso::in-review compasso::verifying compasso::done"
+  local all="compasso::new compasso::building compasso::in-review compasso::verifying compasso::done"
   need IID STATE
   case " $all " in *" compasso::$STATE "*) : ;; *) echo "gitlab: unknown state '$STATE'" >&2; return 1 ;; esac
   api -X PUT "projects/$PID/issues/$IID" -f add_labels="compasso::$STATE" \

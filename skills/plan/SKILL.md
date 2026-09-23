@@ -11,7 +11,7 @@ Plan one sprint top-down. You act as the planner: read `roles/planner.md` in the
 
 3. **Epic.** Ask for the sprint goal in one sentence. Propose the sprint number (one more than the highest `S<n>` milestone in the project, or 1) and dates (next Monday to the Friday `sprint.weeks` later), and confirm the capacity from the config. Record risks the user names.
 
-4. **Features.** Ask which features the sprint delivers. For each: goal, scope (what to build), acceptance (Given/When/Then). Ask questions in rounds as `roles/planner.md` says; record each answer as a bullet in `decisions`.
+4. **Features.** Ask which features the sprint delivers. For each: goal, scope (what to build), acceptance (Given/When/Then). Ask questions in rounds as `roles/planner.md` says; record each answer as a bullet in `decisions`. Ask in this conversation, never on the tracker.
 
 5. **Stories.** Read the code, then split each feature into stories that follow `roles/planner.md`. For every story set `title`, `as`/`want`/`so_that`, `acceptance`, `verify`, `tests`, `touches`, `depends_on`, `owner` and `estimate_h`. Ask the user who owns stories you cannot assign (`agent`, `human` or `either`). Add a `coverage` override only when the user asks for one.
 
