@@ -1,0 +1,50 @@
+# Compasso project configuration. Written by /compasso:setup; commit it.
+version: 1
+
+tracker:
+  provider: gitlab            # the only provider in v0
+  host: gitlab.com
+  project: ""                 # namespace/project, e.g. my-group/my-app
+  tier: auto                  # auto | free | premium (set explicitly on self-managed)
+
+sprint:
+  weeks: 2
+  hours_per_day: 8
+  capacity_hours: 80          # team hours available per sprint, humans and agents
+
+limits:
+  story_max_hours: 8          # hard limit: one working day
+  story_target_hours: 4       # what the planner aims for
+  # A feature may take at most half a sprint; derived from sprint, not configured.
+
+commands:                     # the repo's own commands; empty means "not applicable"
+  test: ""
+  lint: ""
+  typecheck: ""
+  build: ""
+  coverage: ""                # must produce a Cobertura or LCOV report
+  e2e: ""
+
+approvals:
+  plan: human                 # human | auto  (auto still requires a clean security review of the plan)
+  merge: human                # human | agent (agent never approves with an open security finding)
+
+harnesses: [claude]           # claude and/or codex
+
+models:
+  claude:
+    planner:  { model: opus }
+    tester:   { model: sonnet }
+    builder:  { model: sonnet }
+    reviewer: { model: sonnet }
+    security: { model: opus }
+    approver: { model: opus }
+    shipper:  { model: haiku }
+  codex:
+    planner:  { model: gpt-6-astra, effort: high }
+    tester:   { model: gpt-6-sol,   effort: medium }
+    builder:  { model: gpt-6-sol,   effort: medium }
+    reviewer: { model: gpt-6-sol,   effort: high }
+    security: { model: gpt-6-astra, effort: high }
+    approver: { model: gpt-6-astra, effort: high }
+    shipper:  { model: gpt-6-luna,  effort: low }

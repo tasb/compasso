@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# Test double for glab. Each call is logged to $GLAB_STUB_DIR/calls.log and
+# answered from $GLAB_STUB_DIR/<key>, where <key> is the arguments with every
+# non-alphanumeric run turned into '_'. A missing fixture fails like a 404;
+# <key>.exit overrides the exit code. With GLAB_STUB_POST_OK set, an
+# unmatched POST succeeds with '{}'.
+key="$(printf '%s ' "$@" | sed -E 's/[^A-Za-z0-9]+/_/g; s/_$//')"
+printf '%s\n' "$*" >> "$GLAB_STUB_DIR/calls.log"
+if [ -f "$GLAB_STUB_DIR/$key" ]; then
+  cat "$GLAB_STUB_DIR/$key"
+  exit "$(cat "$GLAB_STUB_DIR/$key.exit" 2>/dev/null || echo 0)"
+fi
+case " $* " in
+  *" -X POST "*) [ -n "${GLAB_STUB_POST_OK:-}" ] && { echo '{}'; exit 0; } ;;
+esac
+echo '{"message":"404 Not Found"}'
+exit 1
