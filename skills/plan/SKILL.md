@@ -9,17 +9,19 @@ Plan one sprint top-down. You act as the planner: read `roles/planner.md` in the
 
 2. **Plan file.** If `.compasso/plan.yaml` exists, this re-plans that sprint: read it and change only what the user asks; never touch `gitlab` fields. Otherwise copy `${CLAUDE_PLUGIN_ROOT}/templates/plan.yaml` there.
 
-3. **Epic.** Ask for the sprint goal in one sentence. Propose the sprint name (`YYYY-S<ISO week of the start>`) and dates (next Monday to the Friday `sprint.weeks` later), and confirm the capacity from the config. Record risks the user names.
+3. **Epic.** Ask for the sprint goal in one sentence. Propose the sprint number (one more than the highest `S<n>` milestone in the project, or 1) and dates (next Monday to the Friday `sprint.weeks` later), and confirm the capacity from the config. Record risks the user names.
 
 4. **Features.** Ask which features the sprint delivers. For each: goal, scope (what to build), acceptance (Given/When/Then). Ask questions in rounds as `roles/planner.md` says; record each answer as a bullet in `decisions`.
 
 5. **Stories.** Read the code, then split each feature into stories that follow `roles/planner.md`. For every story set `title`, `as`/`want`/`so_that`, `acceptance`, `verify`, `tests`, `touches`, `depends_on`, `owner` and `estimate_h`. Ask the user who owns stories you cannot assign (`agent`, `human` or `either`). Add a `coverage` override only when the user asks for one.
 
+   **Blockers.** For anything outside the plan a story waits for (credentials, another team, a decision), add a blocker: a title, the GitLab username of the project member who will resolve it (ask; it is required), and the steps to resolve it, one clear action each. List it in the story's `blocked_by`.
+
 6. **Check.** `bash ${CLAUDE_PLUGIN_ROOT}/bin/plan-check.sh --repo .` Fix every error and re-run until it passes. Mention its notes (stories above the target) and the overlapping paths.
 
 7. **Show the plan** in the approved Plan format from `${CLAUDE_PLUGIN_ROOT}/templates/comments/plan.md`: one row per story with hours, owner and dependencies, plus the total and the critical path from plan-check.
 
-8. **Security review (mandatory).** Dispatch a subagent that follows `roles/security.md`, with the model set for the `security` role in `.compasso/project.yaml` for this harness, and give it the path `.compasso/plan.yaml`. Add its result to the Plan's Security line. For each blocker or major finding, change the plan (usually acceptance for the abuse case) and re-run steps 6 and 8.
+8. **Security review (mandatory).** Dispatch a subagent that follows `roles/security.md`, with the model set for the `security` role in `.compasso/project.yaml` for this harness, and give it the path `.compasso/plan.yaml`. Add its result to the Plan's Security line. For each finding of severity blocker or major, change the plan (usually acceptance for the abuse case) and re-run steps 6 and 8.
 
 9. **Approval.** With `approvals.plan: human`, ask the user to approve the plan as shown and wait for an explicit yes. With `auto`, continue only when security reported no findings; otherwise ask the user.
 

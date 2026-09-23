@@ -1,9 +1,18 @@
 epic:
   key: E-1
   goal: Customers can see and download their invoices without contacting support.
-  sprint: { name: 2026-S20, start: "2026-10-05", end: "2026-10-16" }
+  sprint: { number: 20, start: "2026-10-05", end: "2026-10-16" }
   risks: [PDF service is owned by another team]
   gitlab: { milestone: null, issue: null }
+blockers:
+  - key: B-1
+    title: PDF service credentials
+    assignee: ana
+    steps:
+      - Ask the PDF team for API credentials for the invoices service
+      - Store them as the masked CI variable PDF_API_KEY
+      - Close this task
+    gitlab: null
 features:
   - key: F-1
     title: Invoice history
@@ -72,5 +81,5 @@ features:
         depends_on: ["#12"]
         owner: agent
         estimate_h: 8
-        blocked: Waiting for PDF service credentials
+        blocked_by: [B-1]
         gitlab: null

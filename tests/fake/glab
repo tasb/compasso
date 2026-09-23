@@ -35,6 +35,13 @@ case "$method $path" in
   "GET projects/"*"/milestones?"*) echo '[]' ;;
   "POST projects/"*"/milestones") echo '{"id":501}' ;;
   "PUT projects/"*"/milestones/"*) echo '{"id":501}' ;;
+  "GET users?username=ghost") echo '[]' ;;
+  "GET users?username=outsider") echo '[{"id":88}]' ;;
+  "GET users?username="*) echo '[{"id":77}]' ;;
+  "GET projects/"*"/members/all/77") echo '{"id":77}' ;;
+  "GET projects/"*"/members/all/"*) echo '{"message":"404 Not found"}'; exit 1 ;;
+  "GET projects/"*"/labels?"*) echo '[]' ;;
+  "POST projects/"*"/labels") echo '{}' ;;
   "GET namespaces/9") printf '{"plan":"%s"}\n' "${FAKE_GL_PLAN:-free}" ;;
   "POST projects/"*"/issues")
     i="$(next_iid)"; printf '%s\n' "${desc:-}" > "$D/desc/$i.md"; echo "${f_labels:-}" > "$D/labels/$i"; issue_json "$i" ;;

@@ -3,10 +3,19 @@
 epic:
   key: E-1
   goal: ""
-  sprint: { name: "", start: "", end: "" }   # dates as YYYY-MM-DD
+  sprint: { number: 1, start: "", end: "" }  # sprint number (S1, S2, ...); dates as YYYY-MM-DD
   # coverage: 85                              # optional % of changed lines for this sprint
   risks: []
   gitlab: { milestone: null, issue: null }
+
+blockers: []           # things outside the plan that stories wait for, each a task for a person:
+# - key: B-1
+#   title: PDF service credentials
+#   assignee: ana      # GitLab username of a project member; always required
+#   steps:             # what to do, in order
+#     - Ask the PDF team for API credentials
+#     - Store them as the CI variable PDF_API_KEY
+#   gitlab: null
 
 features:
   - key: F-1
@@ -29,5 +38,5 @@ features:
         depends_on: []   # story keys in this plan, or "#iid" for existing items
         owner: agent     # agent | human | either
         estimate_h: 4
-        # blocked: ""    # external dependency, if any
+        blocked_by: []   # blocker keys (B-1) this story waits for
         gitlab: null

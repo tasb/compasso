@@ -20,6 +20,8 @@ A *compasso* is a musical measure: one bar of a fixed length. Here, one sprint.
 | Feature | ≤ half a sprint (≤ 40h at 2-week sprints) | Issue (child of epic), `type::feature` | Issue, `type::feature`, assigned to the milestone |
 | User story | ≤ 8h hard limit, ~4h target | Child task of the feature | Child task of the feature |
 
+Premium features are designed but switched off: every tier is pushed the Free way until the Premium path can be tested on a Premium project. The Premium columns below describe that future path.
+
 - Sprint length defaults to **2 weeks** (10 working days); `setup` asks, the user overrides.
 - Estimates are in **hours**.
 - A story has an owner label: `owner::agent`, `owner::human` or `owner::either`. Humans and agents share a sprint.
@@ -32,7 +34,7 @@ The planner must identify three kinds:
 |---|---|---|---|
 | hard | B cannot start before A is done | `blocks` / `is blocked by` link | `**Depends on:** #iid` line in the story |
 | soft | A and B touch overlapping paths, so they run serially | derived from `touches:` | derived from `touches:` |
-| external | waits on a human, another team, or a third party | `blocked` label + note | `blocked` label + note |
+| external | waits on something outside the plan | a blocker task + `**Blocked by:** #iid` + `blocked` label | same |
 
 `plan-check` refuses a plan with: an unknown dependency id, a cycle, a dependency on a later sprint, a story over the hard limit, a feature over half a sprint, or an epic over capacity. It prints the critical path and the parallel waves.
 
@@ -44,10 +46,18 @@ The planner must identify three kinds:
 epic:
   key: E-1
   goal: Customers can see and download their invoices without contacting support.
-  sprint: { name: 2026-S20, start: "2026-10-05", end: "2026-10-16" }
+  sprint: { number: 20, start: "2026-10-05", end: "2026-10-16" }   # sprint 20 = "S20"
   coverage: 85                          # optional
   risks: [PDF service is owned by another team]
   gitlab: { milestone: 501, issue: 12 }
+blockers:
+  - key: B-1
+    title: PDF service credentials
+    assignee: ana                       # GitLab username of a project member; required
+    steps:
+      - Ask the PDF team for API credentials for the invoices service
+      - Store them as the masked CI variable PDF_API_KEY
+    gitlab: 9
 features:
   - key: F-1
     title: Invoice history
@@ -69,7 +79,7 @@ features:
         depends_on: []                  # story keys, or "#iid" for existing items
         owner: agent                    # agent | human | either
         estimate_h: 4
-        blocked: ""                     # optional external dependency
+        blocked_by: [B-1]               # blockers this story waits for
         coverage: 90                    # optional
         gitlab: 8
 ```
@@ -78,12 +88,14 @@ features:
 
 `gitlab.sh push-plan` runs only on a plan that passes `plan-check`, then writes, in this order:
 
-1. The milestone for the sprint (found by name, else created with the sprint dates).
+1. The milestone `S<number>` for the sprint (found by title, else created with the sprint dates).
 2. Each feature as an issue labelled `type::feature`.
-3. Each story as a task, in dependency order, attached to its feature, with its estimate in hours and its `owner::` (and `blocked`) labels. Free: dependencies are the `**Depends on:**` line. Premium: `blocks` links, created only when missing.
-4. The epic as an issue labelled `type::epic`, last, because it lists the features with their hours.
+3. Each blocker as a task labelled `type::blocker` and `priority::urgent`, assigned to its person, who must be a project member.
+4. Each story as a task, in dependency order, attached to its feature, with its estimate in hours, its `owner::` label, and `blocked` when it has blockers. Dependencies are the `**Depends on:**` line.
+5. The blockers again, now listing the stories they hold up.
+6. The epic as an issue labelled `type::epic` and titled `S<number>: <goal>`, last, because it lists the features with their hours.
 
-Premium currently uses the same milestone + `type::epic` issue as Free; native group epics and iterations need a Premium project to build and test against.
+Premium (native group epics, iterations, `blocks` links) is commented out in `gitlab.sh` and not available: it needs a Premium project to build and test against.
 
 ### Work item formats
 
@@ -95,7 +107,7 @@ Rules for every description:
 4. Describe only what to do. Bullets, one idea each, at most 20 words. No introductions, no restating the title.
 5. Items Compasso writes carry one hidden line for idempotent pushes: `<!-- compasso:key=S-1 -->`.
 
-The formats ship as GitLab issue templates in `templates/issue_templates/`; `setup` installs them into the product repo's `.gitlab/issue_templates/`. On Premium, epics are group epics, which issue templates do not reach; Compasso writes the same format into them.
+The formats ship as GitLab issue templates in `templates/issue_templates/`; `setup` installs them into the product repo's `.gitlab/issue_templates/`.
 
 **Epic** — required: Goal, Features.
 
@@ -132,7 +144,7 @@ The formats ship as GitLab issue templates in `templates/issue_templates/`; `set
 - Filled in at verification
 ```
 
-**User story** — required: the As/I want/so that line, Acceptance, Verify, Tests. `Depends on` is Free tier only (Premium uses `blocks` links). `Blocked` (external dependency) and `Coverage` appear only when set.
+**User story** — required: the As/I want/so that line, Acceptance, Verify, Tests. `Blocked by` links to the blocker tasks and, like `Coverage`, appears only when set.
 
 ```markdown
 **As** a customer **I want** an invoice list API **so that** the Billing page can show my history.
@@ -147,6 +159,18 @@ The formats ship as GitLab issue templates in `templates/issue_templates/`; `set
 
 **Tests:** unit, e2e · **Touches:** `src/billing/api/**`
 **Depends on:** #440
+**Blocked by:** #452
+```
+
+**Blocker** — a task for one person, always assigned, labelled `type::blocker` and `priority::urgent`. Required: Steps.
+
+```markdown
+**Needed for:** #9 PDF endpoint
+
+## Steps
+1. Ask the PDF team for API credentials for the invoices service
+2. Store them as the masked CI variable PDF_API_KEY
+3. Close this task
 ```
 
 **Bug** — required: all sections. Verify must fail before the fix and pass after.

@@ -163,3 +163,35 @@ json() { pc --json | jq -r "$1"; }
   yq -i '.features[1].stories[0].touches = ["src/billing/**"]' "$PLAN"
   [ "$(json '.overlaps | map(join("/")) | join(" ")')" = "S-1/S-3 S-1/S-4 S-2/S-4 S-3/S-4" ]
 }
+
+@test "the sprint number must be a positive integer" {
+  plan_set '.epic.sprint.number = 20.5'
+  run pc
+  [ "$status" -eq 1 ]
+  plan_set '.epic.sprint.number = "twenty"'
+  run pc
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"epic.sprint.number must be a positive integer"* ]] || false
+}
+
+@test "a blocker needs a title, a person and steps" {
+  plan_set 'del(.blockers[0].assignee) | .blockers[0].steps = []'
+  run pc
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"B-1: assignee is required"* ]] || false
+  [[ "$output" == *"B-1: steps is required"* ]] || false
+}
+
+@test "a story can only be blocked by a blocker in the plan" {
+  plan_set '.features[0].stories[0].blocked_by = ["B-9"]'
+  run pc
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"S-1: blocked by unknown blocker B-9"* ]] || false
+}
+
+@test "a blocker that blocks nothing is refused" {
+  plan_set '.features[1].stories[0].blocked_by = []'
+  run pc
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"B-1: blocks no story"* ]] || false
+}

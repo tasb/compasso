@@ -8,4 +8,5 @@
 
 **Tests:** <!-- unit | unit, e2e --> · **Touches:** `<!-- paths -->`
 **Depends on:** <!-- #iid, Free tier only; delete the line if none -->
+**Blocked by:** <!-- #iid of the blocker task; delete the line if none -->
 **Coverage:** <!-- optional: % of changed lines; delete the line to inherit from the feature -->

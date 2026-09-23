@@ -7,8 +7,8 @@ it() { "$ROOT/bin/issue-templates.sh" --repo "$REPO"; }
 @test "installs one template per work-item type" {
   run it
   [ "$status" -eq 0 ]
-  [[ "$output" == *"4 added, 0 unchanged"* ]] || false
-  for t in Epic Feature Story Bug; do
+  [[ "$output" == *"5 added, 0 unchanged"* ]] || false
+  for t in Epic Feature Story Bug Blocker; do
     cmp -s "$ROOT/templates/issue_templates/$t.md" "$REPO/.gitlab/issue_templates/$t.md"
   done
 }
@@ -16,7 +16,7 @@ it() { "$ROOT/bin/issue-templates.sh" --repo "$REPO"; }
 @test "a second run changes nothing" {
   it >/dev/null
   run it
-  [[ "$output" == *"0 added, 4 unchanged"* ]] || false
+  [[ "$output" == *"0 added, 5 unchanged"* ]] || false
 }
 
 @test "a template the team edited is kept and reported" {
@@ -24,7 +24,7 @@ it() { "$ROOT/bin/issue-templates.sh" --repo "$REPO"; }
   echo "our own feature format" > "$REPO/.gitlab/issue_templates/Feature.md"
   run it
   [ "$status" -eq 0 ]
-  [[ "$output" == *"3 added, 0 unchanged"* ]] || false
+  [[ "$output" == *"4 added, 0 unchanged"* ]] || false
   [[ "$output" == *"kept the repo's own version of: Feature.md"* ]] || false
   [ "$(cat "$REPO/.gitlab/issue_templates/Feature.md")" = "our own feature format" ]
 }
@@ -39,4 +39,9 @@ it() { "$ROOT/bin/issue-templates.sh" --repo "$REPO"; }
   for l in $(cat "$ROOT"/templates/issue_templates/*.md | grep -o '~"[^"]*"' | tr -d '~"' | sort -u); do
     grep -qE "(^|')$l\\|" "$ROOT/bin/tracker/gitlab.sh"
   done
+}
+
+@test "the blocker template is urgent and asks for a person" {
+  grep -qF '/label ~"type::blocker" ~"priority::urgent"' "$ROOT/templates/issue_templates/Blocker.md"
+  grep -q '^/assign ' "$ROOT/templates/issue_templates/Blocker.md"
 }

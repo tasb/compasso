@@ -45,7 +45,9 @@ owner::either|#7f8c8d|Whoever starts it first
 severity::blocker|#a93226|Stops the feature from shipping
 severity::major|#d35400|Wrong behaviour with a workaround
 severity::minor|#b7950b|Cosmetic or low impact
-blocked|#d9534f|Waiting on an external dependency'
+type::blocker|#6c3483|Something outside the plan a story waits for
+priority::urgent|#e74c3c|Needs action now
+blocked|#d9534f|Waiting on a blocker task'
 
 check() {
   local user proj level tier plan
@@ -121,12 +123,14 @@ duration() { # hours (may be fractional) -> GitLab duration, e.g. 4.5 -> 4h30m
     | "\($w)h" + (if $m > 0 then "\($m)m" else "" end)'
 }
 
+sprint() { echo "S$(pget .epic.sprint.number)"; }   # sprint number 20 -> "S20"
+
 milestone() { # -> milestone id
   local id name start end
   id="$(pget '.epic.gitlab.milestone // ""')"
-  name="$(pget .epic.sprint.name)"; start="$(pget .epic.sprint.start)"; end="$(pget .epic.sprint.end)"
+  name="$(sprint)"; start="$(pget .epic.sprint.start)"; end="$(pget .epic.sprint.end)"
   if [ -z "$id" ]; then
-    id="$(api "projects/$PID/milestones?title=$(printf '%s' "$name" | jq -sRr @uri)" | jq -r '.[0].id // empty')"
+    id="$(api "projects/$PID/milestones?title=$name" | jq -r '.[0].id // empty')"
     [ -n "$id" ] || id="$(api -X POST "projects/$PID/milestones" -f title="$name" \
       -f start_date="$start" -f due_date="$end" | jq -r '.id // empty')"
     [ -n "$id" ] || { echo "gitlab: could not create milestone $name" >&2; return 1; }
@@ -138,42 +142,71 @@ milestone() { # -> milestone id
   echo "$id"
 }
 
-upsert_issue() { # iid-or-empty title description milestone type labels... -> "iid id"
-  local iid="$1" title="$2" desc="$3" ms="$4" type="$5"; shift 5
-  local out
+member_id() { # username -> user id of a member of the project
+  local uid
+  uid="$(api "users?username=$1" | jq -r '.[0].id // empty')"
+  [ -n "$uid" ] || { echo "gitlab: no GitLab user '$1'" >&2; return 1; }
+  api "projects/$PID/members/all/$uid" >/dev/null 2>&1 || { echo "gitlab: $1 is not a member of $PROJECT" >&2; return 1; }
+  echo "$uid"
+}
+
+upsert_issue() { # iid-or-empty title description milestone type assignee-id-or-empty labels... -> "iid id"
+  local iid="$1" title="$2" desc="$3" ms="$4" type="$5" who="$6"; shift 6
+  local out assign=""
+  [ -n "$who" ] && assign="assignee_ids=$who"
   if [ -z "$iid" ]; then
     out="$(api -X POST "projects/$PID/issues" -f title="$title" -f description="$desc" \
-      -f milestone_id="$ms" -f issue_type="$type" -f labels="$(IFS=,; echo "$*")")"
+      -f milestone_id="$ms" -f issue_type="$type" -f labels="$(IFS=,; echo "$*")" ${assign:+-f "$assign"})"
   else
     out="$(api -X PUT "projects/$PID/issues/$iid" -f title="$title" -f description="$desc" \
-      -f milestone_id="$ms" -f add_labels="$(IFS=,; echo "$*")")"
+      -f milestone_id="$ms" -f add_labels="$(IFS=,; echo "$*")" ${assign:+-f "$assign"})"
   fi
   printf '%s' "$out" | jq -r 'if .iid then "\(.iid) \(.id)" else empty end'
 }
 
 push_plan() {
-  local info tier ms nf ns fi si f s key iid id fid title desc labels deps d ctx res owner feats=""
-  local iids='{}' stale linked was parent
+  local info tier ms n i f b s key iid id fid title desc labels ctx res owner feats uid needed
+  local iids='{}' stale was parent
   "$BIN/plan-check.sh" --repo "$REPO" >/dev/null || {
     echo "gitlab: the plan does not pass plan-check - run: bin/plan-check.sh --repo $REPO" >&2; return 1; }
   info="$(check)" || return $?
-  tier="$(printf '%s' "$info" | jq -r .tier)"
+  ensure_labels >/dev/null || return $?   # labels added in a newer Compasso exist before they are applied
+  # Premium features (native epics, iterations, blocks links) are not available
+  # yet: every tier is pushed the Free way until they can be tested on Premium.
+  # tier="$(printf '%s' "$info" | jq -r .tier)"
+  tier=free
   ms="$(milestone)" || return 1
 
   # features
-  nf="$(pget '.features | length')"
-  fi=0
-  while [ "$fi" -lt "$nf" ]; do
-    f="$(yq -o=json ".features[$fi]" "$PLAN")"
+  n="$(pget '.features | length')"; i=0
+  while [ "$i" -lt "$n" ]; do
+    f="$(yq -o=json ".features[$i]" "$PLAN")"
     key="$(jq -r .key <<<"$f")"; title="$(jq -r .title <<<"$f")"
     desc="$(render feature "$f" '{}')"
-    res="$(upsert_issue "$(jq -r '.gitlab // ""' <<<"$f")" "$title" "$desc" "$ms" issue type::feature)"
+    res="$(upsert_issue "$(jq -r '.gitlab // ""' <<<"$f")" "$title" "$desc" "$ms" issue "" type::feature)"
     [ -n "$res" ] || { echo "gitlab: could not write feature $key" >&2; return 1; }
     iid="${res% *}"; id="${res#* }"
     pset '(.features[] | select(.key == strenv(K)) | .gitlab) = (strenv(V) | tonumber)' "$key" "$iid"
     iids="$(jq -c --arg k "$key" --argjson v "$iid" --argjson id "$id" '.[$k] = $v | .["id:" + $k] = $id' <<<"$iids")"
     echo "gitlab: feature $key -> #$iid"
-    fi=$((fi + 1))
+    i=$((i + 1))
+  done
+
+  # blockers, before the stories that link to them; "Needed for" is filled in after the stories
+  n="$(pget '.blockers // [] | length')"; i=0
+  while [ "$i" -lt "$n" ]; do
+    b="$(yq -o=json ".blockers[$i]" "$PLAN")"
+    key="$(jq -r .key <<<"$b")"
+    uid="$(member_id "$(jq -r .assignee <<<"$b")")" || return 1
+    iid="$(jq -r '.gitlab // ""' <<<"$b")"
+    if [ -z "$iid" ]; then
+      res="$(upsert_issue "" "$(jq -r .title <<<"$b")" "$(render blocker "$b" '{"needed": []}')" "$ms" task "$uid" type::blocker priority::urgent)"
+      [ -n "$res" ] || { echo "gitlab: could not write blocker $key" >&2; return 1; }
+      iid="${res% *}"
+      pset '(.blockers[] | select(.key == strenv(K)) | .gitlab) = (strenv(V) | tonumber)' "$key" "$iid"
+    fi
+    iids="$(jq -c --arg k "$key" --argjson v "$iid" '.[$k] = $v' <<<"$iids")"
+    i=$((i + 1))
   done
 
   # stories, in dependency order so every dependency already has an iid
@@ -183,9 +216,9 @@ push_plan() {
     ctx="$(jq -nc --arg tier "$tier" --argjson iids "$iids" '{tier: $tier, iids: $iids}')"
     desc="$(render story "$s" "$ctx")"
     labels="owner::$owner"
-    [ -n "$(jq -r '.blocked // ""' <<<"$s")" ] && labels="$labels,blocked"
+    [ "$(jq '.blocked_by // [] | length' <<<"$s")" -gt 0 ] && labels="$labels,blocked"
     iid="$(jq -r '.gitlab // ""' <<<"$s")"
-    res="$(upsert_issue "$iid" "$title" "$desc" "$ms" task $labels)"
+    res="$(upsert_issue "$iid" "$title" "$desc" "$ms" task "" $labels)"
     [ -n "$res" ] || { echo "gitlab: could not write story $key" >&2; return 1; }
     was="$iid"; iid="${res% *}"
     pset '(.features[].stories[] | select(.key == strenv(K)) | .gitlab) = (strenv(V) | tonumber)' "$key" "$iid"
@@ -210,27 +243,42 @@ push_plan() {
     api -X POST "projects/$PID/issues/$iid/time_estimate?duration=$(duration "$(jq .estimate_h <<<"$s")")" >/dev/null ||
       { echo "gitlab: could not set the estimate of story $key" >&2; return 1; }
 
-    if [ "$tier" = premium ]; then
-      linked="$(api "projects/$PID/issues/$iid/links" | jq -r '.[] | select(.link_type == "is_blocked_by") | .iid')"
-      for d in $(jq -r '.depends_on // [] | .[]' <<<"$s"); do
-        case "$d" in \#*) d="${d#\#}" ;; *) d="$(jq -r --arg k "$d" '.[$k]' <<<"$iids")" ;; esac
-        printf '%s\n' "$linked" | grep -qxF "$d" && continue
-        api -X POST "projects/$PID/issues/$d/links" -f target_project_id="$(printf '%s' "$info" | jq -r .project_id)" \
-          -f target_issue_iid="$iid" -f link_type=blocks >/dev/null ||
-          { echo "gitlab: could not link #$d as blocking story $key" >&2; return 1; }
-      done
-    fi
+    # Premium only, not available yet (see the tier note above): dependencies as blocks links.
+    # if [ "$tier" = premium ]; then
+    #   linked="$(api "projects/$PID/issues/$iid/links" | jq -r '.[] | select(.link_type == "is_blocked_by") | .iid')"
+    #   for d in $(jq -r '.depends_on // [] | .[]' <<<"$s"); do
+    #     case "$d" in \#*) d="${d#\#}" ;; *) d="$(jq -r --arg k "$d" '.[$k]' <<<"$iids")" ;; esac
+    #     printf '%s\n' "$linked" | grep -qxF "$d" && continue
+    #     api -X POST "projects/$PID/issues/$d/links" -f target_project_id="$(printf '%s' "$info" | jq -r .project_id)" \
+    #       -f target_issue_iid="$iid" -f link_type=blocks >/dev/null ||
+    #       { echo "gitlab: could not link #$d as blocking story $key" >&2; return 1; }
+    #   done
+    # fi
     echo "gitlab: story $key -> #$iid"
+  done
+
+  # blockers again: final description with the stories they hold up, and the assignee
+  n="$(pget '.blockers // [] | length')"; i=0
+  while [ "$i" -lt "$n" ]; do
+    b="$(yq -o=json ".blockers[$i]" "$PLAN")"
+    key="$(jq -r .key <<<"$b")"
+    needed="$(yq -o=json . "$PLAN" | jq -c --arg k "$key" '[.features[].stories[] | select((.blocked_by // []) | index($k)) | {iid: .gitlab, title}]')"
+    uid="$(member_id "$(jq -r .assignee <<<"$b")")" || return 1
+    res="$(upsert_issue "$(jq -r .gitlab <<<"$b")" "$(jq -r .title <<<"$b")" \
+      "$(render blocker "$b" "$(jq -nc --argjson needed "$needed" '{needed: $needed}')")" "$ms" task "$uid" type::blocker priority::urgent)"
+    [ -n "$res" ] || { echo "gitlab: could not write blocker $key" >&2; return 1; }
+    echo "gitlab: blocker $key -> #${res% *} (assigned to $(jq -r .assignee <<<"$b"))"
+    i=$((i + 1))
   done
 
   # epic, last, because it lists the features with their iids and hours
   feats="$(yq -o=json . "$PLAN" | jq -c '[.features[] | {iid: .gitlab, title, hours: ([.stories[].estimate_h] | add)}]')"
   ctx="$(jq -nc --argjson features "$feats" --argjson cap "$(cfg .sprint.capacity_hours)" '{features: $features, capacity: $cap}')"
   desc="$(render epic "$(yq -o=json .epic "$PLAN")" "$ctx")"
-  res="$(upsert_issue "$(pget '.epic.gitlab.issue // ""')" "$(pget .epic.sprint.name): $(pget .epic.goal)" "$desc" "$ms" issue type::epic)"
+  res="$(upsert_issue "$(pget '.epic.gitlab.issue // ""')" "$(sprint): $(pget .epic.goal)" "$desc" "$ms" issue "" type::epic)"
   [ -n "$res" ] || { echo "gitlab: could not write the epic" >&2; return 1; }
   pset '.epic.gitlab.issue = (strenv(V) | tonumber)' "" "${res% *}"
-  echo "gitlab: epic $(pget .epic.key) -> #${res% *} (milestone $ms)"
+  echo "gitlab: epic $(pget .epic.key) -> #${res% *} (milestone $(sprint))"
 }
 
 

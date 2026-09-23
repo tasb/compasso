@@ -1,9 +1,10 @@
 # Render one plan item as a GitLab description in the approved work-item format.
-# Input: {kind: "epic"|"feature"|"story", item, ctx}
+# Input: {kind: "epic"|"feature"|"story"|"blocker", item, ctx}
 #   ctx.tier       "free" | "premium" (story Depends on lines are Free only)
 #   ctx.iids       {"S-1": 12, ...}   plan key -> GitLab iid, for dependencies
 #   ctx.capacity   sprint capacity in hours (epic)
 #   ctx.features   [{iid, title, hours}] (epic)
+#   ctx.needed     [{iid, title}] stories a blocker holds up (blocker)
 
 def bullets: map("- " + .) | join("\n");
 def checks: map("- [ ] " + .) | join("\n");
@@ -23,6 +24,13 @@ def hours: (. | tostring) + "h";
       section("Risks"; ($i.risks // []) | if length > 0 then bullets else "" end),
       ($i | key_line)
     ]
+  elif .kind == "blocker" then
+    [
+      (if ($ctx.needed // []) | length > 0
+         then "**Needed for:** " + ($ctx.needed | map("#\(.iid) \(.title)") | join(", ")) else empty end),
+      section("Steps"; $i.steps | to_entries | map("\(.key + 1). \(.value)") | join("\n")),
+      ($i | key_line)
+    ]
   elif .kind == "feature" then
     [
       ([ "**Goal:** \($i.goal)", ($i | coverage_line) ] | join("\n")),
@@ -40,7 +48,7 @@ def hours: (. | tostring) + "h";
       ([ "**Tests:** \($i.tests | join(", "))"
          + (if ($i.touches // []) | length > 0 then " · **Touches:** \($i.touches | map("`\(.)`") | join(", "))" else "" end),
          (if $ctx.tier == "free" and ($deps | length) > 0 then "**Depends on:** \($deps | join(", "))" else empty end),
-         (if ($i.blocked // "") != "" then "**Blocked:** \($i.blocked)" else empty end),
+         (if ($i.blocked_by // []) | length > 0 then "**Blocked by:** \(($i.blocked_by | map("#\($ctx.iids[.] // .)") | join(", ")))" else empty end),
          ($i | coverage_line) ] | join("\n")),
       ($i | key_line)
     ]

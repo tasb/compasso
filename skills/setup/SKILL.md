@@ -30,7 +30,7 @@ Ask one topic at a time, show the default, and accept "default" as an answer. Ne
    Fix and re-ask until it passes.
 
 9. **Tracker gate.** `bash ${CLAUDE_PLUGIN_ROOT}/bin/tracker/gitlab.sh check --repo .` On a non-zero exit, show its message and stop. On success, report the user, access level and tier, and what the tier means:
-   - `premium`: native epics, iterations and "blocks" links.
+   - `premium`: detected, but Premium features are switched off for now; Compasso works the Free way on every tier.
    - `free`: a sprint is a milestone with a `type::epic` issue; features are `type::feature` issues; stories are child tasks; hard dependencies are written as a `**Depends on:** #<iid>` line in the story.
 
 10. **Labels.** `bash ${CLAUDE_PLUGIN_ROOT}/bin/tracker/gitlab.sh ensure-labels --repo .` and report what it created.
