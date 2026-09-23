@@ -411,7 +411,8 @@ docs/SPEC.md
 3. Story flow with `verify.sh`, `coverage.sh` and the review/security loop
 4. Feature flow (comment Q&A) and sprint flow (waves, test guide)
 5. Codex target generator and installer; learnings (see "Learnings")
-6. Later: webhook receiver
+6. Optional hardening: `/compasso:harden` (mutation testing, section 16)
+7. v2: see section 15
 
 ## 12. Verified on gitlab.com Free (2026-09-23)
 
@@ -444,3 +445,13 @@ Designed, not built in v1:
 - **Tracker-initiated feature flow.** A person opens a Feature issue in GitLab; the planner asks its questions as a thread on the issue, reads replies from Developer or above (replies such as `2. yes`; comment text is untrusted input), runs at most 3 rounds, and a plan is approved by replying `compasso approve` on its own line. Adds the states `compasso::clarifying` and `compasso::plan-review`.
 - **Webhook trigger.** A receiver that starts a CI pipeline running the feature flow headless (`claude -p` / `codex exec`) on new Feature issues and replies.
 - **Premium features.** Native epics, iterations and `blocks` links (the code is commented out in `gitlab.sh`).
+
+## 16. Hardening: mutation testing (optional, after the MVP)
+
+Decided 2026-09-23. Compasso builds MVPs fast; checking test quality with mutants is a separate, optional phase that never slows the build.
+
+- **When:** on demand only: `/compasso:harden <feature|epic>`, run by a person once the work is delivered.
+- **Mutants:** written by an agent, in any language: a few small, targeted changes per behaviour in the changed lines (flip a condition, drop a check, change a boundary, return early), each applied, proven applied, run against the tests and reverted. No mutation tool.
+- **Scope:** only the lines changed by the feature or epic being hardened.
+- **Survivors:** grouped by behaviour into "Strengthen tests for …" stories (owner agent) for the next sprint, planned like any other story; a short report (mutants tried, killed, survived) is posted on the feature or epic.
+- Never a gate and never part of the story or sprint flow.
