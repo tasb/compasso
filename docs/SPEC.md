@@ -112,8 +112,10 @@ The formats ship as GitLab issue templates in `templates/issue_templates/`; `set
 **Epic** — required: Goal, Features.
 
 ```markdown
-**Goal:** Customers can see and download their invoices without contacting support.
-**Sprint:** 2026-10-05 → 2026-10-16 · **Capacity:** 80h · **Planned:** 72h
+**Goal:** Customers can see and download their invoices without contacting support.\
+**Sprint:** 2026-10-05 → 2026-10-16\
+**Capacity:** 80h\
+**Planned:** 72h
 
 ## Features
 - [ ] #431 Invoice history — 32h

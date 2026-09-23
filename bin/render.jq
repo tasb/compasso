@@ -18,8 +18,10 @@ def hours: (. | tostring) + "h";
 | if .kind == "epic" then
     [
       ([ "**Goal:** \($i.goal)",
-         "**Sprint:** \($i.sprint.start) → \($i.sprint.end) · **Capacity:** \($ctx.capacity | hours) · **Planned:** \($ctx.features | map(.hours) | add // 0 | hours)",
-         ($i | coverage_line) ] | join("\n")),
+         "**Sprint:** \($i.sprint.start) → \($i.sprint.end)",
+         "**Capacity:** \($ctx.capacity | hours)",
+         "**Planned:** \($ctx.features | map(.hours) | add // 0 | hours)",
+         ($i | coverage_line) ] | join("\\\n")),   # a trailing backslash is a line break in GitLab
       section("Features"; $ctx.features | map("#\(.iid) \(.title) — \(.hours | hours)") | checks),
       section("Risks"; ($i.risks // []) | if length > 0 then bullets else "" end),
       ($i | key_line)

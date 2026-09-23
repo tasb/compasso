@@ -100,8 +100,10 @@ EOF
 EOF
   diff "$BATS_TEST_TMPDIR/feature" "$FAKE_GL/desc/$(iid_of F-1).md"
   cat > "$BATS_TEST_TMPDIR/epic" <<EOF
-**Goal:** Customers can see and download their invoices without contacting support.
-**Sprint:** 2026-10-05 → 2026-10-16 · **Capacity:** 80h · **Planned:** 22h
+**Goal:** Customers can see and download their invoices without contacting support.\\
+**Sprint:** 2026-10-05 → 2026-10-16\\
+**Capacity:** 80h\\
+**Planned:** 22h
 
 ## Features
 - [ ] #$(iid_of F-1) Invoice history — 14h
