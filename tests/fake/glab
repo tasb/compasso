@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+# A tiny in-memory GitLab behind `glab api`, for push tests. State lives in
+# $FAKE_GL: calls.log (one "METHOD path field=value..." line per call, with
+# descriptions left out), desc/<iid>.md (the last description written),
+# labels/<iid> and next_iid. $FAKE_GL_PLAN sets the namespace plan (default free).
+set -u
+D="$FAKE_GL"; mkdir -p "$D/desc" "$D/labels"
+[ "$1" = api ] || { echo "fake glab: only 'api' is supported" >&2; exit 1; }
+shift
+method="" path="" fields=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --hostname) shift 2 ;;
+    --paginate) shift ;;
+    -X) method="$2"; shift 2 ;;
+    -f) k="${2%%=*}"; v="${2#*=}"
+        case "$k" in
+          description) desc="$v" ;;
+          query) fields="$fields query=$v" ;;
+          *) fields="$fields $k=$v" ;;
+        esac
+        eval "f_$k=\$v" 2>/dev/null; shift 2 ;;
+    *) path="$1"; shift ;;
+  esac
+done
+[ -n "$method" ] || { [ -n "$fields${desc+x}" ] && method=POST || method=GET; }  # glab: POST once fields are given
+echo "$method $path$fields" >> "$D/calls.log"
+[ -n "${FAKE_GL_FAIL:-}" ] && case "$method $path" in $FAKE_GL_FAIL) echo '{"message":"500"}'; exit 1 ;; esac
+
+next_iid() { n="$(cat "$D/next_iid" 2>/dev/null || echo 1)"; echo $((n + 1)) > "$D/next_iid"; echo "$n"; }
+issue_json() { printf '{"iid":%s,"id":%s}\n' "$1" "$((1000 + $1))"; }
+
+case "$method $path" in
+  "GET user") echo '{"username":"dev"}' ;;
+  "GET projects/"*"/milestones?"*) echo '[]' ;;
+  "POST projects/"*"/milestones") echo '{"id":501}' ;;
+  "PUT projects/"*"/milestones/"*) echo '{"id":501}' ;;
+  "GET namespaces/9") printf '{"plan":"%s"}\n' "${FAKE_GL_PLAN:-free}" ;;
+  "POST projects/"*"/issues")
+    i="$(next_iid)"; printf '%s\n' "${desc:-}" > "$D/desc/$i.md"; echo "${f_labels:-}" > "$D/labels/$i"; issue_json "$i" ;;
+  "PUT projects/"*"/issues/"*)
+    i="${path##*/}"; [ -n "${desc+x}" ] && printf '%s\n' "$desc" > "$D/desc/$i.md"; issue_json "$i" ;;
+  "POST projects/"*"/time_estimate?"*) echo '{}' ;;
+  "GET projects/"*"/links") echo '[]' ;;
+  "POST projects/"*"/links") echo '{}' ;;
+  *" graphql")   # parents live in parent/<child id>; GitLab refuses to re-assign an assigned item
+    q="${f_query:-}"; mkdir -p "$D/parent"
+    child="$(printf '%s' "$q" | sed -E 's/.*id: "gid:\/\/gitlab\/WorkItem\/([0-9]+)".*/\1/')"
+    case "$q" in
+      query*) p="$(cat "$D/parent/$child" 2>/dev/null)"
+              if [ -n "$p" ]; then printf '{"data":{"workItem":{"widgets":[{},{"parent":{"id":"gid://gitlab/WorkItem/%s"}}]}}}\n' "$p"
+              else echo '{"data":{"workItem":{"widgets":[{},{"parent":null}]}}}'; fi ;;
+      *) if [ -e "$D/parent/$child" ]; then echo '{"data":{"workItemUpdate":{"errors":["Work item(s) already assigned"]}}}'
+         else printf '%s' "$q" | sed -E 's/.*parentId: "gid:\/\/gitlab\/WorkItem\/([0-9]+)".*/\1/' > "$D/parent/$child"
+              echo '{"data":{"workItemUpdate":{"errors":[]}}}'; fi ;;
+    esac ;;
+  "GET projects/"*)
+    echo '{"id":7,"namespace":{"id":9},"permissions":{"project_access":{"access_level":40},"group_access":null}}' ;;
+  *) echo '{"message":"404 Not Found"}'; exit 1 ;;
+esac

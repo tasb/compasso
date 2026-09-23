@@ -20,6 +20,8 @@ bin/config.sh validate --repo .                          # list every problem
 bin/tracker/gitlab.sh check --repo .                     # the tracker gate: login, access, tier
 bin/tracker/gitlab.sh ensure-labels --repo .             # create Compasso's labels
 bin/issue-templates.sh --repo .                          # install the work-item formats as issue templates
+bin/plan-check.sh --repo .                               # check .compasso/plan.yaml: sizes, dependencies, capacity
+bin/tracker/gitlab.sh push-plan --repo .                 # create or update the plan in GitLab
 ```
 
 ## Develop

@@ -16,7 +16,7 @@ A *compasso* is a musical measure: one bar of a fixed length. Here, one sprint.
 
 | Level | Size rule (defaults) | GitLab Premium/Ultimate | GitLab Free |
 |---|---|---|---|
-| Epic | One per sprint; total estimate ≤ team capacity | Epic + iteration | Milestone + `type::epic` issue |
+| Epic | One per sprint; total estimate ≤ team capacity | Milestone + `type::epic` issue (native epic + iteration later) | Milestone + `type::epic` issue |
 | Feature | ≤ half a sprint (≤ 40h at 2-week sprints) | Issue (child of epic), `type::feature` | Issue, `type::feature`, assigned to the milestone |
 | User story | ≤ 8h hard limit, ~4h target | Child task of the feature | Child task of the feature |
 
@@ -38,28 +38,52 @@ The planner must identify three kinds:
 
 ### The plan file
 
-`.compasso/plan.yaml` in the product repo is the only local planning artifact. Tracker ids are written back so pushes are idempotent.
+`.compasso/plan.yaml` in the product repo is the only local planning artifact; the template is `templates/plan.yaml`. Feature hours are the sum of their stories. `gitlab` fields are written by the push, after each item, so a re-run updates instead of duplicating and a failed run resumes.
 
 ```yaml
-epic: { key: E-12, sprint: "2026-S20", gitlab: null }
+epic:
+  key: E-1
+  goal: Customers can see and download their invoices without contacting support.
+  sprint: { name: 2026-S20, start: "2026-10-05", end: "2026-10-16" }
+  coverage: 85                          # optional
+  risks: [PDF service is owned by another team]
+  gitlab: { milestone: 501, issue: 12 }
 features:
   - key: F-1
-    gitlab: 431            # issue iid once pushed
     title: Invoice history
-    estimate_h: 32
+    goal: Customers see their last 24 months of invoices, newest first.
+    scope: [Invoice list, Filter by year]
+    acceptance: ["Given 3 invoices, When I open Billing, Then I see 3 rows, newest first"]
+    decisions: []
+    gitlab: 6
     stories:
       - key: S-1
-        gitlab: null
-        title: List invoices API
-        estimate_h: 4
-        owner: agent        # agent | human | either
-        depends_on: []
-        touches: ["src/billing/api/**"]
+        title: Invoice list API
+        as: a customer
+        want: an invoice list API
+        so_that: the Billing page can show my history
+        acceptance: ["Given 3 invoices, When GET /invoices, Then 200 with 3 items, newest first"]
+        verify: ["npm test -- billing/api"]
         tests: [unit, e2e]
-        acceptance:
-          - "Given a customer with 3 invoices, When GET /invoices, Then 3 items newest first"
-        verify: ["npm test -- billing", "npx playwright test billing/list"]
+        touches: ["src/billing/api/**"]
+        depends_on: []                  # story keys, or "#iid" for existing items
+        owner: agent                    # agent | human | either
+        estimate_h: 4
+        blocked: ""                     # optional external dependency
+        coverage: 90                    # optional
+        gitlab: 8
 ```
+
+### Pushing to GitLab
+
+`gitlab.sh push-plan` runs only on a plan that passes `plan-check`, then writes, in this order:
+
+1. The milestone for the sprint (found by name, else created with the sprint dates).
+2. Each feature as an issue labelled `type::feature`.
+3. Each story as a task, in dependency order, attached to its feature, with its estimate in hours and its `owner::` (and `blocked`) labels. Free: dependencies are the `**Depends on:**` line. Premium: `blocks` links, created only when missing.
+4. The epic as an issue labelled `type::epic`, last, because it lists the features with their hours.
+
+Premium currently uses the same milestone + `type::epic` issue as Free; native group epics and iterations need a Premium project to build and test against.
 
 ### Work item formats
 
@@ -108,7 +132,7 @@ The formats ship as GitLab issue templates in `templates/issue_templates/`; `set
 - Filled in at verification
 ```
 
-**User story** — required: the As/I want/so that line, Acceptance, Verify, Tests. `Depends on` is Free tier only (Premium uses `blocks` links).
+**User story** — required: the As/I want/so that line, Acceptance, Verify, Tests. `Depends on` is Free tier only (Premium uses `blocks` links). `Blocked` (external dependency) and `Coverage` appear only when set.
 
 ```markdown
 **As** a customer **I want** an invoice list API **so that** the Billing page can show my history.
@@ -348,6 +372,7 @@ docs/SPEC.md
 - Hour estimates on tasks: work (`time_estimate`).
 - `blocks` links: refused ("Blocked issues not available for current license"); `relates_to` works.
 - Tier detection: `namespaces/:id` returns `plan`; self-managed instances must set `tracker.tier`.
+- A task created through REST (`issue_type=task`) is attached with GraphQL `workItemUpdate` + `hierarchyWidget.parentId`; the REST issue id is the work item id. Attaching an already attached item fails with "Work item(s) already assigned", so the push reads the parent first.
 
 ## 13. Open questions
 
