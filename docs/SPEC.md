@@ -161,7 +161,7 @@ Claude Code names shown; on Codex the same skills are invoked as `$compasso-<nam
 
 | Command | Purpose |
 |---|---|
-| `/compasso:setup` | Connect GitLab (mandatory), detect tier, capture verify/coverage/e2e commands, sprint length, capacity, model roles, approval modes. Writes `.compasso/project.yaml`. |
+| `/compasso:setup` | Connect GitLab (mandatory), detect tier, capture verify, e2e and coverage commands, sprint length, capacity, model roles, approval modes. Writes `.compasso/project.yaml`. |
 | `/compasso:plan` | Top-down: sprint goal → epic → features → stories. Validated, then pushed. |
 | `/compasso:feature <iid>` | Feature flow starting from a GitLab issue (Q&A in comments → breakdown → approval → build). |
 | `/compasso:story <iid>` | Story flow: one story to a reviewed MR. |
@@ -239,7 +239,7 @@ pull story → open hard dependencies? → stop, name the next unblocked story
 → move to In Progress, worktree + branch story/<iid>-<slug>
 → tester: failing tests (unit; e2e when the story's tests include it) → record test hashes
 → builder: go green
-→ verify.sh: tests, lint, typecheck, changed-line coverage, the story's verify commands, e2e
+→ verify.sh: tests, lint, typecheck, build, the story's Verify commands, e2e (gate) + coverage.sh (warning)
 → review loop (max 3 rounds):
      reviewer and security run in parallel on the diff
      findings: blocker | major | minor
@@ -263,19 +263,42 @@ sprint end: full regression + e2e + full security pass over the sprint diff
             → test guide + release notes → attached to the epic, committed to docs/releases/
 ```
 
-## 6. Gates
+## 6. Gates and checks
 
-| Gate | Where | Hard? |
+A **gate** stops the flow; a **check** reports and never stops it.
+
+| What | Where | Kind |
 |---|---|---|
-| Tracker connected | every command | hard |
-| `plan-check` (sizes, dependencies, capacity) | before any push | hard |
-| Story has acceptance + `verify` | story flow start | hard |
-| Test immutability (hashes) | after builder turns | hard |
-| `verify.sh` | before review, before MR | hard |
-| Changed-line coverage (repo's own coverage command + diff-cover) | `verify.sh` | soft; exemptions need an in-code justification |
-| Security review | every MR, every plan, sprint end | hard, never skippable |
-| Secret / dependency / SAST scans | every MR pipeline | hard on high/critical |
-| Human merge approval | every MR (default) | platform-enforced via protected branches |
+| Tracker connected | every command | gate |
+| `plan-check` (sizes, dependencies, capacity) | before any push | gate |
+| Story has Acceptance + Verify | story flow start | gate |
+| Test immutability (hashes) | after each builder turn | gate |
+| `verify.sh`: tests, lint, typecheck, build, the story's Verify commands, e2e | before review, before the MR, and in the MR pipeline | gate |
+| Security review | every plan, every MR, sprint end | gate, never skippable |
+| Secret / dependency / SAST scans | every MR pipeline | gate on high or critical |
+| Merge approval | every MR | gate: human by default, platform-enforced through protected branches |
+| Changed-line coverage | `verify.sh` and the MR pipeline | check (warning) |
+
+What happened to Harmonia's gates:
+
+| Harmonia | Compasso |
+|---|---|
+| Criteria gate (`- run:` criteria required, then executed at review) | The story's Acceptance + Verify, required at story start and run by `verify.sh` |
+| Coverage gate (`gate.sh`, 100% soft block, adapters, branch pass, exemption markers, override log) | A coverage check: `coverage.sh`, 80% warning, line only |
+| Receipts + diff digests + `--verify-receipts` | The MR pipeline result |
+| Test immutability | Kept |
+| Acceptance marker (`accepted` / `rejected`) | MR approval |
+| Consent for the coverage command (`trust.sh`) | Security review flags any MR that changes a command in `.compasso/project.yaml` |
+
+### Coverage check
+
+- `bin/coverage.sh` runs `coverage.command`, then `diff-cover --fail-under=<min>` on the Cobertura or LCOV `coverage.report` against the MR target branch.
+- A changed file under `coverage.paths` that is missing from the report counts as uncovered.
+- Threshold: the most specific `**Coverage:** N%` line wins (story, then feature, then epic), else `coverage.min_changed` (default 80).
+- Line coverage only; e2e tests do not contribute.
+- Below the threshold: exit 3, shown as a warning (`allow_failure: exit_codes: [3]` in the pipeline) and in the MR's Review section with the uncovered lines. It never blocks a merge, human or agent approval.
+- No `coverage.command`: "not measured", never a pass.
+- The pipeline job also publishes the report as a `coverage_report` artifact so GitLab shows covered lines in the MR diff.
 
 ## 7. Tests
 
@@ -314,7 +337,7 @@ docs/SPEC.md
 
 1. `setup` + GitLab adapter (both tiers) + `project.yaml` schema incl. models
 2. `plan.yaml` + `plan-check` + `/compasso:plan` push
-3. Story flow with `verify.sh` and the review/security loop
+3. Story flow with `verify.sh`, `coverage.sh` and the review/security loop
 4. Feature flow (comment Q&A) and sprint flow (waves, test guide)
 5. Codex target generator and installer
 6. Later: webhook receiver

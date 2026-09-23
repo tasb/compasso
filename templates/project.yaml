@@ -22,8 +22,13 @@ commands:                     # the repo's own commands; empty means "not applic
   lint: ""
   typecheck: ""
   build: ""
-  coverage: ""                # must produce a Cobertura or LCOV report
   e2e: ""
+
+coverage:                     # line coverage of changed lines; below the threshold is a warning, never a block
+  command: ""                 # the repo's own command; empty means "not measured"
+  report: ""                  # the Cobertura or LCOV file the command writes
+  min_changed: 80             # default %; an Epic, Feature or Story can override with a "**Coverage:** N%" line
+  paths: []                   # product-code globs; a changed file here missing from the report counts as uncovered
 
 approvals:
   plan: human                 # human | auto  (auto still requires a clean security review of the plan)

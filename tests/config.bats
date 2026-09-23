@@ -106,3 +106,25 @@ setup() { setup_repo; }
   run "$ROOT/bin/config.sh" get --repo "$REPO" .tracker.project
   [ "$output" = "acme/app" ]
 }
+
+@test "coverage defaults to 80% of changed lines, not measured until a command is set" {
+  [ "$(yq -r .coverage.min_changed "$CFG")" = 80 ]
+  [ "$(yq -r .coverage.command "$CFG")" = "" ]
+}
+
+@test "a coverage threshold outside 0-100 is rejected" {
+  cfg_set '.coverage.min_changed = 120'
+  run "$ROOT/bin/config.sh" validate --repo "$REPO"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"coverage.min_changed"* ]] || false
+}
+
+@test "a coverage command needs the report it writes" {
+  cfg_set '.coverage.command = "npm test -- --coverage"'
+  run "$ROOT/bin/config.sh" validate --repo "$REPO"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"coverage.report is required"* ]] || false
+  cfg_set '.coverage.report = "coverage/cobertura.xml"'
+  run "$ROOT/bin/config.sh" validate --repo "$REPO"
+  [ "$status" -eq 0 ]
+}

@@ -71,6 +71,10 @@ validate() {
     err "limits.story_target_hours must be a positive integer"
   fi
 
+  v="$(val .coverage.min_changed)"
+  is_int "$v" && [ "$v" -le 100 ] || err "coverage.min_changed must be an integer from 0 to 100"
+  [ -z "$(val .coverage.command)" ] || [ -n "$(val .coverage.report)" ] || err "coverage.report is required when coverage.command is set"
+
   case "$(val .approvals.plan)" in human|auto) : ;; *) err "approvals.plan must be human or auto" ;; esac
   case "$(val .approvals.merge)" in human|agent) : ;; *) err "approvals.merge must be human or agent" ;; esac
 

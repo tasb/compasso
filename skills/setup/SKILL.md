@@ -17,7 +17,9 @@ Ask one topic at a time, show the default, and accept "default" as an answer. Ne
 
 4. **Limits.** Story hard limit (default 8h, and never above one working day) and target (default 4h). Explain that a feature may take at most half a sprint, derived from the sprint length.
 
-5. **Commands.** Detect the repo's own `test`, `lint`, `typecheck`, `build`, `coverage` and `e2e` commands from its manifests (for example `package.json` scripts, `Makefile`, `pyproject.toml`, `go.mod`, CI files). Present what you found and let the user confirm or correct each; leave a command empty when it does not apply. If the repo has a UI or public API and no e2e command, say so and suggest a framework (Playwright for web, the project's own test runner for APIs, bats for CLIs), without installing anything.
+5. **Commands.** Detect the repo's own `test`, `lint`, `typecheck`, `build` and `e2e` commands from its manifests (for example `package.json` scripts, `Makefile`, `pyproject.toml`, `go.mod`, CI files). Present what you found and let the user confirm or correct each; leave a command empty when it does not apply. If the repo has a UI or public API and no e2e command, say so and suggest a framework (Playwright for web, the project's own test runner for APIs, bats for CLIs), without installing anything.
+
+   **Coverage.** Find the repo's coverage command and the Cobertura or LCOV file it writes, and the product-code paths (for example `src/**`). Default threshold: 80% of changed lines; below it is a warning, never a block. Without a command, every merge request shows coverage as "not measured" - say so.
 
 6. **Approvals.** Plan approval: `human` (default) or `auto`. Merge approval: `human` (default) or `agent`. State plainly that security review runs on every plan and merge request regardless, and that no approval mode passes an open security finding.
 
