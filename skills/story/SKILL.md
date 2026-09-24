@@ -15,7 +15,7 @@ Build one story end to end. Scripts are in `${CLAUDE_PLUGIN_ROOT}/bin`, roles in
 
 3. **Branch.** The working tree must be clean. `git fetch`, then create `story/<iid>-<short-slug>` from `origin/<default branch>` (the base). `gitlab.sh set-state --iid <iid> --state building`.
 
-4. **Tests first.** Dispatch the **tester** with `RUN/story.json`. Run the repo's test command and confirm the new tests fail; if they pass, send them back to the tester once. Commit the tests on their own ("Add failing tests for #<iid>"), note that commit as `TESTS`, then `bash ${CLAUDE_PLUGIN_ROOT}/bin/test-hashes.sh record --repo . --run RUN`.
+4. **Tests first.** Dispatch the **tester** with `RUN/story.json`. Run the repo's test command and confirm the new tests fail. If some pass, send them back to the tester once. If, after that, none of the new tests fails, stop and hand back: the story has no behaviour of its own to build (usually enabling work that belongs in the story that uses it), and it needs re-planning, not code. Tests that pass only because they guard existing behaviour are fine next to at least one failing test. Commit the tests on their own ("Add failing tests for #<iid>"), note that commit as `TESTS`, then `bash ${CLAUDE_PLUGIN_ROOT}/bin/test-hashes.sh record --repo . --run RUN`.
 
 5. **Build.** Dispatch the **builder** with `RUN/story.json`. Then:
    - `test-hashes.sh verify --repo . --run RUN`. A violation fails the round: restore the tests with `git checkout TESTS -- <each file it names>` (delete files it added), and send the builder back once; a second violation stops the flow.
