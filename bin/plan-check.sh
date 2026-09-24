@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Validate .compasso/plan.yaml against the sprint rules in .compasso/project.yaml.
 #
-#   plan-check.sh --repo R [--json]
+#   plan-check.sh --repo R [--plan FILE] [--json]
 #
 # Prints errors, notes, totals, the parallel waves, the critical path and
 # stories whose touched paths overlap. --json prints the raw result.
@@ -9,15 +9,16 @@
 set -u
 
 BIN="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO="." JSON=0
+REPO="." JSON=0 PLAN=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --repo) REPO="$2"; shift 2 ;;
     --json) JSON=1; shift ;;
+    --plan) PLAN="$2"; shift 2 ;;
     *) echo "plan-check: unknown argument '$1'" >&2; exit 1 ;;
   esac
 done
-PLAN="$REPO/.compasso/plan.yaml"
+[ -n "$PLAN" ] || PLAN="$REPO/.compasso/plan.yaml"
 
 "$BIN/config.sh" validate --repo "$REPO" >/dev/null || exit $?
 [ -f "$PLAN" ] || { echo "plan-check: no $PLAN - run /compasso:plan" >&2; exit 3; }
