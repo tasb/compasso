@@ -150,3 +150,11 @@ setup() { setup_repo; }
   [ "$(yq -r .tracker.project "$CFG")" = acme/app ]
   "$ROOT/bin/config.sh" validate --repo "$REPO"
 }
+
+@test "the test guide is written in English unless the project says otherwise" {
+  [ "$(yq -r .test_guide.language "$CFG")" = en ]
+  cfg_set '.test_guide.language = ""'
+  run "$ROOT/bin/config.sh" validate --repo "$REPO"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"test_guide.language is required"* ]] || false
+}

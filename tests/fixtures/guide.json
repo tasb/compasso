@@ -1,0 +1,33 @@
+{
+  "id": "S20",
+  "language": "en",
+  "title": "Sprint 20 · Test guide",
+  "goal": "Customers can see and download their invoices without contacting support.",
+  "dates": { "start": "5 Oct 2026", "end": "16 Oct 2026" },
+  "where": "https://staging.example.com",
+  "features": [
+    {
+      "key": "F-1", "iid": 6, "title": "Invoice history",
+      "whats_new": "Customers can now see all their invoices in one place, the most recent first, and filter them by year.",
+      "why": "Customers no longer need to email support to find an old invoice.",
+      "before": ["Sign in as the customer \"Acme Ltd\" (user acme@example.com, password in the team vault).", "Acme Ltd has 3 invoices: July, August and September 2026."],
+      "scenarios": [
+        { "id": "F-1.1", "title": "See your invoices", "steps": ["Open Billing.", "Choose Invoices."], "expected": "You see 3 invoices, with September 2026 at the top." },
+        { "id": "F-1.2", "title": "Filter by year", "steps": ["Open Billing → Invoices.", "Choose the year 2025 in the Year filter."], "expected": "You see the message \"No invoices for 2025\"." },
+        { "id": "F-1.3", "title": "Only your own invoices", "steps": ["Sign in as \"Globex\" (globex@example.com).", "Open Billing → Invoices."], "expected": "You see only Globex's single invoice, never Acme's." },
+        { "id": "F-1.4", "title": "Signed out", "steps": ["Sign out.", "Go to staging.example.com/billing/invoices."], "expected": "You are asked to sign in, and no invoices are shown." }
+      ],
+      "not_included": ["Downloading an invoice as a PDF comes in the next sprint."],
+      "known_issues": ["The Year filter shows years with no invoices."]
+    },
+    {
+      "key": "F-3", "iid": 20, "title": "Invoice reminders",
+      "whats_new": "Customers get an email 3 days before an invoice is due.",
+      "before": ["Use the test mailbox at https://mail.staging.example.com (shared login in the team vault)."],
+      "scenarios": [
+        { "id": "F-3.1", "title": "Reminder arrives", "steps": ["Ask the team to create an invoice for Acme Ltd due in 3 days.", "Wait up to 10 minutes and open the test mailbox."], "expected": "An email \"Your invoice is due in 3 days\" arrives, with the amount and a Pay now button." }
+      ]
+    }
+  ],
+  "verified_automatically": ["Invoice data service used by the Billing page"]
+}

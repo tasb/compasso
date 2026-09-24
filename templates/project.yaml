@@ -43,6 +43,10 @@ coverage:                     # line coverage of changed lines; below the thresh
 ci:
   image: ""                   # the image with the repo's toolchain, for the merge request pipeline
 
+test_guide:                   # the HTML guide business testers get at the end of a sprint
+  language: en                # the language it is written in, e.g. en, pt-PT, es
+  where: ""                   # where testers test: a URL, or how to reach the environment
+
 approvals:
   plan: human                 # human | auto  (auto still requires a clean security review of the plan)
   merge: human                # human | agent (agent never approves with an open security finding)

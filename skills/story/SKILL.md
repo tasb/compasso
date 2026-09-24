@@ -10,7 +10,7 @@ Build one story end to end. Scripts are in `${CLAUDE_PLUGIN_ROOT}/bin`, roles in
 2. **Story.** `bash ${CLAUDE_PLUGIN_ROOT}/bin/tracker/gitlab.sh story --repo . --iid <iid> > RUN/story.json`. Stop and say why when:
    - it is not an open task;
    - `open_dependencies` is not empty: name each one, and for a blocker say who it is assigned to;
-   - `story.acceptance` or `story.verify` is empty: the story does not follow the Story format;
+   - `story.acceptance` is empty, or `story.verify` is empty for a story: it does not follow the Story format. A bug reported by a tester has no Verify yet: the tester's first job (step 4) is a failing test that reproduces it, and that test's command becomes `story.verify` in `RUN/story.json`;
    - it has the `owner::human` label, unless the user confirms an agent should build it.
 
 3. **Branch.** The working tree must be clean. `git fetch`, then create `story/<iid>-<short-slug>` from `origin/<default branch>` (the base). `gitlab.sh set-state --iid <iid> --state building`.

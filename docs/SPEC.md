@@ -380,7 +380,15 @@ What happened to Harmonia's gates:
 
 ## 8. Test guide (sprint deliverable)
 
-Per feature: what changed and why; prerequisites, data and environment; step-by-step scenarios from each story's Given/When/Then with expected results; edge cases, known limitations, out of scope; security notes; links to MRs and work items; tester sign-off table. Written for QA and product, not developers.
+Decided 2026-09-24: an HTML page for business testers, about features, not the development process.
+
+- **What:** `docs/releases/S<n>-test-guide.html`, one self-contained file (no external resources) built by `bin/test-guide.sh` from `docs/releases/S<n>-test-guide.json`, which the shipper writes at sprint close. Opens offline, can be emailed, prints as a checklist.
+- **Content:** the sprint's goal, dates and where to test; per feature: what's new, why it matters, what to prepare, and scenarios (steps and an expected result a person can see) turned from the acceptance criteria; not in this sprint; known issues. No work items, merge requests, commits, status codes or file names. Security fixes appear as plain scenarios.
+- **Features with no screen** (an API, a background job) are not tested by business testers: they are listed by name as checked automatically.
+- **Language:** `test_guide.language` in the config; the content and the page's labels are written in it.
+- **Results:** testers mark each scenario Works / Doesn't work / Can't test (a comment is required when it doesn't work); progress is kept in their browser. "Download my results" gives a JSON file they send back. `bin/test-results.sh` files every failure as a Bug under its feature in the tester's words (never twice for the same tester and scenario) and posts a summary on the epic. A bug from a tester has no Verify yet: the story flow's tester first writes a failing test that reproduces it.
+- **On GitLab:** one short comment with the guide's link on the epic and on each feature it covers; nothing duplicated.
+- **Safety:** the page inserts all content as text, never as HTML, and the data block escapes `</` so content cannot break out of it.
 
 ## 9. Portability: Claude Code and Codex
 

@@ -29,6 +29,8 @@ bin/review-gate.sh --findings F [--for merge]           # do review findings sti
 bin/ci.sh --repo .                                       # generate the merge request pipeline
 bin/tracker/gitlab.sh sprint-sync --repo .              # what can be built now, what waits and on whom
 bin/comment.sh qa|plan ...                              # the feature flow's comments on GitLab
+bin/test-guide.sh --data F --out O                     # the HTML test guide for business testers
+bin/test-results.sh --guide G --results R              # file a tester's failures as bugs
 ```
 
 ## Develop

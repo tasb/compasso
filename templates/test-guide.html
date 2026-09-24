@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Test guide</title>
+<style>
+  :root {
+    --bg: #f7f7f5; --card: #ffffff; --text: #1d1d1b; --muted: #5f5f5a; --line: #e2e2dc;
+    --accent: #2f5d8a; --pass: #2e7d4f; --fail: #b3261e; --skip: #8a6d1f;
+    --pass-bg: #e7f3ec; --fail-bg: #fbe9e7; --skip-bg: #f7f0dc;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #151514; --card: #1f1f1d; --text: #ecece8; --muted: #a3a39c; --line: #34342f;
+      --accent: #8db4dc; --pass: #7cc79a; --fail: #f08a80; --skip: #d9bd6a;
+      --pass-bg: #1d3326; --fail-bg: #3a1f1c; --skip-bg: #342c17;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 860px; margin: 0 auto; padding: 24px 16px 96px; }
+  header h1 { font-size: 1.6rem; margin: 0 0 4px; }
+  header .goal { font-size: 1.1rem; margin: 0 0 12px; }
+  .meta { color: var(--muted); display: flex; flex-wrap: wrap; gap: 4px 20px; margin-bottom: 16px; }
+  .meta a { color: var(--accent); }
+  .progress { height: 8px; background: var(--line); border-radius: 4px; overflow: hidden; }
+  .progress > div { height: 100%; background: var(--accent); width: 0; transition: width .2s; }
+  .progress-label { color: var(--muted); font-size: .9rem; margin: 6px 0 24px; }
+  details.feature { background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+                    margin-bottom: 16px; }
+  details.feature > summary { cursor: pointer; padding: 16px 20px; display: flex; gap: 12px;
+                              justify-content: space-between; align-items: baseline; list-style: none; }
+  details.feature > summary::-webkit-details-marker { display: none; }
+  details.feature > summary h2 { font-size: 1.2rem; margin: 0; }
+  details.feature > summary .count { color: var(--muted); white-space: nowrap; font-size: .9rem; }
+  .feature-body { padding: 0 20px 20px; }
+  .label { font-weight: 600; }
+  .feature-body p { margin: 0 0 10px; }
+  .feature-body ul { margin: 4px 0 12px; padding-left: 20px; }
+  .scenario { border-top: 1px solid var(--line); padding: 16px 0 4px; }
+  .scenario h3 { font-size: 1.05rem; margin: 0 0 8px; }
+  .scenario ol { margin: 0 0 8px; padding-left: 22px; }
+  .choices { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
+  .choices button { font: inherit; padding: 8px 14px; min-height: 44px; border-radius: 8px; cursor: pointer;
+                    border: 1px solid var(--line); background: var(--card); color: var(--text); }
+  .choices button[aria-pressed="true"][data-status="pass"] { background: var(--pass-bg); border-color: var(--pass); color: var(--pass); font-weight: 600; }
+  .choices button[aria-pressed="true"][data-status="fail"] { background: var(--fail-bg); border-color: var(--fail); color: var(--fail); font-weight: 600; }
+  .choices button[aria-pressed="true"][data-status="blocked"] { background: var(--skip-bg); border-color: var(--skip); color: var(--skip); font-weight: 600; }
+  textarea { width: 100%; font: inherit; padding: 8px; border-radius: 8px; border: 1px solid var(--line);
+             background: var(--card); color: var(--text); min-height: 64px; }
+  textarea.required { border-color: var(--fail); }
+  .hint { color: var(--muted); font-size: .9rem; }
+  .auto { background: var(--card); border: 1px dashed var(--line); border-radius: 10px; padding: 16px 20px; }
+  footer { position: fixed; left: 0; right: 0; bottom: 0; background: var(--card); border-top: 1px solid var(--line); }
+  footer .bar { max-width: 860px; margin: 0 auto; padding: 12px 16px; display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; }
+  footer input { font: inherit; padding: 8px; border-radius: 8px; border: 1px solid var(--line);
+                 background: var(--bg); color: var(--text); flex: 1 1 180px; min-width: 0; }
+  footer button { font: inherit; padding: 10px 16px; min-height: 44px; border-radius: 8px; border: 0;
+                  background: var(--accent); color: var(--card); cursor: pointer; font-weight: 600; }
+  footer .status { color: var(--muted); font-size: .9rem; flex-basis: 100%; }
+  :focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+  @media print {
+    footer, .choices, textarea, .hint { display: none; }
+    details.feature { break-inside: avoid; border-color: #999; }
+    main { padding-bottom: 0; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1 id="title"></h1>
+    <p class="goal" id="goal"></p>
+    <div class="meta" id="meta"></div>
+    <div class="progress" aria-hidden="true"><div id="bar"></div></div>
+    <p class="progress-label" id="progress"></p>
+  </header>
+  <section id="features"></section>
+  <section id="automatic"></section>
+</main>
+<footer>
+  <div class="bar">
+    <label for="tester" id="tester-label"></label>
+    <input id="tester" autocomplete="name">
+    <button id="download" type="button"></button>
+    <span class="status" id="status" role="status"></span>
+  </div>
+</footer>
+
+<!-- The guide's content. Compasso fills this in; the page only ever inserts it as text. -->
+<script id="guide-data" type="application/json">__GUIDE_DATA__</script>
+<script>
+(function () {
+  'use strict';
+  var data = JSON.parse(document.getElementById('guide-data').textContent);
+  var ui = Object.assign({
+    where: 'Where to test', dates: 'Dates', whatsNew: "What's new", why: 'Why it matters',
+    before: 'Before you start', steps: 'Steps', expected: 'Expected', notIncluded: 'Not in this sprint',
+    knownIssues: 'Known issues', pass: 'Works', fail: "Doesn't work", blocked: "Can't test",
+    comment: 'Comment', commentRequired: "Please say what happened instead.",
+    tested: '{done} of {total} tested', progress: '{done} of {total} scenarios tested',
+    tester: 'Your name', download: 'Download my results', needName: 'Please enter your name first.',
+    missingComment: 'Add a comment to every scenario that does not work.',
+    downloaded: 'Saved {file}. Send it to the team.', automatic: 'Checked automatically',
+    automaticText: 'These changes have no screen to try. They were verified by automated tests.'
+  }, data.ui || {});
+  document.documentElement.lang = data.language || 'en';
+  document.title = data.title;
+
+  var storeKey = 'compasso-guide-' + data.id;
+  var state = { tester: '', results: {} };
+  try { state = Object.assign(state, JSON.parse(localStorage.getItem(storeKey) || '{}')); } catch (e) {}
+  function save() { try { localStorage.setItem(storeKey, JSON.stringify(state)); } catch (e) {} }
+  function fmt(s, v) { return s.replace(/\{(\w+)\}/g, function (_, k) { return v[k]; }); }
+  function el(tag, attrs, text) {
+    var n = document.createElement(tag);
+    Object.keys(attrs || {}).forEach(function (k) { n.setAttribute(k, attrs[k]); });
+    if (text != null) n.textContent = text;
+    return n;
+  }
+  function para(label, text) {
+    var p = el('p'); p.appendChild(el('span', { 'class': 'label' }, label + ': '));
+    p.appendChild(document.createTextNode(text)); return p;
+  }
+  function list(label, items, root) {
+    if (!items || !items.length) return;
+    root.appendChild(el('p', { 'class': 'label' }, label));
+    var ul = el('ul'); items.forEach(function (i) { ul.appendChild(el('li', null, i)); }); root.appendChild(ul);
+  }
+
+  document.getElementById('title').textContent = data.title;
+  document.getElementById('goal').textContent = data.goal;
+  var meta = document.getElementById('meta');
+  meta.appendChild(el('span', null, ui.dates + ': ' + data.dates.start + ' – ' + data.dates.end));
+  if (data.where) {
+    var w = el('span', null, ui.where + ': ');
+    if (/^https?:\/\//.test(data.where)) w.appendChild(el('a', { href: data.where, rel: 'noopener' }, data.where));
+    else w.appendChild(document.createTextNode(data.where));
+    meta.appendChild(w);
+  }
+
+  var all = [], counters = [];
+  var root = document.getElementById('features');
+  data.features.forEach(function (f) {
+    var d = el('details', { 'class': 'feature', open: '' });
+    var s = el('summary'); s.appendChild(el('h2', null, f.title));
+    var count = el('span', { 'class': 'count' }); s.appendChild(count); d.appendChild(s);
+    var body = el('div', { 'class': 'feature-body' });
+    body.appendChild(para(ui.whatsNew, f.whats_new));
+    if (f.why) body.appendChild(para(ui.why, f.why));
+    list(ui.before, f.before, body);
+    f.scenarios.forEach(function (sc, i) {
+      all.push({ feature: f, scenario: sc });
+      var box = el('div', { 'class': 'scenario' });
+      box.appendChild(el('h3', null, (i + 1) + '. ' + sc.title));
+      box.appendChild(el('p', { 'class': 'label' }, ui.steps));
+      var ol = el('ol'); sc.steps.forEach(function (st) { ol.appendChild(el('li', null, st)); }); box.appendChild(ol);
+      box.appendChild(para(ui.expected, sc.expected));
+      var r = state.results[sc.id] || (state.results[sc.id] = { status: '', comment: '' });
+      var choices = el('div', { 'class': 'choices', role: 'group', 'aria-label': sc.title });
+      var note = el('textarea', { 'aria-label': ui.comment + ' – ' + sc.title, placeholder: ui.comment });
+      note.value = r.comment;
+      var hint = el('p', { 'class': 'hint' });
+      function paint() {
+        Array.prototype.forEach.call(choices.children, function (b) {
+          b.setAttribute('aria-pressed', String(b.dataset.status === r.status));
+        });
+        var missing = r.status === 'fail' && !r.comment.trim();
+        note.classList.toggle('required', missing);
+        hint.textContent = missing ? ui.commentRequired : '';
+      }
+      ['pass', 'fail', 'blocked'].forEach(function (st) {
+        var b = el('button', { type: 'button', 'data-status': st }, ui[st]);
+        b.addEventListener('click', function () { r.status = r.status === st ? '' : st; save(); paint(); refresh(); });
+        choices.appendChild(b);
+      });
+      note.addEventListener('input', function () { r.comment = note.value; save(); paint(); });
+      box.appendChild(choices); box.appendChild(note); box.appendChild(hint);
+      body.appendChild(box); paint();
+    });
+    list(ui.notIncluded, f.not_included, body);
+    list(ui.knownIssues, f.known_issues, body);
+    d.appendChild(body); root.appendChild(d);
+    counters.push({ feature: f, el: count });
+  });
+
+  if (data.verified_automatically && data.verified_automatically.length) {
+    var a = el('div', { 'class': 'auto' });
+    a.appendChild(el('h2', null, ui.automatic)); a.appendChild(el('p', null, ui.automaticText));
+    var ul = el('ul'); data.verified_automatically.forEach(function (t) { ul.appendChild(el('li', null, t)); });
+    a.appendChild(ul); document.getElementById('automatic').appendChild(a);
+  }
+
+  function done(scs) { return scs.filter(function (sc) { return (state.results[sc.id] || {}).status; }).length; }
+  function refresh() {
+    counters.forEach(function (c) {
+      c.el.textContent = fmt(ui.tested, { done: done(c.feature.scenarios), total: c.feature.scenarios.length });
+    });
+    var n = done(all.map(function (x) { return x.scenario; }));
+    document.getElementById('progress').textContent = fmt(ui.progress, { done: n, total: all.length });
+    document.getElementById('bar').style.width = (all.length ? 100 * n / all.length : 0) + '%';
+  }
+  refresh();
+
+  var tester = document.getElementById('tester');
+  document.getElementById('tester-label').textContent = ui.tester;
+  tester.value = state.tester;
+  tester.addEventListener('input', function () { state.tester = tester.value; save(); });
+  var status = document.getElementById('status');
+  var dl = document.getElementById('download');
+  dl.textContent = ui.download;
+  dl.addEventListener('click', function () {
+    if (!state.tester.trim()) { status.textContent = ui.needName; tester.focus(); return; }
+    var missing = all.some(function (x) { var r = state.results[x.scenario.id]; return r && r.status === 'fail' && !r.comment.trim(); });
+    if (missing) { status.textContent = ui.missingComment; return; }
+    var out = {
+      guide: data.id, tester: state.tester.trim(), date: new Date().toISOString().slice(0, 10),
+      results: all.map(function (x) {
+        var r = state.results[x.scenario.id] || {};
+        return { feature: x.feature.key, scenario: x.scenario.id, status: r.status || 'not-tested', comment: (r.comment || '').trim() };
+      })
+    };
+    var file = data.id + '-results-' + out.tester.toLowerCase().replace(/[^a-z0-9]+/g, '-') + '.json';
+    var url = URL.createObjectURL(new Blob([JSON.stringify(out, null, 2)], { type: 'application/json' }));
+    var link = el('a', { href: url, download: file }); document.body.appendChild(link); link.click(); link.remove();
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+    status.textContent = fmt(ui.downloaded, { file: file });
+  });
+})();
+</script>
+</body>
+</html>
