@@ -317,7 +317,7 @@ States on a story: `compasso::building` → `compasso::in-review` → closed by 
 
 ### Merge request pipeline
 
-`ci.sh` generates `.gitlab/compasso.gitlab-ci.yml` from the config; the repo includes it from `.gitlab-ci.yml`. On merge request pipelines it runs `compasso-verify` (test, lint, typecheck, build), `compasso-e2e`, `compasso-coverage` + `compasso-coverage-check` (diff-cover at the project threshold, exit 3 allowed to fail) and GitLab SAST and Secret Detection. The pipeline uses the project threshold; the story's own threshold is applied by the local run and shown in the MR.
+`ci.sh` generates `.gitlab/compasso.gitlab-ci.yml` from the config; the repo includes it from `.gitlab-ci.yml`. On merge request pipelines it runs `compasso-verify` (test, lint, typecheck, build), `compasso-e2e`, `compasso-coverage` + `compasso-coverage-check` (diff-cover at the project threshold, exit 3 allowed to fail) and GitLab SAST and Secret Detection. GitLab Free neither shows nor enforces scan findings and the scan jobs may fail, so `compasso-scan-gate` (last stage) reads both reports and fails on any high or critical finding; verified live on 2026-09-24 with a planted fake token. The pipeline uses the project threshold; the story's own threshold is applied by the local run and shown in the MR.
 
 ### Test files
 
@@ -347,7 +347,7 @@ A **gate** stops the flow; a **check** reports and never stops it.
 | Test immutability (hashes) | after each builder turn | gate |
 | `verify.sh`: tests, lint, typecheck, build, the story's Verify commands, e2e | before review, before the MR, and in the MR pipeline | gate |
 | Security review | every plan, every MR, sprint end | gate, never skippable |
-| Secret / dependency / SAST scans | every MR pipeline | gate on high or critical |
+| SAST and secret detection scans | every MR pipeline | gate: `compasso-scan-gate` fails on any high or critical finding, and fails closed when secret detection did not run |
 | Merge approval | every MR | gate: human by default, platform-enforced through protected branches |
 | Changed-line coverage | `verify.sh` and the MR pipeline | check (warning) |
 
