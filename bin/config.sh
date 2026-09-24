@@ -82,6 +82,9 @@ validate() {
 
   [ -n "$(val .test_guide.language)" ] || err "test_guide.language is required, e.g. en or pt-PT (run: config.sh upgrade)"
 
+  [ "$(yq '[(.metrics.prices // {}) | to_entries | .[] | select((.value | tag) != "!!int" and (.value | tag) != "!!float")] | length' "$CFG")" = 0 ] ||
+    err "metrics.prices must map each model to a number (price per million tokens)"
+
   case "$(val .approvals.plan)" in human|auto) : ;; *) err "approvals.plan must be human or auto" ;; esac
   case "$(val .approvals.merge)" in human|agent) : ;; *) err "approvals.merge must be human or agent" ;; esac
 

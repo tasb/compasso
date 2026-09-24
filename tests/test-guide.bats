@@ -134,3 +134,9 @@ EOF2
   [[ "$output" == *"F-1.2 failed without a comment"* ]] || false
   [ "$(grep -c 'POST' "$FAKE_GL/calls.log" || true)" -eq 0 ]
 }
+
+@test "results: the tester's file is kept where the sprint report reads it" {
+  results_setup
+  import >/dev/null
+  cmp -s "$RESULTS" "$REPO/docs/releases/S20-results/ana-silva.json"
+}

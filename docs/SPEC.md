@@ -420,8 +420,9 @@ docs/SPEC.md
 3. Story flow with `verify.sh`, `coverage.sh` and the review/security loop
 4. Feature flow (Q&A in the agent, recorded as comments) and sprint flow (waves, test guide)
 5. Codex target generator and installer; learnings (see "Learnings")
-6. Optional hardening: `/compasso:harden` (mutation testing, section 16)
-7. v2: see section 15
+6. Metrics and reporting: `/compasso:report` (section 17)
+7. Optional hardening: `/compasso:harden` (mutation testing, section 16)
+8. v2: see section 15
 
 ## 12. Verified on gitlab.com Free (2026-09-23)
 
@@ -465,3 +466,14 @@ Decided 2026-09-23. Compasso builds MVPs fast; checking test quality with mutant
 - **Scope:** only the lines changed by the feature or epic being hardened.
 - **Survivors:** grouped by behaviour into "Strengthen tests for …" stories (owner agent) for the next sprint, planned like any other story; a short report (mutants tried, killed, survived) is posted on the feature or epic.
 - Never a gate and never part of the story or sprint flow.
+
+## 17. Metrics and reporting
+
+Decided 2026-09-24: one HTML sprint report, on demand (`/compasso:report`) and at sprint close, linked from the epic. For team leads and management.
+
+- **Delivery:** planned vs done hours, stories done and open, burn-down, carry-over, velocity over past sprints, time stories wait on blockers.
+- **Flow and waiting:** cycle time per story (building to merged) and how long merge requests wait for a person.
+- **Quality:** review and security findings by severity, review rounds, bugs found by feature e2e and by testers, test guide pass rate, coverage.
+- **Agent effort and cost:** agent time and tokens per story and per role, estimate vs agent time; cost only when prices are configured.
+- **Sources:** GitLab (stories, estimates, label history, merge requests, milestones of past sprints), each story's `.compasso/metrics/<iid>.json` committed in its merge request (so run data survives the local run folder), and testers' results committed under `docs/releases/`.
+- **Built as:** `bin/story-metrics.sh` (the story flow records each agent run with the tokens and time the harness reports, and each review round, verify failure, test violation and re-plan, then writes `.compasso/metrics/<iid>.json` into the story's merge request); `bin/metrics.sh collect` (GitLab plus those files, counted to the report's date); `bin/report.sh` renders `templates/report.html`, a self-contained page with a table view for every chart; `/compasso:report`. Optional `metrics.prices` (per million tokens, per model) adds approximate cost.

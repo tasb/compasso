@@ -48,8 +48,11 @@ case "$method $path" in
   "PUT projects/"*"/issues/"*)
     i="${path##*/}"; [ -n "${desc+x}" ] && printf '%s\n' "$desc" > "$D/desc/$i.md"; issue_json "$i" ;;
   "POST projects/"*"/time_estimate?"*) echo '{}' ;;
+  "GET projects/"*"/resource_label_events"*) i="${path%/resource_label_events*}"; i="${i##*/}"; cat "$D/events/$i.json" 2>/dev/null || echo '[]' ;;
   "GET projects/"*"/issues?"*"labels=type::epic"*) cat "$D/epic-query.json" 2>/dev/null || echo '[]' ;;
-  "GET projects/"*"/issues?"*) cat "$D/issue-query.json" 2>/dev/null || echo '[]' ;;
+  "GET projects/"*"/issues?"*)   # per-milestone lists live in issues-<milestone>.json
+    m="$(printf '%s' "$path" | sed -n 's/.*milestone=\([^&]*\).*/\1/p')"
+    if [ -n "$m" ] && [ -f "$D/issues-$m.json" ]; then cat "$D/issues-$m.json"; else cat "$D/issue-query.json" 2>/dev/null || echo '[]'; fi ;;
   "GET projects/"*"/merge_requests?"*) cat "$D/mr-query.json" 2>/dev/null || echo '[]' ;;
   "GET projects/"*"/merge_requests/"*"/closes_issues") cat "$D/closes.json" 2>/dev/null || echo '[]' ;;
   "GET projects/"*"/merge_requests/"*) cat "$D/mr-${path##*/}.json" 2>/dev/null || { echo '{"message":"404"}'; exit 1; } ;;

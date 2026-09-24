@@ -1,0 +1,30 @@
+{
+  "sprint": {"number": 20, "goal": "Customers can see and download their invoices without contacting support.",
+             "start": "2026-10-05", "end": "2026-10-16", "capacity_h": 80, "status": "in progress", "generated": "2026-10-12"},
+  "delivery": {"planned_h": 29, "done_h": 15, "stories_total": 7, "stories_done": 3, "stories_blocked": 1,
+    "burndown": [{"date":"2026-10-05","remaining_h":29},{"date":"2026-10-06","remaining_h":29},{"date":"2026-10-07","remaining_h":25},
+                 {"date":"2026-10-08","remaining_h":25},{"date":"2026-10-09","remaining_h":21},{"date":"2026-10-12","remaining_h":14}],
+    "velocity": [{"sprint":"S17","done_h":41},{"sprint":"S18","done_h":52},{"sprint":"S19","done_h":47},{"sprint":"S20","done_h":15}],
+    "blockers": [{"title":"PDF service credentials","owner":"tiago.bernardo1","open_days":7,"state":"open"}],
+    "open": [{"title":"PDF endpoint","estimate_h":8,"waiting_on":"blocker: PDF service credentials"},
+             {"title":"Invoice list UI","estimate_h":6,"waiting_on":"a person (owner::human)"},
+             {"title":"Invoice detail API","estimate_h":4,"waiting_on":"#15 Path parameters in the router"}]},
+  "flow": {"stories": [
+    {"title":"Invoice list API","building_h":1.2,"waiting_h":19.5,"merged":true},
+    {"title":"Path parameters in the router","building_h":0.8,"waiting_h":3.1,"merged":true},
+    {"title":"Year filter","building_h":0.9,"waiting_h":26.0,"merged":true},
+    {"title":"Invoice detail API","building_h":1.1,"waiting_h":4.0,"merged":false}]},
+  "quality": {"findings": {"reviewer": {"blocker":0,"major":1,"minor":2}, "security": {"blocker":0,"major":3,"minor":2}},
+    "security_open": 0, "review_rounds_avg": 1.8, "bugs": {"feature_e2e": 1, "testers": 2},
+    "test_guide": {"pass": 8, "fail": 1, "blocked": 1, "not_tested": 0}, "coverage_avg": 96},
+  "agents": {
+    "by_role": [{"role":"tester","model":"sonnet","runs":5,"tokens":285000,"minutes":9.5},
+                {"role":"builder","model":"sonnet","runs":6,"tokens":262000,"minutes":6.1},
+                {"role":"reviewer","model":"sonnet","runs":5,"tokens":270000,"minutes":4.8},
+                {"role":"security","model":"opus","runs":6,"tokens":286000,"minutes":4.4},
+                {"role":"shipper","model":"haiku","runs":3,"tokens":117000,"minutes":6.7}],
+    "stories": [{"title":"Invoice list API","estimate_h":4,"agent_minutes":14.2,"tokens":552000},
+                {"title":"Path parameters in the router","estimate_h":3,"agent_minutes":6.0,"tokens":231000},
+                {"title":"Year filter","estimate_h":4,"agent_minutes":11.3,"tokens":437000}],
+    "cost": null}
+}

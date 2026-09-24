@@ -41,6 +41,9 @@ problems="$(jq -r --slurpfile g "$GUIDE" '
 tester="$(jq -r .tester "$RESULTS")"; date="$(jq -r .date "$RESULTS")"
 slug="$(printf '%s' "$tester" | tr 'A-Z' 'a-z' | sed -E 's/[^a-z0-9]+/-/g; s/^-|-$//g')"
 DIR="$REPO/.compasso/runs/guide-$gid"; mkdir -p "$DIR"
+# keep the results where the sprint report reads them (committed with the guide)
+mkdir -p "$REPO/docs/releases/$gid-results" && cp "$RESULTS" "$REPO/docs/releases/$gid-results/$slug.json" ||
+  { echo "test-results: cannot keep the results in docs/releases/$gid-results" >&2; exit 1; }
 LEDGER="$DIR/imported.json"; [ -f "$LEDGER" ] || echo '{}' > "$LEDGER"
 filed='[]'
 

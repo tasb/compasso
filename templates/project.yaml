@@ -47,6 +47,10 @@ test_guide:                   # the HTML guide business testers get at the end o
   language: en                # the language it is written in, e.g. en, pt-PT, es
   where: ""                   # where testers test: a URL, or how to reach the environment
 
+metrics:                      # the sprint report
+  prices: {}                  # optional: price per million tokens per model, e.g. { opus: 30, sonnet: 6, haiku: 2 }
+  currency: USD
+
 approvals:
   plan: human                 # human | auto  (auto still requires a clean security review of the plan)
   merge: human                # human | agent (agent never approves with an open security finding)

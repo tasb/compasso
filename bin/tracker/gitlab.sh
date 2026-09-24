@@ -336,6 +336,7 @@ story() {
         --arg epic "$epic" --argjson ecov "$ecov" --argjson open "$open" --argjson dflt "$(cfg .coverage.min_changed)" '{
     iid: $issue.iid, id: $issue.id, title: $issue.title, state: $issue.state, type: $issue.issue_type,
     kind: (if ($issue.labels | index("type::bug")) then "bug" else "story" end),
+    estimate_h: (($issue.time_stats.time_estimate // 0) / 3600),
     labels: $issue.labels, milestone: ($issue.milestone.title // null),
     feature: (if $feature == "" then null else ($feature | tonumber) end),
     epic: (if $epic == "" then null else ($epic | tonumber) end),

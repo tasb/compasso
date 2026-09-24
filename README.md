@@ -54,6 +54,8 @@ bin/test-guide.sh --data F --out O                     # the HTML test guide for
 bin/test-results.sh --guide G --results R              # file a tester's failures as bugs
 bin/learnings.sh recall --role R --story F               # the lessons one role needs for one story
 bin/install-codex.sh [--repo R]                          # install for Codex
+bin/metrics.sh collect --repo . --out F                  # the sprint report's data
+bin/report.sh --data F --out O                          # the sprint report page
 ```
 
 ## Develop

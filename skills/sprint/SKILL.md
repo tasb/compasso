@@ -28,7 +28,8 @@ Move the sprint forward as far as it can go, then say exactly what waits and on 
      - features with nothing to try on a screen go in `verified_automatically`, by name only.
      - for any language other than English, `ui` holds the page's labels in that language (the keys are in `templates/test-guide.html`).
      
-     Then `bash ${CLAUDE_PLUGIN_ROOT}/bin/test-guide.sh --data docs/releases/S<n>-test-guide.json --out docs/releases/S<n>-test-guide.html`, open a merge request with both files, and once it is merged post one short comment with the guide's link on the epic and on each feature it covers.
+   - The sprint report: run `/compasso:report` (`${CLAUDE_PLUGIN_ROOT}/skills/report/SKILL.md`) and copy its data and page to `docs/releases/S<n>-report.json` and `docs/releases/S<n>-report.html`.
+     Then `bash ${CLAUDE_PLUGIN_ROOT}/bin/test-guide.sh --data docs/releases/S<n>-test-guide.json --out docs/releases/S<n>-test-guide.html`, open a merge request with the guide, the report and the testers' results folder, and once it is merged post one short comment with the guide's link (and the report's, on the epic) on the epic and on each feature the guide covers.
 
 6. **Results from testers.** When a tester sends back their results file: `bash ${CLAUDE_PLUGIN_ROOT}/bin/test-results.sh --repo . --guide docs/releases/S<n>-test-guide.json --results <file>`. Each scenario that does not work becomes a Bug under its feature, and a summary goes on the epic. Those bugs are built by the next `/compasso:sprint` run.
 

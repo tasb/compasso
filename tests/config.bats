@@ -158,3 +158,15 @@ setup() { setup_repo; }
   [ "$status" -eq 1 ]
   [[ "$output" == *"test_guide.language is required"* ]] || false
 }
+
+@test "report prices are optional numbers per model" {
+  run "$ROOT/bin/config.sh" validate --repo "$REPO"
+  [ "$status" -eq 0 ]
+  cfg_set '.metrics.prices = {"opus": 30, "sonnet": 6.5}'
+  run "$ROOT/bin/config.sh" validate --repo "$REPO"
+  [ "$status" -eq 0 ]
+  cfg_set '.metrics.prices = {"opus": "cheap"}'
+  run "$ROOT/bin/config.sh" validate --repo "$REPO"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"metrics.prices must map each model to a number"* ]] || false
+}
