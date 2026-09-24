@@ -3,7 +3,7 @@
 #
 #   mutate.sh scope --repo R --commits "SHA..." --out F                what the mutants may change
 #   mutate.sh run --repo R --mutants DIR --test CMD [--timeout S] --out F
-#   mutate.sh report --results F --verdicts V [--feature N]           the Hardening comment
+#   mutate.sh result --results F --verdicts V --out R                 this check's part of the Hardening report
 #
 # DIR holds one JSON file per mutant: {id, file, behaviour, description, patch}, where
 # patch is a unified diff against the current tree. For each mutant: prove it applies
@@ -48,20 +48,22 @@ if [ "$CMD" = scope ]; then
   echo "mutate: scope has $(grep -c '^+[^+]' "$OUT") changed lines in $(grep -c '^+++ ' "$OUT") files"
   exit 0
 fi
-if [ "$CMD" = report ]; then
+if [ "$CMD" = result ]; then
   # V: the tester's verdict on each survivor: [{id, verdict: gap|equivalent, reason, story?}]
-  [ -f "$RESULTS" ] && [ -f "$VERDICTS" ] || { echo "usage: mutate.sh report --results F --verdicts V [--feature N]" >&2; exit 2; }
+  [ -f "$RESULTS" ] && [ -f "$VERDICTS" ] && [ -n "$OUT" ] || { echo "usage: mutate.sh result --results F --verdicts V --out R" >&2; exit 2; }
   missing="$(jq -r --slurpfile v "$VERDICTS" '.[] | select(.status == "survived") | .id as $i
     | select([$v[0][] | select(.id == $i and (.verdict | IN("gap", "equivalent")))] | length == 0) | .id' "$RESULTS")"
   [ -z "$missing" ] || { echo "mutate: no verdict for survivor(s): $(echo $missing)" >&2; exit 2; }
-  jq -rn --slurpfile r "$RESULTS" --slurpfile v "$VERDICTS" --arg feature "$FEATURE" '
+  jq -n --slurpfile r "$RESULTS" --slurpfile v "$VERDICTS" '
     $r[0] as $r | $v[0] as $v
     | def verdict($i): [$v[] | select(.id == $i)][0];
     ([$r[] | select(.status == "survived") | . + {v: verdict(.id)}]) as $s
-    | "**Hardening** · mutation testing · \($r | map(select(.status != "not-applicable")) | length) mutants", "",
-      "- Caught by the tests: \($r | map(select(.status == "killed" or .status == "timeout")) | length) · Gaps: \($s | map(select(.v.verdict == "gap")) | length) · No observable effect: \($s | map(select(.v.verdict == "equivalent")) | length) · Not applicable: \($r | map(select(.status == "not-applicable")) | length)",
-      ($s[] | select(.v.verdict == "gap") | "- Gap: \(.behaviour) — \(.description)" + (if .v.story then " → #\(.v.story)" else "" end)),
-      "", "<!-- compasso:harden" + (if $feature != "" then " feature=\($feature)" else "" end) + " -->"'
+    | {check: "mutation", title: "Mutation testing", ran: true,
+       counts: [{label: "mutants", n: ($r | map(select(.status != "not-applicable")) | length)},
+                {label: "caught", n: ($r | map(select(.status == "killed" or .status == "timeout")) | length)},
+                {label: "gaps", n: ($s | map(select(.v.verdict == "gap")) | length)},
+                {label: "no observable effect", n: ($s | map(select(.v.verdict == "equivalent")) | length)}],
+       gaps: [$s[] | select(.v.verdict == "gap") | {summary: "\(.behaviour) — \(.description)"} + (if .v.story then {story: .v.story} else {} end)]}' > "$OUT"
   exit 0
 fi
 [ "$CMD" = run ] && [ -d "$DIR" ] && [ -n "$TEST" ] && [ -n "$OUT" ] ||

@@ -51,6 +51,23 @@ metrics:                      # the sprint report
   prices: {}                  # optional: price per million tokens per model, e.g. { opus: 30, sonnet: 6, haiku: 2 }
   currency: USD
 
+harden:                       # optional hardening, after the MVP (/compasso:harden)
+  flaky_runs: 5               # code set: how many times the suite runs to find flaky tests
+  environment:                # live set: a running test environment - never production
+    url: ""                   # its base URL
+    openapi: ""               # the OpenAPI schema (a URL, or a path in the repo) for API fuzzing
+    disposable: false         # true: fuzzing may send requests that create or change data
+    pages: []                 # UI paths to check for accessibility, e.g. ["/", "/billing"]
+    endpoints: []             # GET paths for the performance smoke test, e.g. ["/invoices"]
+  limits:
+    p95_ms: 500               # performance: 95% of requests faster than this
+    error_rate: 0.01          # performance: at most this share of requests failing
+  images:                     # the Docker images the live checks run in; update them here
+    zap: ghcr.io/zaproxy/zaproxy:stable
+    fuzz: schemathesis/schemathesis:stable
+    perf: grafana/k6:latest
+    a11y: mcr.microsoft.com/playwright:v1.55.0-noble
+
 approvals:
   plan: human                 # human | auto  (auto still requires a clean security review of the plan)
   merge: human                # human | agent (agent never approves with an open security finding)

@@ -170,3 +170,14 @@ setup() { setup_repo; }
   [ "$status" -eq 1 ]
   [[ "$output" == *"metrics.prices must map each model to a number"* ]] || false
 }
+
+@test "hardening: the test environment is a web URL and flaky runs are at least 2" {
+  cfg_set '.harden.environment.url = "staging.example.com" | .harden.flaky_runs = 1'
+  run "$ROOT/bin/config.sh" validate --repo "$REPO"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"harden.environment.url must start with http"* ]] || false
+  [[ "$output" == *"harden.flaky_runs must be a number of at least 2"* ]] || false
+  cfg_set '.harden.environment.url = "https://staging.example.com" | .harden.flaky_runs = 3'
+  run "$ROOT/bin/config.sh" validate --repo "$REPO"
+  [ "$status" -eq 0 ]
+}

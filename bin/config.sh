@@ -85,6 +85,11 @@ validate() {
   [ "$(yq '[(.metrics.prices // {}) | to_entries | .[] | select((.value | tag) != "!!int" and (.value | tag) != "!!float")] | length' "$CFG")" = 0 ] ||
     err "metrics.prices must map each model to a number (price per million tokens)"
 
+  v="$(val .harden.environment.url)"
+  case "$v" in ""|http://*|https://*) ;; *) err "harden.environment.url must start with http:// or https://" ;; esac
+  v="$(val .harden.flaky_runs)"
+  [ -z "$v" ] || { is_int "$v" && [ "$v" -ge 2 ]; } || err "harden.flaky_runs must be a number of at least 2"
+
   case "$(val .approvals.plan)" in human|auto) : ;; *) err "approvals.plan must be human or auto" ;; esac
   case "$(val .approvals.merge)" in human|agent) : ;; *) err "approvals.merge must be human or agent" ;; esac
 

@@ -457,7 +457,11 @@ Designed, not built in v1:
 - **Webhook trigger.** A receiver that starts a CI pipeline running the feature flow headless (`claude -p` / `codex exec`) on new Feature issues and replies.
 - **Premium features.** Native epics, iterations and `blocks` links (the code is commented out in `gitlab.sh`).
 
-## 16. Hardening: mutation testing (optional, after the MVP)
+## 16. Hardening (optional, after the MVP)
+
+Decided 2026-09-25: two sets. The **code set** needs no infrastructure: mutation testing, property-based tests, flaky-test detection and a test-smell review. The **live set** needs a running test environment and Docker: API fuzzing (Schemathesis), a passive security scan (OWASP ZAP baseline), a performance smoke test (k6) and accessibility (axe-core in the official Playwright image). `/compasso:harden <feature|epic> [--set code|live|all] [--checks ...]`, the code set by default. Live checks run from the agent on demand against `harden.environment.url`, which the person confirms every run and which is never production; API fuzzing sends only reading requests unless the environment is marked disposable; the images are pinned in `harden.images`. Every check writes one result in a common format; `harden-report.sh` renders the Hardening comment; gaps become backlog stories.
+
+### Mutation testing
 
 Decided 2026-09-23. Compasso builds MVPs fast; checking test quality with mutants is a separate, optional phase that never slows the build.
 

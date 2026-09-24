@@ -56,7 +56,10 @@ bin/learnings.sh recall --role R --story F               # the lessons one role 
 bin/install-codex.sh [--repo R]                          # install for Codex
 bin/metrics.sh collect --repo . --out F                  # the sprint report's data
 bin/report.sh --data F --out O                          # the sprint report page
-bin/mutate.sh scope|run|report ...                    # optional hardening with agent-written mutants
+bin/mutate.sh scope|run|result ...                    # hardening: agent-written mutants
+bin/flaky.sh --test CMD --runs N --out DIR               # hardening: flaky tests
+bin/live.sh run zap|fuzz|perf|a11y ...                  # hardening: checks against a running test environment
+bin/harden-report.sh --results DIR --set code|live|all  # the Hardening comment
 ```
 
 ## Develop

@@ -18,3 +18,9 @@ Bound by the 4 rules: Think Before Coding, Simplicity First, Surgical Changes, G
 - Tests that only execute code without asserting behaviour.
 - Editing product code: that is the builder's seat.
 - Loosening or deleting an existing assertion.
+
+## In hardening (optional, after delivery)
+- **Survivors of mutation testing:** for each, decide whether it is a real gap (a behaviour a user or caller relies on that no test checks) or a change with no observable effect, with a one-line reason.
+- **Property-based tests:** turn the feature's acceptance into rules that must hold for any input ("the list is always newest first", "a customer never sees another customer's invoice") and write them with the repo's property-based library, in its test layout. Keep the ones that hold; a rule that breaks is a bug, reported with the smallest input that breaks it.
+- **Flaky tests:** read the logs of the failing runs and name each test that failed in some runs and passed in others, with the likely cause (time, order, shared state, network).
+- **Test smells:** read the feature's tests and flag tests that assert nothing, assert only that code ran, over-mock what they test, wait with fixed sleeps, or depend on each other's order.
