@@ -8,6 +8,7 @@
 #   compasso-e2e       the repo's e2e command, when set                      (gate)
 #   compasso-coverage  the coverage command, then diff-cover on changed lines (warning: exit 3 allowed)
 #   GitLab SAST and Secret Detection                                         (security scans, every tier)
+#   compasso-scan-gate  fails on any high or critical scan finding           (gate)
 # The product repo includes the file from its .gitlab-ci.yml.
 # Exit: 0 written | 1 config problem
 set -u
@@ -50,6 +51,35 @@ variables:
 .compasso-mr:
   rules:
     - if: \$CI_PIPELINE_SOURCE == "merge_request_event"
+
+# Keep the scan reports as plain artifacts so the scan gate (last stage) can read them.
+semgrep-sast:
+  artifacts:
+    paths: [gl-sast-report.json]
+
+secret_detection:
+  artifacts:
+    paths: [gl-secret-detection-report.json]
+
+# High or critical scan findings block the merge request. GitLab Free neither shows
+# nor enforces them, and the scan jobs themselves are allowed to fail.
+compasso-scan-gate:
+  extends: .compasso-mr
+  stage: .post
+  image: alpine:3.20
+  script:
+    - apk add --no-cache jq >/dev/null
+    - |
+      blocked=0
+      [ -f gl-secret-detection-report.json ] || { echo "scan gate: no secret detection report - the scan did not run"; exit 1; }
+      [ -f gl-sast-report.json ] || echo "scan gate: no SAST report (no language the SAST analyzer supports)"
+      for f in gl-sast-report.json gl-secret-detection-report.json; do
+        [ -f "\$f" ] || continue
+        found="\$(jq -r '.vulnerabilities[]? | select(.severity == "High" or .severity == "Critical") | "  - [\\(.severity)] \\(.name // .message // .id) (\\(.location.file // "?"):\\(.location.start_line // "?"))"' "\$f")"
+        [ -z "\$found" ] || { echo "scan gate: high or critical findings in \$f:"; echo "\$found"; blocked=1; }
+      done
+      [ "\$blocked" -eq 0 ] && echo "scan gate: no high or critical findings"
+      exit "\$blocked"
 
 compasso-verify:
   extends: .compasso-mr

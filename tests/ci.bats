@@ -68,3 +68,69 @@ job() { yq -r "$1" "$OUT"; }
   ci >/dev/null
   [ "$(job '.compasso-verify.script[0]')" = 'pytest -k "not slow" --cov: x # y' ]
 }
+
+# ---------- scan gate ----------
+
+gate() { # run the generated gate script in a directory holding the given reports
+  ci >/dev/null
+  mkdir -p "$BATS_TEST_TMPDIR/job" && cd "$BATS_TEST_TMPDIR/job"
+  yq -r '.compasso-scan-gate.script[1]' "$OUT" > gate.sh
+  bash gate.sh
+}
+report() { # file severity...
+  local f="$1"; shift
+  jq -n --args '{vulnerabilities: ($ARGS.positional | to_entries | map({id: "v\(.key)", name: "finding \(.key)", severity: .value, location: {file: "src/a.js", start_line: (.key + 1)}}))}' "$@" \
+    > "$BATS_TEST_TMPDIR/job/$f"
+}
+
+@test "the scan gate is a blocking last-stage job, and the scans keep their reports readable" {
+  ci >/dev/null
+  [ "$(job '.compasso-scan-gate.stage')" = ".post" ]
+  [ "$(job '.compasso-scan-gate.allow_failure')" = null ]
+  [ "$(job '.compasso-scan-gate.extends')" = ".compasso-mr" ]
+  [ "$(job '.semgrep-sast.artifacts.paths[0]')" = "gl-sast-report.json" ]
+  [ "$(job '.secret_detection.artifacts.paths[0]')" = "gl-secret-detection-report.json" ]
+}
+
+@test "the scan gate passes when the scans found nothing high or critical" {
+  mkdir -p "$BATS_TEST_TMPDIR/job"
+  report gl-sast-report.json Low Medium Info
+  report gl-secret-detection-report.json
+  run gate
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"no high or critical findings"* ]] || false
+}
+
+@test "the scan gate fails on a high SAST finding and names it" {
+  mkdir -p "$BATS_TEST_TMPDIR/job"
+  report gl-sast-report.json Low High
+  report gl-secret-detection-report.json
+  run gate
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"[High] finding 1 (src/a.js:2)"* ]] || false
+  [[ "$output" != *"[Low]"* ]] || false
+}
+
+@test "the scan gate fails on a leaked secret" {
+  mkdir -p "$BATS_TEST_TMPDIR/job"
+  report gl-secret-detection-report.json Critical
+  run gate
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"[Critical]"* ]] || false
+}
+
+@test "the scan gate fails closed when secret detection did not run" {
+  mkdir -p "$BATS_TEST_TMPDIR/job"
+  report gl-sast-report.json Low
+  run gate
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"no secret detection report"* ]] || false
+}
+
+@test "the scan gate tolerates no SAST report when no analyzer applies" {
+  mkdir -p "$BATS_TEST_TMPDIR/job"
+  report gl-secret-detection-report.json
+  run gate
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"no SAST report"* ]] || false
+}
