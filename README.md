@@ -4,6 +4,27 @@ A sprint-sized SDLC for Claude Code and Codex. It plans an epic per sprint, feat
 
 Design: [docs/SPEC.md](docs/SPEC.md). Status: step 1 of 5 (setup and the GitLab adapter).
 
+## Install
+
+**Claude Code**
+
+```bash
+claude plugin marketplace add tasb/compasso
+claude plugin install compasso@compasso
+```
+
+Commands are `/compasso:setup`, `/compasso:plan`, `/compasso:feature`, `/compasso:story`, `/compasso:sprint` and `/compasso:review`.
+
+**Codex**
+
+```bash
+git clone https://github.com/tasb/compasso && cd compasso
+bin/install-codex.sh                 # once per machine: engine in ~/.compasso/engine, skills in ~/.agents/skills
+~/.compasso/engine/bin/install-codex.sh --repo /path/to/project   # per project: .codex/agents with each role's model
+```
+
+The same commands are `$compasso-setup`, `$compasso-plan` and so on. Re-run the first command to update, and the second after changing `models.codex`.
+
 ## Requirements
 
 `bash`, `git`, `glab` (logged in), `jq`, `yq` (mikefarah v4). Tests: `bats`.
@@ -31,6 +52,8 @@ bin/tracker/gitlab.sh sprint-sync --repo .              # what can be built now,
 bin/comment.sh qa|plan ...                              # the feature flow's comments on GitLab
 bin/test-guide.sh --data F --out O                     # the HTML test guide for business testers
 bin/test-results.sh --guide G --results R              # file a tester's failures as bugs
+bin/learnings.sh recall --role R --story F               # the lessons one role needs for one story
+bin/install-codex.sh [--repo R]                          # install for Codex
 ```
 
 ## Develop

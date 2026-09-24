@@ -400,14 +400,14 @@ Decided 2026-09-24: an HTML page for business testers, about features, not the d
 | Session context | `SessionStart` hook | `AGENTS.md` block |
 | Headless (future webhook) | `claude -p` | `codex exec` |
 
-Source of truth: `roles/*.md` and `skills/*/SKILL.md` (Agent Skills format). `bin/build-targets.sh` generates both targets from `project.yaml` models. Scripts are bash + `glab` + `jq`/`yq`, shared by both.
+Source of truth: `roles/*.md` and `skills/*/SKILL.md` (Agent Skills format). Claude Code runs them as a plugin (`.claude-plugin/`); each role is dispatched as a subagent with the model the project config sets. `bin/install-codex.sh` installs the engine and the skills for Codex once per machine (`~/.compasso/engine`, `~/.agents/skills/compasso-*`, with plugin paths and `/compasso:` commands rewritten) and, per project, writes `.codex/agents/compasso-<role>.toml` with each role's model and reasoning effort from `models.codex`. No session-start injection is needed on either: the 4 rules are in every role file, and lessons are recalled per role and story. Scripts are bash + `glab` + `jq`/`yq`, shared by both.
 
 ## 10. Repo layout
 
 ```
 roles/            one file per role (charter)
 skills/           setup plan feature story sprint review status
-bin/              plan-check, verify, tracker adapter (gitlab), build-targets, install-codex
+bin/              config, tracker adapter (gitlab), plan-check, verify, coverage, review-gate, test-guide, learnings, install-codex
 templates/        test-guide.md, release-notes.md, mr-body.md, gitlab-ci security jobs
 tests/            bats
 docs/SPEC.md

@@ -29,7 +29,7 @@ Ask one topic at a time, show the default, and accept "default" as an answer. Ne
 
 6. **Approvals.** Plan approval: `human` (default) or `auto`. Merge approval: `human` (default) or `agent`. State plainly that security review runs on every plan and merge request regardless, and that no approval mode passes an open security finding.
 
-7. **Harnesses and models.** Ask which harnesses the team uses: `claude`, `codex`, or both. Show the model table for each chosen harness from the config and ask whether to change any role. The `security` and `approver` roles have a floor: no fast-tier model and no low effort. Remove the `models.<harness>` block of a harness that is not used.
+7. **Harnesses and models.** Ask which harnesses the team uses: `claude`, `codex`, or both. Show the model table for each chosen harness from the config and ask whether to change any role. The `security` and `approver` roles have a floor: no fast-tier model and no low effort. Remove the `models.<harness>` block of a harness that is not used. When the team uses Codex: after validating (step 8), run `bash ${CLAUDE_PLUGIN_ROOT}/bin/install-codex.sh --repo .` to write `.codex/agents/compasso-*.toml` with each role's model (tell the user to run `install-codex.sh` once without `--repo` on each machine first, and to re-run the `--repo` form after changing models).
 
 8. Write every answer with `yq -i` edits to `.compasso/project.yaml`, then validate:
    `bash ${CLAUDE_PLUGIN_ROOT}/bin/config.sh validate --repo .`

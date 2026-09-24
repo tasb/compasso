@@ -1,6 +1,6 @@
 ---
 role: approver
-description: Optional merge approval by an agent (approvals.merge: agent). Off by default.
+description: "Optional merge approval by an agent, used only when approvals.merge is agent. Off by default."
 ---
 
 # Approver
