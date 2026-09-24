@@ -7,10 +7,11 @@
 #   gitlab.sh story         --repo R --iid N                      a story, its resolved coverage and open dependencies -> JSON
 #   gitlab.sh set-state     --repo R --iid N --state S            S: building | in-review; drops the other compasso:: states
 #   gitlab.sh open-mr       --repo R --iid N --branch B --body-file F   create or update the story's MR -> JSON {iid, web_url}
-#   gitlab.sh followup      --repo R --parent N --title T --body-file F  a task under N for a minor finding -> iid
+#   gitlab.sh followup      --repo R --parent N --title T --body-file F [--labels a,b]  a task under N (a minor finding, a bug) -> iid
 #   gitlab.sh merge         --repo R --mr N                       merge when the pipeline succeeds (approvals.merge: agent only)
 #   gitlab.sh mr-info       --repo R --mr N                       branches, author and the issues it closes -> JSON
-#   gitlab.sh comment       --repo R --mr N --body-file F         post F as a comment on the merge request
+#   gitlab.sh comment       --repo R --mr N|--iid N --body-file F  post F as a comment on a merge request or an issue
+#   gitlab.sh sprint-sync   --repo R [--milestone S20]            what can be built now, what waits and on whom -> JSON
 #
 # Exit: 0 ok | 1 config/usage | 2 not logged in | 3 project not found or no access
 #       4 role below Developer | 5 tier cannot be detected (set tracker.tier)
@@ -18,7 +19,7 @@ set -u
 
 BIN="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CMD="${1:-}"; shift || true
-REPO="." IID="" STATE="" BRANCH="" BODY="" TITLE="" PARENT="" MR=""
+REPO="." IID="" STATE="" BRANCH="" BODY="" TITLE="" PARENT="" MR="" LABELS_ARG="owner::either" MILESTONE=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --repo) REPO="$2"; shift 2 ;;
@@ -29,6 +30,8 @@ while [ $# -gt 0 ]; do
     --title) TITLE="$2"; shift 2 ;;
     --parent) PARENT="$2"; shift 2 ;;
     --mr) MR="$2"; shift 2 ;;
+    --labels) LABELS_ARG="$2"; shift 2 ;;
+    --milestone) MILESTONE="$2"; shift 2 ;;
     *) echo "gitlab: unknown argument '$1'" >&2; exit 1 ;;
   esac
 done
@@ -332,10 +335,15 @@ story() {
   jq -n --argjson issue "$issue" --argjson s "$parsed" --arg feature "$feature" --argjson fcov "$fcov" \
         --arg epic "$epic" --argjson ecov "$ecov" --argjson open "$open" --argjson dflt "$(cfg .coverage.min_changed)" '{
     iid: $issue.iid, id: $issue.id, title: $issue.title, state: $issue.state, type: $issue.issue_type,
+    kind: (if ($issue.labels | index("type::bug")) then "bug" else "story" end),
     labels: $issue.labels, milestone: ($issue.milestone.title // null),
     feature: (if $feature == "" then null else ($feature | tonumber) end),
     epic: (if $epic == "" then null else ($epic | tonumber) end),
-    story: $s,
+    # a bug is built like a story: its Expected is what the tests must pin, unit tests at least
+    story: (if ($issue.labels | index("type::bug")) then $s
+             | .acceptance = (if (.acceptance | length) > 0 then .acceptance else .expected end)
+             | .tests = (if (.tests | length) > 0 then .tests else ["unit"] end)
+           else $s end),
     coverage_min: ([$s.coverage, $fcov, $ecov, $dflt] | map(select(. != null)) | first),
     open_dependencies: $open
   }'
@@ -373,7 +381,7 @@ followup() {
   need PARENT TITLE BODY
   pj="$(api "projects/$PID/issues/$PARENT")"
   [ -n "$(jq -r '.iid // empty' <<<"$pj" 2>/dev/null)" ] || { echo "gitlab: no work item #$PARENT" >&2; return 1; }
-  res="$(upsert_issue "" "$TITLE" "$(cat "$BODY")" "$(jq -r '.milestone.id // ""' <<<"$pj")" task "" owner::either)"
+  res="$(upsert_issue "" "$TITLE" "$(cat "$BODY")" "$(jq -r '.milestone.id // ""' <<<"$pj")" task "" $(printf '%s' "$LABELS_ARG" | tr ',' ' '))"
   [ -n "$res" ] || { echo "gitlab: could not create the follow-up" >&2; return 1; }
   api graphql -f query="mutation { workItemUpdate(input: { id: \"gid://gitlab/WorkItem/${res#* }\", hierarchyWidget: { parentId: \"gid://gitlab/WorkItem/$(jq -r .id <<<"$pj")\" } }) { errors } }" |
     jq -e '(.data.workItemUpdate.errors // ["no response"]) | length == 0' >/dev/null ||
@@ -401,12 +409,56 @@ mr_info() {
   jq -c --argjson closes "$closes" '{iid, title, state, source_branch, target_branch, web_url, author: .author.username, draft, closes: $closes}' <<<"$mr"
 }
 
-comment() {
-  need MR BODY
+comment() { # on a merge request (--mr) or an issue (--iid)
+  local target where
+  need BODY
   [ -f "$BODY" ] || { echo "gitlab: no body file $BODY" >&2; return 1; }
-  api -X POST "projects/$PID/merge_requests/$MR/notes" -f body="$(cat "$BODY")" | jq -e -r '.id' >/dev/null ||
-    { echo "gitlab: could not comment on !$MR" >&2; return 1; }
-  echo "gitlab: commented on !$MR"
+  if [ -n "$MR" ]; then target="merge_requests/$MR"; where="!$MR"
+  elif [ -n "$IID" ]; then target="issues/$IID"; where="#$IID"
+  else echo "gitlab: comment needs --mr or --iid" >&2; return 1; fi
+  api -X POST "projects/$PID/$target/notes" -f body="$(cat "$BODY")" | jq -e -r '.id' >/dev/null ||
+    { echo "gitlab: could not comment on $where" >&2; return 1; }
+  echo "gitlab: commented on $where"
+}
+
+
+sprint_sync() {
+  local ms items tasks enriched ext='[]' i id d cleaned='[]' parallel
+  check >/dev/null || return $?
+  ms="$MILESTONE"
+  [ -n "$ms" ] || ms="S$(yq -r '.epic.sprint.number // ""' "$REPO/.compasso/plan.yaml" 2>/dev/null)"
+  [ "$ms" != "S" ] || { echo "gitlab: sprint-sync needs --milestone or a .compasso/plan.yaml" >&2; return 1; }
+  items="$(api --paginate "projects/$PID/issues?milestone=$ms&state=all&per_page=100" | jq -s 'add // []')"
+  [ "$(jq length <<<"$items")" -gt 0 ] || { echo "gitlab: no work items in milestone $ms" >&2; return 1; }
+
+  # every task gets its parent and its parsed description
+  enriched='[]'
+  for i in $(jq -r '.[].iid' <<<"$items"); do
+    d="$(jq --argjson i "$i" '.[] | select(.iid == $i)' <<<"$items")"
+    id="$(jq -r .id <<<"$d")"
+    d="$(jq --argjson p "$(jq -r '.description // ""' <<<"$d" | jq -Rs -f "$BIN/parse.jq")" \
+            --arg parent "$( [ "$(jq -r .issue_type <<<"$d")" = task ] && parent_iid "$id" )" \
+      '. + {parsed: $p, parent: (if $parent == "" then null else ($parent | tonumber) end)}' <<<"$d")"
+    enriched="$(jq -c --argjson d "$d" '. + [$d]' <<<"$enriched")"
+  done
+
+  # dependencies outside the milestone: look up their state
+  for i in $(jq -r '[.[].iid] as $in | [.[].parsed | (.depends_on + .blocked_by)[]] | unique | map(select(. as $x | $in | index($x) | not)) | .[]' <<<"$enriched"); do
+    d="$(api "projects/$PID/issues/$i")" || { echo "gitlab: #$i is referenced in $ms but does not exist" >&2; return 1; }
+    ext="$(jq -c --argjson d "$d" '. + [{iid: $d.iid, state: $d.state, title: $d.title}]' <<<"$ext")"
+  done
+
+  # closed stories and bugs keep no in-progress state label
+  for i in $(jq -r '.[] | select(.state == "closed" and .issue_type == "task")
+      | select(.labels | index("compasso::building") or index("compasso::in-review")) | .iid' <<<"$enriched"); do
+    api -X PUT "projects/$PID/issues/$i" -f remove_labels="compasso::building,compasso::in-review" >/dev/null ||
+      { echo "gitlab: could not clear the state of #$i" >&2; return 1; }
+    cleaned="$(jq -c --argjson i "$i" '. + [$i]' <<<"$cleaned")"
+  done
+
+  parallel="$(cfg '.sprint.parallel // 2')"
+  jq -n --arg ms "$ms" --argjson items "$enriched" --argjson ext "$ext" --argjson cleaned "$cleaned" \
+        --argjson parallel "$parallel" -f "$BIN/sprint.jq"
 }
 
 
@@ -421,5 +473,6 @@ case "$CMD" in
   merge) merge ;;
   mr-info) mr_info ;;
   comment) comment ;;
-  *) echo "usage: gitlab.sh check|ensure-labels|push-plan|story|set-state|open-mr|followup|merge|mr-info|comment --repo R ..." >&2; exit 1 ;;
+  sprint-sync) sprint_sync ;;
+  *) echo "usage: gitlab.sh check|ensure-labels|push-plan|story|set-state|open-mr|followup|merge|mr-info|comment|sprint-sync --repo R ..." >&2; exit 1 ;;
 esac

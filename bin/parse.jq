@@ -1,6 +1,6 @@
 # Parse a Compasso work-item description (the approved formats) back into fields.
 # Input: the description as a string. Output:
-#   {key, acceptance, verify, tests, touches, depends_on, blocked_by, coverage}
+#   {key, goal, scope, acceptance, decisions, expected, verify, tests, touches, depends_on, blocked_by, coverage}
 # depends_on / blocked_by are GitLab iids (numbers); coverage is a number or null.
 
 def lines: split("\n") | map(sub("\\\\$"; "") | sub("\\s+$"; ""));
@@ -20,7 +20,11 @@ def list: if . == null then [] else split(",") | map(gsub("^\\s+|\\s+$|`"; "")) 
 lines as $l
 | {
     key: ([ $l[] | capture("<!-- compasso:key=(?<k>[^ ]+) -->")? | .k ][0]),
+    goal: ($l | field("Goal")),
+    scope: ($l | section("Scope")),
     acceptance: ($l | section("Acceptance")),
+    decisions: ($l | section("Decisions")),
+    expected: ($l | section("Expected")),
     verify: ($l | section("Verify") | map(gsub("^`|`$"; ""))),
     tests: ($l | field("Tests") | list),
     touches: ($l | field("Touches") | list),

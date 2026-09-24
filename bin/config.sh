@@ -59,6 +59,8 @@ validate() {
   is_int "$weeks" && [ "$weeks" -ge 1 ] && [ "$weeks" -le 8 ] || err "sprint.weeks must be an integer from 1 to 8"
   is_int "$hpd" && [ "$hpd" -ge 1 ] && [ "$hpd" -le 24 ] || err "sprint.hours_per_day must be an integer from 1 to 24"
   is_int "$cap" && [ "$cap" -ge 1 ] || err "sprint.capacity_hours must be a positive integer"
+  v="$(val .sprint.parallel)"
+  [ -z "$v" ] || { is_int "$v" && [ "$v" -ge 1 ] && [ "$v" -le 8 ]; } || err "sprint.parallel must be an integer from 1 to 8"
 
   smax="$(val .limits.story_max_hours)"; star="$(val .limits.story_target_hours)"
   if is_int "$smax" && [ "$smax" -ge 1 ]; then

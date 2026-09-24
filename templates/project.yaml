@@ -11,6 +11,7 @@ sprint:
   weeks: 2
   hours_per_day: 8
   capacity_hours: 80          # team hours available per sprint, humans and agents
+  parallel: 2                 # stories built at the same time by the sprint flow
 
 limits:
   story_max_hours: 8          # hard limit: one working day

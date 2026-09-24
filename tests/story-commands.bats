@@ -22,7 +22,7 @@ setup() {
 EOF
 )"
   echo 1006 > "$FAKE_GL/parent/1008"
-  jq -n '[{iid: 12, description: "**Goal:** g\\\n**Coverage:** 70%"}]' > "$FAKE_GL/issue-query.json"
+  jq -n '[{iid: 12, description: "**Goal:** g\\\n**Coverage:** 70%"}]' > "$FAKE_GL/epic-query.json"
 }
 issue() { # iid type title state description
   jq -n --argjson iid "$1" --arg t "$2" --arg title "$3" --arg s "$4" --arg d "$5" \
@@ -47,7 +47,7 @@ calls() { grep -c -- "$1" "$FAKE_GL/calls.log" || true; }
   [ "$(gl story --iid 8 | jq .coverage_min)" = 85 ]
   issue 6 issue "Invoice history" opened '**Goal:** g'
   [ "$(gl story --iid 8 | jq .coverage_min)" = 70 ]
-  echo '[{"iid": 12, "description": "**Goal:** g"}]' > "$FAKE_GL/issue-query.json"
+  echo '[{"iid": 12, "description": "**Goal:** g"}]' > "$FAKE_GL/epic-query.json"
   [ "$(gl story --iid 8 | jq .coverage_min)" = 80 ]
   issue 8 task "t" opened $'**Tests:** unit\n**Coverage:** 95%'
   [ "$(gl story --iid 8 | jq .coverage_min)" = 95 ]
