@@ -15,6 +15,6 @@ Review one merge request, whoever wrote it. Scripts are in `${CLAUDE_PLUGIN_ROOT
 
 5. **Post.** `bash ${CLAUDE_PLUGIN_ROOT}/bin/review-gate.sh --findings RUN/findings.json --comment > RUN/review.md`, then `gitlab.sh comment --mr <mr> --body-file RUN/review.md`.
 
-6. **Fix, only when asked.** Pushing to someone else's branch needs the user's yes. With it: check out the source branch, then run the story flow's review loop (its step 7, at most 3 rounds, security in every round), push, and post the updated review.
+6. **Fix, only when asked.** Pushing to someone else's branch needs the user's yes. With it: check out the source branch, then run the story flow's review loop (its step 7, at most 3 rounds, security in every round), push, and post the updated review. When the fix answers a person who asked for rework, the shipper also captures a lesson from it (at most 2, `learnings.sh check`) in the same push.
 
 7. Hand back: the MR link, whether it blocks, and what a person must decide.

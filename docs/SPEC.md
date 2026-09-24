@@ -446,6 +446,7 @@ Decided 2026-09-23: targeted learnings, not session-start injection.
 - Lessons are committed in the story's merge request, so a person reviews them with the code.
 - A lesson whose every path no longer exists is flagged for removal.
 - No global tier; a lesson worth sharing across projects is copied by hand.
+- Built as `bin/learnings.sh`: `recall --role R [--story F]` (the story flow passes each role its lessons; the planner gets all of its own), `check` (well formed, at most 5 lines, stale paths flagged) and `list`.
 
 ## 15. Compasso v2 (deferred)
 

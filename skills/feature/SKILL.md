@@ -13,7 +13,7 @@ Plan and build one feature. The conversation happens here; GitLab gets the recor
    - `<iid>`: `gitlab.sh story --repo . --iid <iid>` and read `story.goal`, `story.scope`, `story.acceptance`, `story.decisions`. Add it to `plan.yaml` as a new feature (next free `F-n` key) with `gitlab: <iid>`; if it is already there, continue with that entry.
    - `"<idea>"`: add a new feature to `plan.yaml` with the idea as its goal and `gitlab: null`.
 
-4. **Questions, in this conversation.** Read the code, then ask what you need: at most 5 questions per round, each answerable in one line, with options where possible. At most 3 rounds; after that, or when the user says to proceed, list what is still open as assumptions and continue. Never ask on the tracker.
+4. **Questions, in this conversation.** Read the lessons for planning first (`bash ${CLAUDE_PLUGIN_ROOT}/bin/learnings.sh recall --repo . --role planner`), then read the code, then ask what you need: at most 5 questions per round, each answerable in one line, with options where possible. At most 3 rounds; after that, or when the user says to proceed, list what is still open as assumptions and continue. Never ask on the tracker.
    - After each round write `RUN/qa-<round>.json` (`{round, user, date, items: [{question, answer}]}`, the user being the GitLab username from `gitlab.sh check`) and add each answer to the feature's `decisions` as `<answer> (answered by @<user> in the agent, <date>)`; assumptions as `Assumed: <assumption>`.
    - Complete the feature's `scope` and `acceptance` from the answers.
 

@@ -13,7 +13,7 @@ Plan one sprint top-down. You act as the planner: read `roles/planner.md` in the
 
 4. **Features.** Ask which features the sprint delivers. For each: goal, scope (what to build), acceptance (Given/When/Then). Ask questions in rounds as `roles/planner.md` says; record each answer as a bullet in `decisions`. Ask in this conversation, never on the tracker.
 
-5. **Stories.** Read the code, then split each feature into stories that follow `roles/planner.md`. For every story set `title`, `as`/`want`/`so_that`, `acceptance`, `verify`, `tests`, `touches`, `depends_on`, `owner` and `estimate_h`. Ask the user who owns stories you cannot assign (`agent`, `human` or `either`). Add a `coverage` override only when the user asks for one.
+5. **Stories.** Read the lessons for planning (`bash ${CLAUDE_PLUGIN_ROOT}/bin/learnings.sh recall --repo . --role planner`) and the code, then split each feature into stories that follow `roles/planner.md`. For every story set `title`, `as`/`want`/`so_that`, `acceptance`, `verify`, `tests`, `touches`, `depends_on`, `owner` and `estimate_h`. Ask the user who owns stories you cannot assign (`agent`, `human` or `either`). Add a `coverage` override only when the user asks for one.
 
    **Blockers.** For anything outside the plan a story waits for (credentials, another team, a decision), add a blocker: a title, the GitLab username of the project member who will resolve it (ask; it is required), and the steps to resolve it, one clear action each. List it in the story's `blocked_by`.
 
