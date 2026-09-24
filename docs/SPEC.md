@@ -466,6 +466,7 @@ Decided 2026-09-23. Compasso builds MVPs fast; checking test quality with mutant
 - **Scope:** only the lines changed by the feature or epic being hardened.
 - **Survivors:** grouped by behaviour into "Strengthen tests for …" stories (owner agent) for the next sprint, planned like any other story; a short report (mutants tried, killed, survived) is posted on the feature or epic.
 - Never a gate and never part of the story or sprint flow.
+- **Built as:** `/compasso:harden` (`skills/harden/SKILL.md`) with the `mutator` role; `bin/mutate.sh scope` (the feature's merge commits from `gitlab.sh merge-commit`, test files left out), `run` (proves each patch applies with `git apply`, runs the tests under a time limit that kills the whole process group, reverts and proves the tree is back; a timeout counts as caught) and `report` (the Hardening comment); the tester judges each survivor as a real gap or a change with no observable effect; gaps are filed with `gitlab.sh followup --milestone none`, and `/compasso:plan` offers backlog stories.
 
 ## 17. Metrics and reporting
 

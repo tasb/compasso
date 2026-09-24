@@ -66,6 +66,7 @@ models:
     security: { model: opus }
     approver: { model: opus }
     shipper:  { model: haiku }
+    mutator:  { model: sonnet }
   codex:
     planner:  { model: gpt-6-astra, effort: high }
     tester:   { model: gpt-6-sol,   effort: medium }
@@ -74,3 +75,4 @@ models:
     security: { model: gpt-6-astra, effort: high }
     approver: { model: gpt-6-astra, effort: high }
     shipper:  { model: gpt-6-luna,  effort: low }
+    mutator:  { model: gpt-6-sol,   effort: medium }

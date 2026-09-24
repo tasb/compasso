@@ -10,7 +10,7 @@
 set -u
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-ROLES="planner tester builder reviewer security approver shipper"
+ROLES="planner tester builder reviewer security approver shipper mutator"
 FLOOR_ROLES="security approver"   # may never run on a fast-tier model or low effort
 
 CMD="${1:-}"; shift || true

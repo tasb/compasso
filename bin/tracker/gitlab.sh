@@ -12,6 +12,7 @@
 #   gitlab.sh mr-info       --repo R --mr N                       branches, author and the issues it closes -> JSON
 #   gitlab.sh comment       --repo R --mr N|--iid N --body-file F  post F as a comment on a merge request or an issue
 #   gitlab.sh sprint-sync   --repo R [--milestone S20] [--parent F] what can be built now, what waits and on whom -> JSON
+#   gitlab.sh merge-commit  --repo R --iid N                      the commit the story's merge request put on the default branch
 #
 # Exit: 0 ok | 1 config/usage | 2 not logged in | 3 project not found or no access
 #       4 role below Developer | 5 tier cannot be detected (set tracker.tier)
@@ -378,11 +379,13 @@ open_mr() {
 }
 
 followup() {
-  local res pj
+  local res pj ms
   need PARENT TITLE BODY
   pj="$(api "projects/$PID/issues/$PARENT")"
   [ -n "$(jq -r '.iid // empty' <<<"$pj" 2>/dev/null)" ] || { echo "gitlab: no work item #$PARENT" >&2; return 1; }
-  res="$(upsert_issue "" "$TITLE" "$(cat "$BODY")" "$(jq -r '.milestone.id // ""' <<<"$pj")" task "" $(printf '%s' "$LABELS_ARG" | tr ',' ' '))"
+  # the parent's sprint, unless --milestone none puts it in the backlog for a later sprint
+  ms=""; [ "$MILESTONE" = none ] || ms="$(jq -r '.milestone.id // ""' <<<"$pj")"
+  res="$(upsert_issue "" "$TITLE" "$(cat "$BODY")" "$ms" task "" $(printf '%s' "$LABELS_ARG" | tr ',' ' '))"
   [ -n "$res" ] || { echo "gitlab: could not create the follow-up" >&2; return 1; }
   api graphql -f query="mutation { workItemUpdate(input: { id: \"gid://gitlab/WorkItem/${res#* }\", hierarchyWidget: { parentId: \"gid://gitlab/WorkItem/$(jq -r .id <<<"$pj")\" } }) { errors } }" |
     jq -e '(.data.workItemUpdate.errors // ["no response"]) | length == 0' >/dev/null ||
@@ -463,6 +466,16 @@ sprint_sync() {
 }
 
 
+merge_commit() { # the commit a story's merge request put on the default branch
+  local mr
+  need IID
+  mr="$(api "projects/$PID/issues/$IID/closed_by" | jq -c '[.[] | select(.state == "merged")][0] // empty')"
+  [ -n "$mr" ] || { echo "gitlab: #$IID was not closed by a merged merge request" >&2; return 1; }
+  jq -r '.squash_commit_sha // .merge_commit_sha // empty' <<<"$mr" | grep . ||
+    { echo "gitlab: the merge request that closed #$IID has no merge commit" >&2; return 1; }
+}
+
+
 case "$CMD" in
   check) check ;;
   ensure-labels) ensure_labels ;;
@@ -475,5 +488,6 @@ case "$CMD" in
   mr-info) mr_info ;;
   comment) comment ;;
   sprint-sync) sprint_sync ;;
-  *) echo "usage: gitlab.sh check|ensure-labels|push-plan|story|set-state|open-mr|followup|merge|mr-info|comment|sprint-sync --repo R ..." >&2; exit 1 ;;
+  merge-commit) merge_commit ;;
+  *) echo "usage: gitlab.sh check|ensure-labels|push-plan|story|set-state|open-mr|followup|merge|mr-info|comment|sprint-sync|merge-commit --repo R ..." >&2; exit 1 ;;
 esac

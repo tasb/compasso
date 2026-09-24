@@ -32,7 +32,7 @@ while [ $# -gt 0 ]; do
   esac
 done
 DIR="$REPO/docs/learnings"
-ROLES="planner tester builder reviewer security approver shipper"
+ROLES="planner tester builder reviewer security approver shipper mutator"
 
 lessons() { [ -d "$DIR" ] && find "$DIR" -maxdepth 1 -name '*.md' | sort; }
 front() { yq --front-matter=extract -o=json '.' "$1" 2>/dev/null; }
