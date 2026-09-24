@@ -11,7 +11,7 @@
 #   gitlab.sh merge         --repo R --mr N                       merge when the pipeline succeeds (approvals.merge: agent only)
 #   gitlab.sh mr-info       --repo R --mr N                       branches, author and the issues it closes -> JSON
 #   gitlab.sh comment       --repo R --mr N|--iid N --body-file F  post F as a comment on a merge request or an issue
-#   gitlab.sh sprint-sync   --repo R [--milestone S20]            what can be built now, what waits and on whom -> JSON
+#   gitlab.sh sprint-sync   --repo R [--milestone S20] [--parent F] what can be built now, what waits and on whom -> JSON
 #
 # Exit: 0 ok | 1 config/usage | 2 not logged in | 3 project not found or no access
 #       4 role below Developer | 5 tier cannot be detected (set tracker.tier)
@@ -458,7 +458,7 @@ sprint_sync() {
 
   parallel="$(cfg '.sprint.parallel // 2')"
   jq -n --arg ms "$ms" --argjson items "$enriched" --argjson ext "$ext" --argjson cleaned "$cleaned" \
-        --argjson parallel "$parallel" -f "$BIN/sprint.jq"
+        --argjson parallel "$parallel" --arg feature "$PARENT" -f "$BIN/sprint.jq"
 }
 
 

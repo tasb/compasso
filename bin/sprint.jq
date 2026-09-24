@@ -1,6 +1,6 @@
 # Classify a sprint's work items. Input (as $vars): $ms, $items (issues with .parsed
 # and .parent), $ext ([{iid, state, title}] for dependencies outside the sprint),
-# $cleaned, $parallel. Output: what can be built now, what waits and on whom.
+# $cleaned, $parallel, $feature (a feature iid, or "" for the whole sprint). Output: what can be built now, what waits and on whom.
 
 def kind: .labels as $l
   | if ($l | index("type::epic")) then "epic"
@@ -18,7 +18,8 @@ def brief: {iid, title};
 ($items | map(. + {kind: kind})) as $all
 | ($all + $ext | map({key: (.iid | tostring), value: .}) | from_entries) as $by
 | def open($i): ($by[$i | tostring].state // "opened") == "opened";
-  ($all | map(select(.kind == "story" or .kind == "bug"))) as $work
+  ($all | map(select(.kind == "story" or .kind == "bug"))
+    | if $feature == "" then . else map(select(.parent == ($feature | tonumber))) end) as $work
 | ($work | map(select(.state == "opened")) | map(
     . as $w
     | ([$w.parsed.blocked_by[] | select(open(.))]) as $blocked
@@ -45,7 +46,7 @@ def brief: {iid, title};
     blocked: ($open | map(select(.status == "blocked") | brief + {by: [.open_blockers[] | . as $b
                 | {iid: $b, title: $by[$b | tostring].title, assignees: [$by[$b | tostring].assignees[]?.username]}]})),
     waiting: ($open | map(select(.status == "waiting") | brief + {on: .open_dependencies})),
-    features: ($all | map(select(.kind == "feature")) | map(. as $f
+    features: ($all | map(select(.kind == "feature" and ($feature == "" or .iid == ($feature | tonumber)))) | map(. as $f
       | ($work | map(select(.parent == $f.iid))) as $children
       | brief + {
           state: (if .state == "closed" then "closed"
@@ -54,7 +55,9 @@ def brief: {iid, title};
           open: ($children | map(select(.state == "opened")) | length),
           ready_to_verify: (.state == "opened" and ($children | length) > 0
             and all($children[]; .state == "closed")
-            and ((.labels | index("compasso::verifying")) or (.labels | index("compasso::done")) | not))})),
+            and ((.labels | index("compasso::verifying")) or (.labels | index("compasso::done")) | not)),
+          ready_to_finish: (.state == "opened" and (.labels | index("compasso::verifying") != null)
+            and all($children[]; .state == "closed"))})),
     cleaned: $cleaned,
     sprint_done: ($all | map(select(.kind == "feature")) | length > 0 and all(.[]; .state == "closed" or (.labels | index("compasso::done"))))
   }

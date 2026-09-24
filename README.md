@@ -27,6 +27,8 @@ bin/verify.sh --repo . --run DIR --story F               # the verify gate
 bin/coverage.sh --repo . --base origin/main --run DIR    # changed-line coverage (warning)
 bin/review-gate.sh --findings F [--for merge]           # do review findings still block?
 bin/ci.sh --repo .                                       # generate the merge request pipeline
+bin/tracker/gitlab.sh sprint-sync --repo .              # what can be built now, what waits and on whom
+bin/comment.sh qa|plan ...                              # the feature flow's comments on GitLab
 ```
 
 ## Develop

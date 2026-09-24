@@ -95,3 +95,19 @@ field() { sync | jq -c "$1"; }
   echo '{"iid":3,"state":"closed","title":"old"}' > "$FAKE_GL/issues/3.json"
   [ "$(field '[.runnable[] | select(.iid == 11)] | length')" = 1 ]
 }
+
+@test "with --parent only that feature's stories and the feature itself count" {
+  run "$ROOT/bin/tracker/gitlab.sh" sprint-sync --repo "$REPO" --milestone S20 --parent 7
+  [ "$status" -eq 0 ]
+  [ "$(jq -c '[.runnable[].iid]' <<<"$output")" = "[]" ]
+  [ "$(jq -c '[.blocked[].iid, .waiting[].iid]' <<<"$output")" = "[9,15]" ]
+  [ "$(jq -c '[.features[].iid]' <<<"$output")" = "[7]" ]
+}
+
+@test "a verifying feature whose stories and bugs are all closed is ready to finish" {
+  [ "$(field '[.features[] | select(.iid == 6) | .ready_to_finish]')" = '[false]' ]
+  add 6 issue "Invoice history" opened '["type::feature","compasso::verifying"]' '**Goal:** g'
+  items="$(jq -c 'map(if .iid == 10 or .iid == 11 or .iid == 14 or .iid == 16 then .state = "closed" else . end)' <<<"$items")"
+  echo "$items" > "$FAKE_GL/issue-query.json"
+  [ "$(field '[.features[] | select(.iid == 6) | [.ready_to_verify, .ready_to_finish]]')" = '[[false,true]]' ]
+}
