@@ -80,3 +80,9 @@ EOF2
   [ "$status" -eq 1 ]
   [[ "$output" == *"no feature F-9"* ]] || false
 }
+
+@test "plan: before the push, stories and dependencies show their plan keys" {
+  yq -i '(.features[1].stories[0]).gitlab = null | .blockers[0].gitlab = null' "$REPO/.compasso/plan.yaml"
+  run plan_comment F-2
+  [[ "$output" == *"| S-4 PDF endpoint | 8 | agent | #12, B-1 |"* ]] || false
+}

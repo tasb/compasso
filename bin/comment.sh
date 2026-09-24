@@ -57,13 +57,13 @@ case "$CMD" in
     jq -rn --argjson p "$(yq -o=json '.' "$plan")" --argjson c "$check" --arg k "$FEATURE" \
           --arg who "$APPROVER" --arg date "$DATE" --rawfile sec "$SECURITY" '
       ([$p.features[].stories[] | {key: .key, value: .gitlab}] + [($p.blockers // [])[] | {key: .key, value: .gitlab}] | from_entries) as $iid
-      | def ref: if startswith("#") then . else "#\($iid[.] // .)" end;
+      | def ref: if startswith("#") then . elif $iid[.] then "#\($iid[.])" else . end;   # not pushed yet: the plan key
       ($p.features[] | select(.key == $k)) as $f
       | "**Plan** · \($f.stories | length) \(if ($f.stories | length) == 1 then "story" else "stories" end) · \($c.totals.epic)h · critical path \($c.critical.hours)h",
         "",
         "| Story | h | Owner | Depends on |",
         "|---|---|---|---|",
-        ($f.stories[] | "| #\(.gitlab // "?") \(.title) | \(.estimate_h) | \(.owner) | "
+        ($f.stories[] | "| \(if .gitlab then "#\(.gitlab)" else .key end) \(.title) | \(.estimate_h) | \(.owner) | "
            + ((((.depends_on // []) + (.blocked_by // [])) | map(ref) | join(", ")) as $d | if $d == "" then "—" else $d end) + " |"),
         "",
         ($sec | sub("\\s+$"; "")) as $s | (if ($s | startswith("- ")) then "**Security:**\n\($s)" else "**Security:** \($s)" end),
