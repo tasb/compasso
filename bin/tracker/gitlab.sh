@@ -6,7 +6,7 @@
 #   gitlab.sh push-plan     --repo R   create or update .compasso/plan.yaml in GitLab; ids are written back
 #   gitlab.sh story         --repo R --iid N                      a story, its resolved coverage and open dependencies -> JSON
 #   gitlab.sh set-state     --repo R --iid N --state S            S: building | in-review; drops the other compasso:: states
-#   gitlab.sh open-mr       --repo R --iid N --branch B --body-file F   create or update the story's MR -> JSON {iid, web_url}
+#   gitlab.sh open-mr       --repo R --iid N --branch B --body-file F [--target T]  create or update the story's MR -> JSON {iid, web_url}
 #   gitlab.sh followup      --repo R --parent N --title T --body-file F [--labels a,b]  a task under N (a minor finding, a bug) -> iid
 #   gitlab.sh merge         --repo R --mr N --body-file F [--risk R]  merge when the pipeline succeeds (approvals.merge agent, or risk with a low-risk R)
 #   gitlab.sh mr-info       --repo R --mr N                       branches, author and the issues it closes -> JSON
@@ -14,6 +14,7 @@
 #   gitlab.sh sprint-sync   --repo R [--milestone S20] [--parent F] what can be built now, what waits and on whom -> JSON
 #   gitlab.sh merge-commit  --repo R --iid N                      the commit the story's merge request put on the default branch
 #   gitlab.sh digest        --repo R --since YYYY-MM-DD           merge requests merged without a person, as a comment
+#   gitlab.sh open-mr-branch --repo R --iid N                     the branch of the open MR that closes #N (to stack a story on)
 #
 # Exit: 0 ok | 1 config/usage | 2 not logged in | 3 project not found or no access
 #       4 role below Developer | 5 tier cannot be detected (set tracker.tier)
@@ -372,7 +373,7 @@ open_mr() {
   [ -f "$BODY" ] || { echo "gitlab: no body file $BODY" >&2; return 1; }
   title="$(api "projects/$PID/issues/$IID" | jq -r '.title // empty')"
   [ -n "$title" ] || { echo "gitlab: no work item #$IID" >&2; return 1; }
-  target="$(api "projects/$PID" | jq -r .default_branch)"
+  target="${TARGET:-$(api "projects/$PID" | jq -r .default_branch)}"   # --target: stack on another story's branch
   mr="$(api "projects/$PID/merge_requests?source_branch=$BRANCH&state=opened" | jq -r '.[0].iid // empty')"
   if [ -n "$mr" ]; then
     out="$(api -X PUT "projects/$PID/merge_requests/$mr" -f description="$(cat "$BODY")")"
@@ -501,6 +502,16 @@ digest() { # merge requests merged without a person since a date, for the daily 
 }
 
 
+open_mr_branch() { # the source branch of the open merge request that closes a story, to stack on
+  local b
+  need IID
+  b="$(api "projects/$PID/issues/$IID/related_merge_requests" |
+    jq -r --arg c "Closes #$IID" '[.[] | select(.state == "opened" and ((.description // "") | contains($c)))][0].source_branch // empty')"
+  [ -n "$b" ] || { echo "gitlab: #$IID has no open merge request to stack on" >&2; return 1; }
+  echo "$b"
+}
+
+
 case "$CMD" in
   check) check ;;
   ensure-labels) ensure_labels ;;
@@ -515,5 +526,6 @@ case "$CMD" in
   sprint-sync) sprint_sync ;;
   merge-commit) merge_commit ;;
   digest) digest ;;
-  *) echo "usage: gitlab.sh check|ensure-labels|push-plan|story|set-state|open-mr|followup|merge|mr-info|comment|sprint-sync|merge-commit|digest --repo R ..." >&2; exit 1 ;;
+  open-mr-branch) open_mr_branch ;;
+  *) echo "usage: gitlab.sh check|ensure-labels|push-plan|story|set-state|open-mr|followup|merge|mr-info|comment|sprint-sync|merge-commit|digest|open-mr-branch --repo R ..." >&2; exit 1 ;;
 esac

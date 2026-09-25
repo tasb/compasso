@@ -60,6 +60,8 @@ bin/mutate.sh scope|run|result ...                    # hardening: agent-written
 bin/flaky.sh --test CMD --runs N --out DIR               # hardening: flaky tests
 bin/live.sh run zap|fuzz|perf|a11y ...                  # hardening: checks against a running test environment
 bin/harden-report.sh --results DIR --set code|live|all  # the Hardening comment
+bin/risk.sh --repo . --run DIR --base REF                # low or high risk: may it merge without a person?
+bin/ship.sh --repo . --run DIR                          # finish a story: follow-ups, metrics, commit
 ```
 
 ## Develop

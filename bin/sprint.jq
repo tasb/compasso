@@ -27,19 +27,22 @@ def brief: {iid, title};
     | . + {status:
         (if (.labels | index("compasso::in-review")) then "in-review"
          elif ($blocked | length) > 0 then "blocked"
+         elif ($waiting | length) == 1 and (($by[$waiting[0] | tostring].labels // []) | index("compasso::in-review"))
+              and ((.labels | index("owner::human")) | not) and ((.labels | index("compasso::building")) | not) then "stackable"
          elif ($waiting | length) > 0 then "waiting"
          elif (.labels | index("owner::human")) then "human"
          elif (.labels | index("compasso::building")) then "building"
          else "runnable" end),
         open_blockers: $blocked, open_dependencies: $waiting})) as $open
-| ($open | map(select(.status == "runnable")) | sort_by(.iid)) as $runnable
+| ($open | map(select(.status == "runnable" or .status == "stackable")) | sort_by(.iid)) as $runnable
 | (reduce $runnable[] as $r ([];
      if length < $parallel and all(.[]; overlaps(.parsed.touches; $r.parsed.touches) | not)
      then . + [$r] else . end)) as $batch
 | {
     milestone: $ms,
-    next_batch: ($batch | map(brief + {kind})),
-    runnable: ($runnable | map(brief + {kind})),
+    # a stackable story starts from the branch of the one story it waits on, whose merge request is open
+    next_batch: ($batch | map(brief + {kind} + (if .status == "stackable" then {stack_on: .open_dependencies[0]} else {} end))),
+    runnable: ($runnable | map(brief + {kind} + (if .status == "stackable" then {stack_on: .open_dependencies[0]} else {} end))),
     building: ($open | map(select(.status == "building") | brief)),
     in_review: ($open | map(select(.status == "in-review") | brief)),
     human: ($open | map(select(.status == "human") | brief + {assignees: [.assignees[]?.username]})),

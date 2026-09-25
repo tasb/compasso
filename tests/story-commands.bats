@@ -181,3 +181,20 @@ findings() { echo "$1" > "$BATS_TEST_TMPDIR/findings.json"; }
   [ "$a" = '{"tests":["unit","e2e"],"touches":["src/a/**","src/b/**"],"blocked_by":[13],"coverage":90}' ]
   [ "$a" = "$b" ]
 }
+
+@test "open-mr-branch: the branch of the open merge request that closes the story" {
+  mkdir -p "$FAKE_GL/related"
+  echo '[{"state":"merged","description":"Closes #8","source_branch":"old"},{"state":"opened","description":"See #8","source_branch":"mentions"},{"state":"opened","description":"Closes #8\n\n## Changes","source_branch":"story/8-list"}]' > "$FAKE_GL/related/8.json"
+  run gl open-mr-branch --iid 8
+  [ "$status" -eq 0 ]
+  [ "$output" = "story/8-list" ]
+  echo '[]' > "$FAKE_GL/related/8.json"
+  run gl open-mr-branch --iid 8
+  [ "$status" -eq 1 ]
+}
+
+@test "open-mr --target stacks the merge request on another story's branch" {
+  echo "Closes #8" > "$BATS_TEST_TMPDIR/body.md"
+  gl open-mr --iid 8 --branch story/9-next --body-file "$BATS_TEST_TMPDIR/body.md" --target story/8-list >/dev/null
+  grep -q "source_branch=story/9-next target_branch=story/8-list" "$FAKE_GL/calls.log"
+}

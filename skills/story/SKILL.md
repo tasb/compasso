@@ -9,11 +9,11 @@ Build one story end to end. Scripts are in `${CLAUDE_PLUGIN_ROOT}/bin`, roles in
 
 2. **Story.** `bash ${CLAUDE_PLUGIN_ROOT}/bin/tracker/gitlab.sh story --repo . --iid <iid> > RUN/story.json`. Stop and say why when:
    - it is not an open task;
-   - `open_dependencies` is not empty: name each one, and for a blocker say who it is assigned to;
+   - `open_dependencies` is not empty: name each one, and for a blocker say who it is assigned to. One exception, **stacking**: when the only open item is a story whose merge request is already open (sprint-sync lists this story with `stack_on`), build on top of it instead of waiting;
    - `story.acceptance` is empty, or `story.verify` is empty for a story: it does not follow the Story format. A bug reported by a tester has no Verify yet: the tester's first job (step 4) is a failing test that reproduces it, and that test's command becomes `story.verify` in `RUN/story.json`;
    - it has the `owner::human` label, unless the user confirms an agent should build it.
 
-3. **Branch.** The working tree must be clean. `git fetch`, then create `story/<iid>-<short-slug>` from `origin/<default branch>` (the base). `gitlab.sh set-state --iid <iid> --state building`.
+3. **Branch.** The working tree must be clean. `git fetch`, then create `story/<iid>-<short-slug>` from `origin/<default branch>` (the base). When stacking, the base is instead the branch of the story it stacks on (`gitlab.sh open-mr-branch --iid <that story>`), and step 9 opens the merge request with `--target` that branch; when that merge request is merged and its branch deleted, GitLab retargets this one to the default branch. `gitlab.sh set-state --iid <iid> --state building`.
 
 4. **Tests first.** Dispatch the **tester** with `RUN/story.json`. Run the repo's test command and confirm the new tests fail. If some pass, send them back to the tester once. If, after that, none of the new tests fails, stop and hand back: the story has no behaviour of its own to build (usually enabling work that belongs in the story that uses it), and it needs re-planning, not code. Tests that pass only because they guard existing behaviour are fine next to at least one failing test. Commit the tests on their own ("Add failing tests for #<iid>"), note that commit as `TESTS`, then `bash ${CLAUDE_PLUGIN_ROOT}/bin/test-hashes.sh record --repo . --run RUN`.
 
