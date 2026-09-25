@@ -13,6 +13,12 @@ First version.
 - Blockers are tracker issues: urgent, always assigned to a person, with step-by-step instructions.
 - `.compasso/plan.yaml` is the source of every push; pushes are idempotent and create stories in dependency order.
 
+### From ideas to sprints
+
+- `/compasso:start` finds where a product stands and runs the next step: `/compasso:discover` (a product brief from ideas, documents, tracker issues or a prototype), `/compasso:backlog` (features with rough hours, dependencies and an explicit MVP line, pushed to the tracker in no sprint) and `/compasso:roadmap` (features placed into sprints by dependency and capacity, MVP first). `/compasso:plan` then plans the roadmap's next sprint.
+- A prototype can be the starting point: a running web app crawled by following links only, its source code, or a Figma file, all turned into one screen inventory. `backlog-check` notes every screen no feature covers.
+- A repository with no code starts with a walking skeleton feature.
+
 ### Building
 
 - `/compasso:story` builds a story test-first: the tester's failing tests, then the builder, who may never change them (test immutability by hashes).

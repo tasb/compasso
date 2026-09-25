@@ -233,3 +233,15 @@ EOF2
   push >/dev/null
   [ "$(head -2 "$FAKE_GL/desc/$(iid_of F-1).md")" = $'**Goal:** Customers see their last 24 months of invoices, newest first.\\\n**Coverage:** 85%' ]
 }
+
+@test "push-backlog: features as issues with no milestone, MVP labelled; ids written back" {
+  cp "$ROOT/tests/fixtures/backlog.yaml" "$REPO/.compasso/backlog.yaml"
+  run "$ROOT/bin/tracker/gitlab.sh" push-backlog --repo "$REPO"
+  [ "$status" -eq 0 ]
+  [ "$(calls 'labels=type::feature,mvp')" -eq 4 ]
+  [ "$(grep 'POST projects/acme%2Fapp/issues title=Wishlist' "$FAKE_GL/calls.log" | grep -c 'labels=type::feature$' || true)" -eq 1 ]
+  [ "$(grep 'POST projects/acme%2Fapp/issues ' "$FAKE_GL/calls.log" | grep -c milestone_id || true)" -eq 0 ]
+  [ "$(yq '[.features[].gitlab] | map(select(. == null)) | length' "$REPO/.compasso/backlog.yaml")" = 0 ]
+  "$ROOT/bin/tracker/gitlab.sh" push-backlog --repo "$REPO" >/dev/null
+  [ "$(calls 'POST projects/acme%2Fapp/issues ')" -eq 6 ]
+}

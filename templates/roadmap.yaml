@@ -1,0 +1,9 @@
+# Compasso roadmap. Proposed by bin/roadmap.sh from the backlog; goals by /compasso:roadmap.
+# Only the next sprint is planned in stories (/compasso:plan); later sprints are refined at each sprint close.
+capacity_h: 80           # hours per sprint used to place features (the sprint's capacity, or measured velocity)
+sprints:
+  - number: 1
+    goal: ""
+    features: []         # backlog feature keys, in build order
+    hours: 0
+mvp_sprint: 1            # the sprint that completes every MVP feature

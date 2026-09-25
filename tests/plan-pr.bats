@@ -51,3 +51,18 @@ remote_files() { git -C "$ORIGIN" ls-tree -r --name-only "$1" | tr '\n' ' '; }
   run "$ROOT/bin/plan-pr.sh" --repo "$REPO"
   [ "$status" -eq 2 ]
 }
+
+@test "--include sends the product files on their own branch; paths outside the repository are refused" {
+  mkdir -p .compasso/product .compasso/records/product
+  echo "# Shop" > .compasso/product/brief.md; cp "$ROOT/tests/fixtures/backlog.yaml" .compasso/backlog.yaml
+  echo "# discover" > .compasso/records/product/discover.md
+  run "$ROOT/bin/plan-pr.sh" --repo "$REPO" --title "Product brief and backlog" --branch product/backlog \
+    --include .compasso/product --include .compasso/backlog.yaml --include .compasso/records/product
+  [ "$status" -eq 0 ]
+  [ "$(remote_files product/backlog)" = ".compasso/backlog.yaml .compasso/product/brief.md .compasso/records/product/discover.md app.js " ]
+  grep -q "head=product/backlog base=main title=Product brief and backlog" "$FAKE_GH/calls.log"
+  run "$ROOT/bin/plan-pr.sh" --repo "$REPO" --title t --branch b --include ../secrets
+  [ "$status" -eq 2 ]
+  run "$ROOT/bin/plan-pr.sh" --repo "$REPO" --title t --include .compasso/backlog.yaml
+  [ "$status" -eq 2 ]
+}

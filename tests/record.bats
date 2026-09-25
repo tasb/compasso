@@ -88,3 +88,8 @@ MD
   run rec story --repo "$REPO" --run "$RUN"
   [ "$status" -eq 1 ]
 }
+
+@test "path: the product stages' records live together" {
+  [ "$(rec path --repo "$REPO" --kind discover)" = .compasso/records/product/discover.md ]
+  [ "$(rec path --repo "$REPO" --kind roadmap)" = .compasso/records/product/roadmap.md ]
+}

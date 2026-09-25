@@ -1,0 +1,12 @@
+product:
+  name: Shop
+  brief: .compasso/product/brief.md
+  sources: [ideas]
+  prototype: null
+features:
+  - {key: F-0, title: Walking skeleton, goal: One page served end to end, scope: [app, CI], acceptance: ["Given the app, When I open /, Then 200"], size_h: 16, mvp: true, depends_on: [], sensitive: false, sources: [idea], gitlab: null}
+  - {key: F-1, title: Catalog, goal: Browse products, scope: [list], acceptance: ["Given 3 products, When I open the catalog, Then I see 3"], size_h: 24, mvp: true, depends_on: [F-0], sensitive: false, sources: [idea], gitlab: null}
+  - {key: F-2, title: Cart, goal: Keep products to buy, scope: [add], acceptance: ["Given a product, When I add it, Then the cart has 1"], size_h: 32, mvp: true, depends_on: [F-1], sensitive: false, sources: [idea], gitlab: null}
+  - {key: F-3, title: Checkout, goal: Pay for the cart, scope: [pay], acceptance: ["Given a cart, When I pay, Then an order exists"], size_h: 40, mvp: true, depends_on: [F-2], sensitive: true, sources: [idea], gitlab: null}
+  - {key: F-4, title: Wishlist, goal: Save for later, scope: [save], acceptance: ["Given a product, When I save it, Then it is in my wishlist"], size_h: 16, mvp: false, depends_on: [F-1], sensitive: false, sources: [idea], gitlab: null}
+  - {key: F-5, title: Reviews, goal: Rate products, scope: [rate], acceptance: ["Given a product, When I rate it, Then its rating shows"], size_h: 24, mvp: false, depends_on: [F-1], sensitive: false, sources: [idea], gitlab: null}

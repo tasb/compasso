@@ -39,11 +39,36 @@ The first command installs the engine in `~/.compasso/engine` and the skills in 
 
 ## Using it
 
+### From ideas to sprints
+
+You don't need a sprint goal to begin. `/compasso:start` says where the product stands and runs the next step:
+
+```
+ideas, a document, tracker issues or a prototype
+   ──► /compasso:discover   the product brief: problem, users, outcomes, what the MVP must prove, risks
+   ──► /compasso:backlog    features of at most half a sprint, dependencies, rough hours, the MVP line
+   ──► /compasso:roadmap    features placed into sprints, MVP first; one goal per sprint
+   ──► /compasso:plan       the next sprint split into one-day stories
+   ──► /compasso:sprint     built, reviewed, merged; at its close the roadmap is refined with real velocity
+```
+
+- **A prototype can be the starting point**: a running web app (crawled by following links only, never submitting a form), its source code, or a Figma file. It becomes an inventory of screens, forms and flows; every screen must belong to a feature or be left out on purpose. The prototype is a reference only: the product is rebuilt test-first. Public prototypes only for now.
+- **Only the next sprint gets stories.** Later sprints stay as features and are re-placed at each sprint close.
+- **The MVP line is explicit.** Work after it never goes into an MVP sprint, and `/compasso:harden` is offered once the MVP sprint closes.
+- **A new repository starts with a walking skeleton** (feature F-0): the stack, test runners, CI and one path running end to end. Setup runs again once it exists.
+- The brief, backlog and roadmap are files in `.compasso/`, each reaching the default branch through a merge request with its decision record. Backlog features are also tracker issues in no sprint.
+
+### Running it
+
 Run `/compasso:setup` once in the product repository. It connects the tracker, asks for the sprint length, capacity, commands, approvals and models, and writes `.compasso/project.yaml`. Every other command refuses to run until the tracker check passes.
 
 | Command | What runs |
 |---|---|
 | `/compasso:setup` | Connect GitLab or GitHub; record sprint, limits, commands, coverage, approvals, risk and models; generate the CI pipeline or workflow; install labels and issue templates |
+| `/compasso:start` | Where the product stands (setup, discover, backlog, roadmap, plan, build) and the next step |
+| `/compasso:discover` | Ideas, documents, issues or a prototype into a product brief, with security's view of the data and access involved |
+| `/compasso:backlog` | The brief into features with rough hours, dependencies and the MVP line; checked, reviewed, pushed to the tracker in no sprint |
+| `/compasso:roadmap` | The backlog into sprints by dependency and capacity, MVP first, one goal each; refined at every sprint close |
 | `/compasso:plan` | The planner turns a sprint goal into an epic, features and one-day stories with dependencies and blockers. `plan-check` validates sizes, dependencies and capacity; security reviews the plan; after your approval it is pushed to the tracker |
 | `/compasso:feature <iid\|"idea">` | The feature flow: up to 3 rounds of questions in the conversation, a breakdown into stories, approval, then the Q&A and plan recorded on the tracker |
 | `/compasso:story <iid>` | The story flow: failing tests first, the smallest change that passes, the verify gate, review and security review with an automatic fix loop, then the merge request |
@@ -129,6 +154,8 @@ Lessons live in the product repo's `docs/learnings/`, one file each, tagged with
 | Path | Committed | What |
 |---|---|---|
 | `.compasso/project.yaml` | yes | The configuration |
+| `.compasso/product/` | yes | The product brief, and the prototype's screen inventory |
+| `.compasso/backlog.yaml`, `.compasso/roadmap.yaml` | yes | Features with the MVP line, and their placement into sprints |
 | `.compasso/plan.yaml` | yes | The sprint plan: the source for everything pushed to the tracker. It reaches the default branch through a plan merge request |
 | `.compasso/records/S<n>/` | yes | A decision record per plan, feature and story: findings, decisions, takeaways, constraints and missing points |
 | `.compasso/metrics/` | yes | One metrics file per story |
@@ -142,9 +169,13 @@ The skills call these; they also run on their own.
 
 ```bash
 bin/config.sh init|upgrade|validate|get --repo .       # the configuration
-bin/tracker.sh check|ensure-labels|push-plan|story|set-state|open-mr|followup|merge|mr-info|comment \
+bin/tracker.sh check|ensure-labels|push-backlog|push-plan|story|set-state|open-mr|followup|merge|mr-info|comment \
                |sprint-sync|sprint-items|sprint-done|merge-commit|open-mr-branch|digest --repo .
 bin/tracker.sh protect --repo .                        # GitHub: the ruleset, CodeQL and auto-merge
+bin/start.sh --repo .                                  # where the product stands, and the next step
+bin/prototype.sh crawl|inventory|check ...             # a prototype's screens, forms and flows
+bin/backlog-check.sh --repo .                          # the backlog: sizes, dependencies, the MVP line, screens covered
+bin/roadmap.sh propose|check|next --repo .             # features into sprints, MVP first
 bin/plan-check.sh --repo .                             # sizes, dependencies, capacity
 bin/status.sh --repo . [--iid N] [--json]              # where the sprint or a story stands (read-only)
 bin/ci.sh --repo .                                     # the merge request pipeline or pull request workflow

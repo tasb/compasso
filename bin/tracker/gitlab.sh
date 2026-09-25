@@ -291,6 +291,29 @@ push_plan() {
 }
 
 
+# ---------- push-backlog: backlog features as issues outside any sprint ----------
+push_backlog() {
+  local BL="$REPO/.compasso/backlog.yaml" n i f key num res labels
+  "$BIN/backlog-check.sh" --repo "$REPO" >/dev/null || { echo "gitlab: the backlog does not pass backlog-check - run bin/backlog-check.sh --repo $REPO" >&2; return 1; }
+  check >/dev/null || return $?
+  ensure_labels >/dev/null || return $?
+  n="$(yq '.features | length' "$BL")"; i=0
+  while [ "$i" -lt "$n" ]; do
+    f="$(yq -o=json ".features[$i]" "$BL")"; key="$(jq -r .key <<<"$f")"
+    labels="type::feature"; [ "$(jq -r .mvp <<<"$f")" = true ] && labels="$labels mvp"
+    num="$(jq -r '.gitlab // ""' <<<"$f")"
+    # no milestone: a feature joins a sprint when /compasso:plan pushes it
+    # shellcheck disable=SC2086
+    res="$(upsert_issue "$num" "$(jq -r .title <<<"$f")" "$(render feature "$f" '{}')" "" issue "" $labels)"
+    [ -n "$res" ] || { echo "gitlab: could not write backlog feature $key" >&2; return 1; }
+    num="${res% *}"
+    K="$key" V="$num" yq -i '(.features[] | select(.key == strenv(K)) | .gitlab) = (strenv(V) | tonumber)' "$BL"
+    [ "$(jq -r .mvp <<<"$f")" = true ] || api -X PUT "projects/$PID/issues/$num" -f remove_labels=mvp >/dev/null
+    echo "gitlab: backlog $key -> #$num$( [ "$(jq -r .mvp <<<"$f")" = true ] && echo " (MVP)")"
+    i=$((i + 1))
+  done
+}
+
 # ---------- story flow ----------
 need() { for v in "$@"; do eval "[ -n \"\$$v\" ]" || { echo "gitlab: $CMD needs --$(echo "$v" | tr 'A-Z_' 'a-z-')" >&2; exit 1; }; done; }
 
@@ -527,6 +550,7 @@ case "$CMD" in
   check) check ;;
   ensure-labels) ensure_labels ;;
   push-plan) push_plan ;;
+  push-backlog) push_backlog ;;
   story) story ;;
   set-state) set_state ;;
   open-mr) open_mr ;;
@@ -540,5 +564,5 @@ case "$CMD" in
   open-mr-branch) open_mr_branch ;;
   sprint-items) sprint_items ;;
   sprint-done) sprint_done ;;
-  *) echo "usage: gitlab.sh check|ensure-labels|push-plan|story|set-state|open-mr|followup|merge|mr-info|comment|sprint-sync|merge-commit|digest|open-mr-branch|sprint-items|sprint-done --repo R ..." >&2; exit 1 ;;
+  *) echo "usage: gitlab.sh check|ensure-labels|push-plan|push-backlog|story|set-state|open-mr|followup|merge|mr-info|comment|sprint-sync|merge-commit|digest|open-mr-branch|sprint-items|sprint-done --repo R ..." >&2; exit 1 ;;
 esac

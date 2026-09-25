@@ -1,0 +1,22 @@
+# Compasso product backlog. Written by /compasso:backlog; checked by bin/backlog-check.sh.
+# Features here are not in a sprint yet: /compasso:roadmap places them, /compasso:plan splits
+# the next sprint's into stories. `gitlab` fields are filled in by the push; never edit them.
+product:
+  name: ""
+  brief: .compasso/product/brief.md
+  sources: []            # ideas | document | tracker | prototype
+  prototype: null        # {kind: url|code|figma, where: "<URL, path or Figma link>", inventory: .compasso/product/prototype.json}
+
+features:
+  - key: F-1
+    title: ""
+    goal: ""
+    scope: []            # what to build, one item each
+    acceptance: []       # "Given ..., When ..., Then ..."; at least one
+    size_h: 0            # rough hours for the whole feature; at most half a sprint
+    mvp: true            # above the MVP line
+    depends_on: []       # other feature keys
+    sensitive: false     # authentication, payments, personal data, secrets: security plans abuse cases
+    sources: []          # where it came from: "idea", "doc: <section>", "#<issue>", "screen: <screen id>"
+    decisions: []
+    gitlab: null

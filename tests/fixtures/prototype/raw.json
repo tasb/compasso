@@ -1,0 +1,12 @@
+[
+  {"url": "https://proto.example/", "title": "Shop", "headings": ["Welcome"], "text": "Welcome",
+   "links": [{"text": "Catalog", "href": "https://proto.example/catalog"}, {"text": "Cart", "href": "https://proto.example/#/cart"}],
+   "buttons": ["Sign up", ""], "forms": [], "screenshot": "screens/1.png"},
+  {"url": "https://proto.example/catalog", "title": "", "headings": ["Products"], "text": "Products",
+   "links": [{"text": "Home", "href": "https://proto.example/"}], "buttons": ["Add to cart", "Add to cart"],
+   "forms": [{"name": "search", "fields": [{"label": "Search", "name": "q", "type": "search", "required": false}], "submit": "Go"}],
+   "screenshot": "screens/2.png"},
+  {"url": "https://proto.example/#/cart", "title": "Cart", "headings": ["Your cart"], "text": "Cart",
+   "links": [], "buttons": ["Checkout"], "forms": [], "screenshot": "screens/3.png"},
+  {"url": "https://proto.example/broken", "error": "net::ERR_ABORTED"}
+]

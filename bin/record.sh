@@ -3,6 +3,7 @@
 # .compasso/records/S<n>/, so what was found and decided lives in the repository.
 #
 #   record.sh path   --repo R --kind plan|feature|story --key K [--sprint S<n>]   the record's path
+#   record.sh path   --repo R --kind discover|backlog|roadmap                     a product stage's record
 #   record.sh write  --data F --out PATH        render the record from its data file
 #   record.sh story  --repo R --run DIR         the story's record, from DIR/story.json, DIR/findings.json
 #                                               and DIR/record.json (decisions, takeaways, constraints, missing)
@@ -66,6 +67,7 @@ sprint_of_plan() { yq -r '.epic.sprint.number // ""' "$REPO/.compasso/plan.yaml"
 
 case "$CMD" in
   path)
+    case "$KIND" in discover|backlog|roadmap) echo ".compasso/records/product/$KIND.md"; exit 0 ;; esac
     [ -n "$KIND" ] && [ -n "$KEY" ] || { echo "record: path needs --kind and --key" >&2; exit 2; }
     [ -n "$SPRINT" ] || SPRINT="$(sprint_of_plan)"
     [ -n "$SPRINT" ] || SPRINT=backlog
@@ -73,7 +75,7 @@ case "$CMD" in
       plan) echo ".compasso/records/$SPRINT/plan.md" ;;
       feature) echo ".compasso/records/$SPRINT/$KEY.md" ;;
       story) echo ".compasso/records/$SPRINT/stories/$KEY.md" ;;
-      *) echo "record: --kind is plan, feature or story" >&2; exit 2 ;;
+      *) echo "record: --kind is plan, feature, story, discover, backlog or roadmap" >&2; exit 2 ;;
     esac ;;
   write)
     [ -n "$DATA" ] && [ -n "$OUT" ] || { echo "record: write needs --data and --out" >&2; exit 2; }

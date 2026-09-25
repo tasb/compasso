@@ -336,6 +336,29 @@ push_plan() {
   echo "github: epic $(pget .epic.key) -> #$epic (milestone $(sprint)$( [ -n "$ITER" ] && echo ", iteration $(sprint)"))"
 }
 
+# ---------- push-backlog: backlog features as issues outside any sprint ----------
+push_backlog() {
+  local BL="$REPO/.compasso/backlog.yaml" n i f key num labels body
+  "$BIN/backlog-check.sh" --repo "$REPO" >/dev/null || { echo "github: the backlog does not pass backlog-check - run bin/backlog-check.sh --repo $REPO" >&2; return 1; }
+  check >/dev/null || return $?
+  ensure_labels >/dev/null || return $?
+  body="$(mktemp)"; trap 'rm -f "$body"' RETURN
+  n="$(yq '.features | length' "$BL")"; i=0
+  while [ "$i" -lt "$n" ]; do
+    f="$(yq -o=json ".features[$i]" "$BL")"; key="$(jq -r .key <<<"$f")"
+    labels="type::feature"; [ "$(jq -r .mvp <<<"$f")" = true ] && labels="$labels mvp"
+    render feature "$f" '{}' > "$body"
+    # no milestone: a feature joins a sprint when /compasso:plan pushes it
+    # shellcheck disable=SC2086
+    num="$(upsert_issue "$(jq -r '.gitlab // ""' <<<"$f")" "$(jq -r .title <<<"$f")" "$body" "" $labels)"
+    [ -n "$num" ] || { echo "github: could not write backlog feature $key" >&2; return 1; }
+    K="$key" V="$num" yq -i '(.features[] | select(.key == strenv(K)) | .gitlab) = (strenv(V) | tonumber)' "$BL"
+    [ "$(jq -r .mvp <<<"$f")" = true ] || label_remove "$num" mvp
+    echo "github: backlog $key -> #$num$( [ "$(jq -r .mvp <<<"$f")" = true ] && echo " (MVP)")"
+    i=$((i + 1))
+  done
+}
+
 # ---------- story ----------
 story() {
   local n parsed feature="" fcov=null epic="" ecov=null deps blocked open='[]' d dj kind ms
@@ -583,6 +606,7 @@ case "$CMD" in
   check) check ;;
   ensure-labels) ensure_labels ;;
   push-plan) push_plan ;;
+  push-backlog) push_backlog ;;
   story) story ;;
   set-state) set_state ;;
   open-mr) open_mr ;;
@@ -597,5 +621,5 @@ case "$CMD" in
   sprint-items) sprint_items ;;
   sprint-done) sprint_done ;;
   protect) protect ;;
-  *) echo "usage: github.sh check|ensure-labels|push-plan|story|set-state|open-mr|followup|merge|mr-info|comment|sprint-sync|merge-commit|digest|open-mr-branch|sprint-items|sprint-done|protect --repo R ..." >&2; exit 1 ;;
+  *) echo "usage: github.sh check|ensure-labels|push-plan|push-backlog|story|set-state|open-mr|followup|merge|mr-info|comment|sprint-sync|merge-commit|digest|open-mr-branch|sprint-items|sprint-done|protect --repo R ..." >&2; exit 1 ;;
 esac

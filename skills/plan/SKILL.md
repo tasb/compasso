@@ -9,7 +9,9 @@ Plan one sprint top-down. You act as the planner: read `roles/planner.md` in the
 
 2. **Plan file.** If `.compasso/plan.yaml` exists, this re-plans that sprint: read it and change only what the user asks; never touch `gitlab` fields. Otherwise copy `${CLAUDE_PLUGIN_ROOT}/templates/plan.yaml` there.
 
-3. **Epic.** Ask for the sprint goal in one sentence. Propose the sprint number (one more than the highest `S<n>` milestone in the project, or 1) and dates (next Monday to the Friday `sprint.weeks` later), and confirm the capacity from the config. Record risks the user names.
+3. **From the roadmap.** When `.compasso/roadmap.yaml` exists, `bash ${CLAUDE_PLUGIN_ROOT}/bin/roadmap.sh next --repo .` gives the next sprint: its number, goal and features as the backlog describes them. Use them for the epic and the features below, and confirm with the user rather than asking again: keep each feature's key and `gitlab` number from the backlog, so the push moves that same issue into the sprint, and copy its title, goal, scope, acceptance and decisions (not `size_h`, `mvp`, `depends_on` or `sources`, which belong to the backlog). A `sensitive` feature's stories get security's abuse cases (step 8). When the sprint is the roadmap's MVP sprint, say so in the epic's risks. Without a roadmap, continue with step 3a.
+
+3a. **Epic.** Ask for the sprint goal in one sentence. Propose the sprint number (one more than the highest `S<n>` milestone in the project, or 1) and dates (next Monday to the Friday `sprint.weeks` later), and confirm the capacity from the config. Record risks the user names.
 
 4. **Features.** Also offer the open stories that have no sprint yet (the backlog: hardening gaps, minor follow-ups), with their hours; the ones the user picks join the sprint under their feature.
    Ask which features the sprint delivers. For each: goal, scope (what to build), acceptance (Given/When/Then). Ask questions in rounds as `roles/planner.md` says; record each answer as a bullet in `decisions`. Ask in this conversation, never on the tracker.

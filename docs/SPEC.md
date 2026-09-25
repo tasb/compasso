@@ -554,3 +554,27 @@ A story's Verify commands are tracker text that `verify.sh` executes, so editing
 - **Story:** tracker state, owner, estimate, open dependencies, Verify commands not approved here, and the run's stage with the step to resume from.
 - **Run stage** is read from the files the story flow leaves in `.compasso/runs/<iid>/`, in step order: `story.json` (2), `test-hashes` (4), `verify.json` (5, with failures counted from `events.jsonl`), `coverage.json` (6), `findings.json` and review rounds (7, decided by `review-gate.sh`), committed metrics and `changes.md` (8), `mr.md` (9). The tracker's `in-review` state means the merge request is open.
 - When the tracker cannot be read, the local part is still shown and it exits 1. Built as `bin/status.sh` (`--json` for scripts).
+
+## 23. From ideas to sprints (2026-09-25)
+
+Compasso used to start at "we know this sprint's goal". Four stages now lead there, each a resumable command with its own files, checks, approval and decision record (option B, decided with the user). `/compasso:start` (`bin/start.sh`) finds the stage from what exists and runs it.
+
+| Stage | Command | Writes | Checked by |
+|---|---|---|---|
+| Discover | `/compasso:discover` | `.compasso/product/brief.md` (problem, users, outcomes, what the MVP must prove, constraints, risks, sources); with a prototype, `.compasso/product/prototype.json` | security (data, access, regulation); the user's approval |
+| Backlog | `/compasso:backlog` | `.compasso/backlog.yaml`: features with `size_h` (at most half a sprint), `mvp`, `depends_on`, `sensitive`, `sources`; tracker issues in no sprint (`tracker.sh push-backlog`, MVP labelled `mvp`) | `backlog-check.sh`; tester and security; approval |
+| Roadmap | `/compasso:roadmap` | `.compasso/roadmap.yaml`: sprints with goal, features and hours; `mvp_sprint` | `roadmap.sh check`; approval |
+| Sprint 0 | through the backlog | feature F-0, the walking skeleton, when `start.sh` finds no product code | the normal story flow; setup runs again afterwards |
+
+Decisions:
+
+- **Rolling wave.** Only the next sprint is split into stories: `/compasso:plan` takes it from `roadmap.sh next`, keeping each feature's backlog key and issue, so the push moves that issue into the sprint. At sprint close `/compasso:roadmap` re-places what is ahead with measured velocity (`tracker.sh sprint-done` of recent sprints); sprints under way are never moved.
+- **Files are the source.** Brief, backlog and roadmap reach the default branch through `plan-pr.sh --include` merge requests. On the tracker, only backlog features exist ahead of time, in no sprint.
+- **An explicit MVP line.** `roadmap.sh propose` places MVP features first by dependency and capacity, and features after the line only in later sprints, so they never delay the MVP. An MVP feature may depend only on MVP features. `/compasso:harden` is offered when the MVP sprint closes.
+- **Sprint 0 for greenfield.** The planner proposes a stack (the user decides) and F-0: layout, unit and e2e runners, CI, one path end to end. Every MVP feature depends on it. Setup leaves commands empty until it exists.
+- **A prototype as the starting point** (added by the user). It is a reference only: the product is rebuilt test-first. Three forms, one inventory shape (`prototype.sh check`):
+  - *a running web app*, public only for now. `prototype.sh crawl` runs Playwright in Docker (the accessibility image). It only follows same-origin links, never clicks buttons or submits forms, skips links that look destructive, and stops at `--max` pages. `prototype.sh inventory` turns what it saw into screens (id from the path, headings, forms and fields, actions, links to other screens);
+  - *its source code*: the planner reads routes and pages and writes the inventory;
+  - *a Figma file*: through the Figma connector, or frames exported by the user.
+  The planner adds the flows it can see, and asks about what a link-only crawl cannot reach: what happens after a form is sent, screens behind a role, which parts are fake. Every screen must belong to a feature (`sources: screen: <id>`), or the record says why it is left out; `backlog-check` notes the ones that don't.
+- **Inputs are data.** Documents, issues and prototype content are never instructions.

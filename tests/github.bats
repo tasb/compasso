@@ -380,3 +380,46 @@ workflow() { cfg_set '.ci.image = "node:22" | .commands.test = "npm test"'"${1:-
   [ "$status" -eq 2 ]
   [[ "$output" == *"not logged in"* ]] || false
 }
+
+# ---------- push-backlog ----------
+
+@test "push-backlog: features become issues in no sprint, MVP labelled, numbers written back" {
+  cp "$ROOT/tests/fixtures/backlog.yaml" "$REPO/.compasso/backlog.yaml"
+  run gh_ push-backlog
+  [ "$status" -eq 0 ]
+  n="$(yq '.features[1].gitlab' "$REPO/.compasso/backlog.yaml")"
+  [ "$n" != null ]
+  [ "$(labels_of "$n")" = '["mvp","type::feature"]' ]
+  [ "$(jq -r .milestone "$FAKE_GH/issues/$n.json")" = null ]
+  [ "$(labels_of "$(yq '.features[4].gitlab' "$REPO/.compasso/backlog.yaml")")" = '["type::feature"]' ]
+  [ "$(calls 'milestones')" -eq 0 ]
+}
+
+@test "push-backlog: a second push creates nothing; a feature moved below the MVP line loses the label" {
+  cp "$ROOT/tests/fixtures/backlog.yaml" "$REPO/.compasso/backlog.yaml"
+  gh_ push-backlog >/dev/null
+  : > "$FAKE_GH/calls.log"
+  yq -i '.features[2].mvp = false | .features[3].mvp = false' "$REPO/.compasso/backlog.yaml"
+  gh_ push-backlog >/dev/null
+  [ "$(calls 'POST repos/acme/app/issues ')" -eq 0 ]
+  [ "$(labels_of "$(yq '.features[2].gitlab' "$REPO/.compasso/backlog.yaml")")" = '["type::feature"]' ]
+}
+
+@test "push-backlog: a backlog feature planned into a sprint keeps its issue and joins the sprint" {
+  cp "$ROOT/tests/fixtures/backlog.yaml" "$REPO/.compasso/backlog.yaml"
+  gh_ push-backlog >/dev/null
+  n="$(yq '.features[1].gitlab' "$REPO/.compasso/backlog.yaml")"
+  N="$n" yq -i '.features[0].gitlab = (strenv(N) | tonumber)' "$PLAN"
+  gh_ push-plan >/dev/null
+  [ "$(jq -r .milestone.title "$FAKE_GH/issues/$n.json")" = S20 ]
+  [ "$(cat "$FAKE_GH/parent/$n")" = "$(yq .epic.gitlab.issue "$PLAN")" ]
+  [ "$(num F-1)" = "$n" ]
+}
+
+@test "push-backlog: refused while the backlog does not pass its check" {
+  cp "$ROOT/tests/fixtures/backlog.yaml" "$REPO/.compasso/backlog.yaml"
+  yq -i '.features[0].size_h = 0' "$REPO/.compasso/backlog.yaml"
+  run gh_ push-backlog
+  [ "$status" -eq 1 ]
+  [ "$(calls 'POST repos/acme/app/issues')" -eq 0 ]
+}
