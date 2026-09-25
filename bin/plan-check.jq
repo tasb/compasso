@@ -1,4 +1,4 @@
-# Input: {plan: <plan.yaml as JSON>, cfg: {max, target, hpd, weeks, cap}}
+# Input: {plan: <plan.yaml as JSON>, cfg: {max, target, hpd, weeks, cap, sensitive}}
 # Output: {errors, notes, totals, waves, critical, overlaps}
 
 def blank: . == null or . == "" or . == [];
@@ -60,6 +60,12 @@ def hours: (.estimate_h | numbers) // 0;
         (if ($s.owner // "") | IN("agent", "human", "either") | not
            then "\($s.key): owner must be agent, human or either" else empty end),
         (if ($s.tests // []) | index("unit") | not then "\($s.key): tests must include unit" else empty end),
+        # a story on a sensitive path needs security's abuse cases in its acceptance before it is built
+        ([($s.touches // [])[] | glob_prefix] as $t
+          | [($c.sensitive // [])[] | . as $g | glob_prefix as $p
+             | select(any($t[]; . as $x | ($x | startswith($p)) or ($p | startswith($x)))) | $g][0] as $hit
+          | if $hit != null and ($s.security_reviewed != true)
+            then "\($s.key): touches a sensitive path (\($hit)); security must add its abuse cases to the acceptance (security_reviewed: true)" else empty end),
         (($s.tests // [])[] | select(IN("unit", "e2e") | not) | "\($s.key): unknown test level '\(.)'"),
         (($s.depends_on // [])[] | select(ext_ref | not) | select($by[.] == null)
           | "\($s.key): depends on unknown story \(.)"),

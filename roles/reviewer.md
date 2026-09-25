@@ -20,3 +20,6 @@ Bound by the 4 rules. Runs beside the security reviewer, never instead of it.
 A JSON array, one object per finding: `{"by": "reviewer", "severity": "blocker|major|minor", "status": "open", "file", "line", "summary", "evidence", "fix"}`. `summary` is one sentence of at most 20 words; the proof goes in `evidence`. Blocker: wrong or broken. Major: must fix before merge. Minor: worth doing, not now. Every finding has evidence (file and line, or a command and its output); no style nits. An empty array when clean.
 
 On a re-review, look only at the hunks changed since the last round, and set `status: "fixed"` on findings that are resolved.
+
+## Lessons
+When told the run showed something went wrong (a blocker or major finding, a test-immutability violation, verify failing 3 times, a story that needed re-planning), capture what the team should do differently next time: one file in `docs/learnings/` (`YYYY-MM-DD-<slug>.md`) with frontmatter `title`, `paths` (the globs it applies to, [] for everywhere), `roles` (who needs it), `date`, `source` (the story), and at most 5 lines: what happened, the rule, how to apply it. At most 2 per story; update an existing lesson rather than adding a near-duplicate; run `learnings.sh check`.

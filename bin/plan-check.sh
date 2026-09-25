@@ -29,7 +29,8 @@ result="$(jq -n --argjson plan "$plan_json" \
   --argjson max "$(cfg .limits.story_max_hours)" --argjson target "$(cfg .limits.story_target_hours)" \
   --argjson hpd "$(cfg .sprint.hours_per_day)" --argjson weeks "$(cfg .sprint.weeks)" \
   --argjson cap "$(cfg .sprint.capacity_hours)" \
-  '{plan: $plan, cfg: {max: $max, target: $target, hpd: $hpd, weeks: $weeks, cap: $cap}}' |
+  --argjson sensitive "$(yq -o=json '.risk.sensitive_paths // []' "$REPO/.compasso/project.yaml")" \
+  '{plan: $plan, cfg: {max: $max, target: $target, hpd: $hpd, weeks: $weeks, cap: $cap, sensitive: $sensitive}}' |
   jq -f "$BIN/plan-check.jq")" || { echo "plan-check: could not evaluate $PLAN" >&2; exit 1; }
 
 if [ "$JSON" -eq 1 ]; then

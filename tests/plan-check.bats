@@ -195,3 +195,15 @@ json() { pc --json | jq -r "$1"; }
   [ "$status" -eq 1 ]
   [[ "$output" == *"B-1: blocks no story"* ]] || false
 }
+
+@test "a story on a sensitive path needs security's abuse cases before it is built" {
+  cfg_set '.risk.sensitive_paths = ["src/billing/api/**"]'
+  run pc
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"S-1: touches a sensitive path (src/billing/api/**); security must add its abuse cases"* ]] || false
+  [[ "$output" == *"S-3: touches a sensitive path"* ]] || false
+  [[ "$output" != *"S-2: touches a sensitive path"* ]] || false
+  plan_set '(.features[].stories[] | select(.key == "S-1" or .key == "S-3")).security_reviewed = true'
+  run pc
+  [ "$status" -eq 0 ]
+}

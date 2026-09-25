@@ -19,15 +19,17 @@ Plan and build one feature. The conversation happens here; GitLab gets the recor
 
 5. **Stories.** Split the feature into stories and blockers as `roles/planner.md` says, in `plan.yaml`. Then `bash ${CLAUDE_PLUGIN_ROOT}/bin/plan-check.sh --repo .` until it passes; it also checks the sprint's capacity with the feature added. If capacity is exceeded, say by how much and let the user choose what moves out.
 
-6. **Security review of the plan (mandatory).** Dispatch the security role (`roles/security.md`, model from the config) with `.compasso/plan.yaml` and the feature's key. Write its result to `RUN/security.md` ("no findings", or one bullet per finding). Fix blocker and major findings in the plan and repeat steps 5 and 6.
+6. **Security review of the plan (mandatory).** Dispatch the security role (`roles/security.md`, model from the config) with `.compasso/plan.yaml` and the feature's key. Write its result to `RUN/security.md` ("no findings", or one bullet per finding). Fix blocker and major findings in the plan and repeat steps 5 and 6. For every story on a sensitive path (`risk.sensitive_paths`), security's abuse cases go into its acceptance and the story gets `security_reviewed: true`; plan-check refuses the plan until then.
 
-7. **Approval.** Show the plan: `bash ${CLAUDE_PLUGIN_ROOT}/bin/comment.sh plan --repo . --feature <key> --approver <user> --security-file RUN/security.md` (the Approved line is only a preview). With `approvals.plan: human`, wait for an explicit yes. With `auto`, continue only when security found nothing; otherwise ask.
+7. **Testability.** Dispatch the **tester** with the feature's stories: can a test fail before each is built, and is every acceptance line observable? Fix what it flags (usually by merging enabling work into the story that uses it) and repeat step 5.
 
-8. **Record on the tracker.**
+8. **Approval.** Show the plan: `bash ${CLAUDE_PLUGIN_ROOT}/bin/comment.sh plan --repo . --feature <key> --approver <user> --security-file RUN/security.md` (the Approved line is only a preview). With `approvals.plan: human`, wait for an explicit yes. With `auto`, continue only when security found nothing; otherwise ask.
+
+9. **Record on the tracker.**
    - `gitlab.sh push-plan --repo .` creates or updates the feature, its stories and blockers.
    - For each question round: `comment.sh qa --file RUN/qa-<round>.json > RUN/qa-<round>.md` and `gitlab.sh comment --repo . --iid <feature iid> --body-file RUN/qa-<round>.md`.
    - `comment.sh plan ... > RUN/plan.md` and post it the same way.
    - `gitlab.sh set-state --repo . --iid <feature iid> --state building`.
    - Remind the user to commit `.compasso/plan.yaml`.
 
-9. **Build.** Run the sprint flow for this feature: `${CLAUDE_PLUGIN_ROOT}/skills/sprint/SKILL.md` with the feature's iid, which builds its stories in dependency order and verifies the feature when they are all merged.
+10. **Build.** Run the sprint flow for this feature: `${CLAUDE_PLUGIN_ROOT}/skills/sprint/SKILL.md` with the feature's iid, which builds its stories in dependency order and verifies the feature when they are all merged.

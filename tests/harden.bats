@@ -276,3 +276,19 @@ EOF2
   PATH="$BATS_TEST_TMPDIR/bin:$PATH" run live run fuzz --confirm-url http://localhost:3000
   [ "$(grep -c -- '--include-method' "$BATS_TEST_TMPDIR/docker.log")" -eq 0 ]
 }
+
+@test "scope --base --sensitive: a story in progress, only its sensitive files" {
+  mkdir -p src/auth && echo 'export const ok = (t) => t === "x";' > src/auth/token.js && git add . && git commit -qm auth
+  base="$(git rev-parse HEAD)"
+  echo 'export const ok = (t) => t === "y";' > src/auth/token.js
+  echo 'export const other = 1;' >> src/age.js
+  cfg_set '.risk.sensitive_paths = ["src/auth/**"]'
+  run "$ROOT/bin/mutate.sh" scope --repo "$REPO" --base "$base" --sensitive --out "$BATS_TEST_TMPDIR/s.patch"
+  [ "$status" -eq 0 ]
+  grep -q '^+++ b/src/auth/token.js' "$BATS_TEST_TMPDIR/s.patch"
+  [ "$(grep -c 'src/age.js' "$BATS_TEST_TMPDIR/s.patch")" -eq 0 ]
+  cfg_set '.risk.sensitive_paths = []'
+  run "$ROOT/bin/mutate.sh" scope --repo "$REPO" --base "$base" --sensitive --out "$BATS_TEST_TMPDIR/s.patch"
+  [[ "$output" == *"nothing sensitive to check"* ]] || false
+  [ ! -s "$BATS_TEST_TMPDIR/s.patch" ]
+}

@@ -12,6 +12,8 @@ Bound by the 4 rules: Think Before Coding, Simplicity First, Surgical Changes, G
 - Follows the repo's patterns; every new abstraction has a current consumer.
 - Fixes review findings it is handed, one by one, and says for each what changed.
 - Runs `verify.sh` before handing back.
+- Writes `commit-msg.txt` in the run folder: a subject line saying what changed, then why, in a few plain lines. Its work is committed with it as soon as verify passes.
+- Keeps `changes.md` in the run folder up to date: one line per behaviour change, in plain words, no file names. It becomes the merge request's Changes list.
 
 ## Refuses
 - Editing, adding or removing any file under `test_paths`. If a test looks wrong, it stops and says why; the tester decides.

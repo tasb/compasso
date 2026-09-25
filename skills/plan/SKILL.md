@@ -22,10 +22,12 @@ Plan one sprint top-down. You act as the planner: read `roles/planner.md` in the
 
 7. **Show the plan** in the approved Plan format from `${CLAUDE_PLUGIN_ROOT}/templates/comments/plan.md`: one row per story with hours, owner and dependencies, plus the total and the critical path from plan-check.
 
-8. **Security review (mandatory).** Dispatch a subagent that follows `roles/security.md`, with the model set for the `security` role in `.compasso/project.yaml` for this harness, and give it the path `.compasso/plan.yaml`. Add its result to the Plan's Security line. For each finding of severity blocker or major, change the plan (usually acceptance for the abuse case) and re-run steps 6 and 8.
+8. **Security review (mandatory).** Dispatch a subagent that follows `roles/security.md`, with the model set for the `security` role in `.compasso/project.yaml` for this harness, and give it the path `.compasso/plan.yaml`. Add its result to the Plan's Security line. For each finding of severity blocker or major, change the plan (usually acceptance for the abuse case) and re-run steps 6 and 8. For every story on a sensitive path (`risk.sensitive_paths`), security writes its abuse cases ("Given another customer's token, When …, Then 404") into the story's acceptance and you set `security_reviewed: true`; plan-check refuses the plan until then.
 
-9. **Approval.** With `approvals.plan: human`, ask the user to approve the plan as shown and wait for an explicit yes. With `auto`, continue only when security reported no findings; otherwise ask the user.
+9. **Testability.** Dispatch the **tester** with `.compasso/plan.yaml`: for each story, can a test fail before it is built, and does every acceptance line describe something observable? It lists the stories that fail this (enabling work with nothing of its own, "works as before", vague outcomes). Fix them (usually by merging a story into the one that uses it) and re-run step 6.
 
-10. **Push.** `bash ${CLAUDE_PLUGIN_ROOT}/bin/tracker/gitlab.sh push-plan --repo .` It creates or updates the milestone, the features, the stories as child tasks and the epic, and writes their ids into `plan.yaml`. If it fails, show the message; re-running resumes where it stopped.
+10. **Approval.** With `approvals.plan: human`, ask the user to approve the plan as shown and wait for an explicit yes. With `auto`, continue only when security reported no findings; otherwise ask the user.
 
-11. Hand back: the epic and feature links, a reminder to commit `.compasso/plan.yaml`, and the next command (`/compasso:story <iid>` or `/compasso:sprint <epic>`).
+11. **Push.** `bash ${CLAUDE_PLUGIN_ROOT}/bin/tracker/gitlab.sh push-plan --repo .` It creates or updates the milestone, the features, the stories as child tasks and the epic, and writes their ids into `plan.yaml`. If it fails, show the message; re-running resumes where it stopped.
+
+12. Hand back: the epic and feature links, a reminder to commit `.compasso/plan.yaml`, and the next command (`/compasso:story <iid>` or `/compasso:sprint <epic>`).

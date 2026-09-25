@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Run agent-written mutants against the tests, one at a time.
 #
-#   mutate.sh scope --repo R --commits "SHA..." --out F                what the mutants may change
+#   mutate.sh scope --repo R --commits "SHA..."|--base REF [--sensitive] --out F   what the mutants may change
 #   mutate.sh run --repo R --mutants DIR --test CMD [--timeout S] --out F
 #   mutate.sh result --results F --verdicts V --out R                 this check's part of the Hardening report
 #
@@ -18,7 +18,7 @@
 set -u
 
 BIN="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO="." DIR="" TEST="" TIMEOUT=120 OUT="" COMMITS="" RESULTS="" VERDICTS="" FEATURE=""
+REPO="." DIR="" TEST="" TIMEOUT=120 OUT="" COMMITS="" RESULTS="" VERDICTS="" FEATURE="" BASE="" SENSITIVE=0
 CMD="${1:-}"; shift || true
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -28,6 +28,8 @@ while [ $# -gt 0 ]; do
     --timeout) TIMEOUT="$2"; shift 2 ;;
     --out) OUT="$2"; shift 2 ;;
     --commits) COMMITS="$2"; shift 2 ;;
+    --base) BASE="$2"; shift 2 ;;
+    --sensitive) SENSITIVE=1; shift ;;
     --results) RESULTS="$2"; shift 2 ;;
     --verdicts) VERDICTS="$2"; shift 2 ;;
     --feature) FEATURE="$2"; shift 2 ;;
@@ -35,15 +37,25 @@ while [ $# -gt 0 ]; do
   esac
 done
 if [ "$CMD" = scope ]; then
-  # the product code the given merge commits changed, never the tests (test_paths)
-  [ -n "$COMMITS" ] && [ -n "$OUT" ] || { echo "usage: mutate.sh scope --repo R --commits \"SHA...\" --out F" >&2; exit 2; }
-  set -f; ex=""
+  # the product code the given merge commits (or, with --base, a story in progress) changed, never
+  # the tests (test_paths); --sensitive keeps only files under risk.sensitive_paths
+  [ -n "$COMMITS$BASE" ] && [ -n "$OUT" ] || { echo "usage: mutate.sh scope --repo R --commits \"SHA...\"|--base REF [--sensitive] --out F" >&2; exit 2; }
+  set -f; ex="" only=""
   for g in $("$BIN/config.sh" get --repo "$REPO" '.test_paths[]'); do ex="$ex ':(exclude,glob)$g'"; done
+  if [ "$SENSITIVE" = 1 ]; then
+    for g in $("$BIN/config.sh" get --repo "$REPO" '.risk.sensitive_paths[]'); do only="$only ':(glob)$g'"; done
+    [ -n "$only" ] || { : > "$OUT"; echo "mutate: no risk.sensitive_paths - nothing sensitive to check"; exit 0; }
+  fi
+  [ -n "$only" ] || only="."
   : > "$OUT"
+  if [ -n "$BASE" ]; then
+    git -C "$REPO" rev-parse --verify --quiet "$BASE^{commit}" >/dev/null || { echo "mutate: base $BASE does not resolve" >&2; exit 2; }
+    eval "git -C \"\$REPO\" diff \"\$BASE\" -- $only $ex" >> "$OUT"
+  fi
   for c in $COMMITS; do
     git -C "$REPO" cat-file -e "$c^{commit}" 2>/dev/null || { echo "mutate: $c is not a commit here; fetch first" >&2; exit 2; }
     first="$(git -C "$REPO" rev-parse "$c^1")"          # a merge commit's first parent is the branch it merged into
-    eval "git -C \"\$REPO\" diff \"\$first\" \"\$c\" -- . $ex" >> "$OUT"
+    eval "git -C \"\$REPO\" diff \"\$first\" \"\$c\" -- $only $ex" >> "$OUT"
   done
   echo "mutate: scope has $(grep -c '^+[^+]' "$OUT") changed lines in $(grep -c '^+++ ' "$OUT") files"
   exit 0
