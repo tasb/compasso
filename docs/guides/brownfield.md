@@ -9,6 +9,7 @@
 1. **`/compasso:setup`.**
    - It detects `test`, `lint`, `typecheck`, `build` and `e2e` from the repository's manifests and CI. You confirm or correct each.
    - It finds the coverage command and the report it writes. Coverage is measured on **changed lines only**, so an old codebase with low coverage is not punished; below 80% is a warning, never a block.
+   - **Test frameworks:** it shows, per language, what you already use for unit, API, browser e2e, coverage and property-based tests. Compasso's default fills only an area where you have nothing, and is added by the first story that needs it. Your frameworks are never replaced.
    - **Test paths:** check `test_paths` matches your layout. The builder may never change files there.
    - **Sensitive paths:** name the folders for authentication, payments, personal data and secrets (`risk.sensitive_paths`). A change there always needs a person, and security plans abuse cases for stories that touch them.
    - **Pipeline:** on GitLab, add the generated file to your existing `.gitlab-ci.yml` with one `include`. On GitHub, it writes `.github/workflows/compasso.yml` next to your workflows, and `tracker.sh protect` (after you agree) sets the branch rules.

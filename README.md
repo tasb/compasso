@@ -103,6 +103,24 @@ Dependencies are part of the plan. Stories are created in dependency order. A st
 
 Both adapters (`bin/tracker/gitlab.sh`, `bin/tracker/github.sh`) have the same commands, and `bin/tracker.sh` picks one from `tracker.provider`.
 
+## Test frameworks
+
+Compasso uses whatever a project already tests with. For each language and area (unit, API, browser e2e, coverage, property-based) it has a default, used only where the project has nothing yet. The first story that needs one adds it. Setup shows both (`bin/test-stack.sh detect`) and records them as `testing` in `.compasso/project.yaml`.
+
+| Language | Unit | API | Browser e2e | Coverage | Property-based |
+|---|---|---|---|---|---|
+| JavaScript / TypeScript | Vitest | Vitest + fetch | Playwright | Vitest (LCOV) | fast-check |
+| Python | pytest | pytest + httpx | Playwright (pytest) | pytest-cov (Cobertura) | Hypothesis |
+| Go | go test | httptest | Playwright (TypeScript, `e2e/`) | coverprofile → Cobertura | rapid |
+| Java / Kotlin | JUnit 5 | REST Assured | Playwright (Java) | JaCoCo | jqwik |
+| C# / .NET | xUnit | WebApplicationFactory | Playwright (.NET) | coverlet (Cobertura) | FsCheck |
+| Ruby | RSpec | rack-test | Playwright (TypeScript, `e2e/`) | SimpleCov (Cobertura) | prop_check |
+| PHP | PHPUnit | the framework's test client | Playwright (TypeScript, `e2e/`) | PHPUnit (Cobertura) | table-driven tests |
+| Rust | cargo test | reqwest in `tests/` | Playwright (TypeScript, `e2e/`) | cargo-llvm-cov (LCOV) | proptest |
+| Bash | bats-core | bats + curl | none | kcov | none |
+
+The catalog, with the signs used to recognise each framework, is `templates/test-defaults.yaml`.
+
 ## The gates
 
 A gate stops the flow. A check reports and never stops it.
@@ -178,6 +196,7 @@ bin/start.sh --repo .                                  # where the product stand
 bin/prototype.sh crawl|inventory|check ...             # a prototype's screens, forms and flows
 bin/backlog-check.sh --repo .                          # the backlog: sizes, dependencies, the MVP line, screens covered
 bin/roadmap.sh propose|check|next --repo .             # features into sprints, MVP first
+bin/test-stack.sh detect|write|defaults ...            # test frameworks per language and area, with defaults
 bin/plan-check.sh --repo .                             # sizes, dependencies, capacity
 bin/status.sh --repo . [--iid N] [--json]              # where the sprint or a story stands (read-only)
 bin/ci.sh --repo .                                     # the merge request pipeline or pull request workflow

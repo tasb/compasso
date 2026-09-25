@@ -19,7 +19,7 @@ Shape the product backlog. You act as the planner (`${CLAUDE_PLUGIN_ROOT}/roles/
    - is `sensitive: true` when it handles authentication, payments, personal data or secrets.
    With a prototype, every screen belongs to a feature, or the record says why it is left out. Its forms become acceptance lines, and its flows show the dependencies.
 
-4. **Walking skeleton.** When `bash ${CLAUDE_PLUGIN_ROOT}/bin/start.sh --repo . --json` says `greenfield: true`, the first feature is `F-0 Walking skeleton`: the repository layout, the stack, unit and e2e test runners, CI, and one page or endpoint running end to end. Propose the stack in one line with its reason and wait for the user's yes; record the choice as a decision. Every MVP feature depends on F-0.
+4. **Walking skeleton.** When `bash ${CLAUDE_PLUGIN_ROOT}/bin/start.sh --repo . --json` says `greenfield: true`, the first feature is `F-0 Walking skeleton`: the repository layout, the stack, unit and e2e test runners, CI, and one page or endpoint running end to end. Propose the stack in one line with its reason and wait for the user's yes; record the choice as a decision. Its tests use the defaults for that language: `bash ${CLAUDE_PLUGIN_ROOT}/bin/test-stack.sh defaults --lang <id>` (unit, API, browser e2e, coverage, property-based), unless the user names others. Every MVP feature depends on F-0.
 
 5. **The MVP line.** Propose the smallest set of features that proves what the brief's `## The MVP must prove` says, marked `mvp: true`; everything else `mvp: false`. The user decides. An MVP feature may depend only on MVP features.
 

@@ -45,6 +45,8 @@ commands:                     # the repo's own commands; empty means "not applic
   build: ""
   e2e: ""
 
+testing: {}                   # per language and area (unit, api, e2e, coverage, property): what the project
+                              # uses, or Compasso's default where it had nothing; written by bin/test-stack.sh write
 test_paths:                   # what counts as a test file: the builder may not add, change or remove these
   - "tests/**"
   - "test/**"

@@ -17,6 +17,7 @@
 
 3. **`/compasso:backlog`.** The planner turns the brief into features: user outcomes, each at most half a sprint, with rough hours and dependencies.
    Because the repository is empty, the first feature is **F-0 Walking skeleton**: the stack, unit and e2e test runners, CI, and one page or endpoint running end to end. Every MVP feature depends on it.
+   Its tests use Compasso's defaults for that language: for example Vitest, Playwright and fast-check for TypeScript, or pytest, Playwright and Hypothesis for Python.
    *You decide:* the stack (proposed in one line with its reason), and where the **MVP line** goes: the smallest set of features that proves what the brief says.
    *You get:* `.compasso/backlog.yaml`, features on the tracker in no sprint (MVP ones labelled `mvp`), and a merge request.
 

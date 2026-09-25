@@ -1,0 +1,235 @@
+# Compasso's test defaults, per language and area. A default is used only for an area where the
+# project has nothing yet; whatever the project already uses always wins (bin/test-stack.sh).
+#
+# languages.<id>:
+#   name        shown to people
+#   manifests   files whose presence means the language is used (globs on tracked paths: * stays
+#               within a folder, **/ spans folders)
+#   files       where to look for signs of a framework (globs): manifests, configs, CI, test files
+#   areas.<area>:
+#     found     framework -> extended regex; the first one found in `files` is what the project uses
+#     inherits  when nothing specific is found, use what was found for this other area (API tests
+#               usually run on the unit test framework)
+#     default   used when nothing is found
+#     command, report   for coverage: the default command and the report it writes (Cobertura, LCOV or JaCoCo)
+# Areas: unit, api (API and integration tests), e2e (browser), coverage, property (property-based).
+# Browser e2e: Playwright in the project's language where Playwright has an official binding,
+# otherwise Playwright (TypeScript) in a separate e2e/ folder.
+
+languages:
+  js:
+    name: JavaScript / TypeScript
+    manifests: [package.json]
+    files: [package.json, "*.config.js", "*.config.ts", "*.config.mjs", "*.config.cjs", .github/workflows/*.yml, .gitlab-ci.yml]
+    areas:
+      unit:
+        found: {vitest: '"vitest"', jest: '"jest"', mocha: '"mocha"', ava: '"ava"', node-test: 'node --test'}
+        default: vitest
+      api:
+        found: {supertest: '"supertest"', pactum: '"pactum"'}
+        inherits: unit
+        default: vitest + fetch
+      e2e:
+        found: {playwright: '"@playwright/test"|"playwright"', cypress: '"cypress"', webdriverio: '"webdriverio"|"@wdio/', puppeteer: '"puppeteer"', testcafe: '"testcafe"'}
+        default: playwright
+      coverage:
+        found: {vitest-coverage: '@vitest/coverage-', c8: '"c8"', nyc: '"nyc"', jest-coverage: 'jest[^"]*--coverage', node-coverage: 'experimental-test-coverage'}
+        default: vitest --coverage
+        command: npx vitest run --coverage --coverage.reporter=lcov
+        report: coverage/lcov.info
+      property:
+        found: {fast-check: '"fast-check"', jsverify: '"jsverify"'}
+        default: fast-check
+
+  python:
+    name: Python
+    manifests: [pyproject.toml, requirements.txt, "requirements*.txt", setup.py, setup.cfg, Pipfile]
+    files: [pyproject.toml, "requirements*.txt", setup.py, setup.cfg, Pipfile, tox.ini, pytest.ini, "conftest.py", "**/conftest.py", .github/workflows/*.yml, .gitlab-ci.yml]
+    areas:
+      unit:
+        found: {pytest: '(^|[^a-z-])pytest([^a-z-]|$)', nose2: 'nose2', unittest: 'python -m unittest'}
+        default: pytest
+      api:
+        found: {httpx: '(^|[^a-z])httpx', requests: '(^|[^a-z])requests([^a-z]|$)', webtest: '(^|[^a-z])webtest'}
+        inherits: unit
+        default: pytest + httpx
+      e2e:
+        found: {playwright: 'pytest-playwright|(^|[^a-z])playwright', selenium: 'selenium', splinter: 'splinter'}
+        default: playwright (pytest-playwright)
+      coverage:
+        found: {pytest-cov: 'pytest-cov|--cov', coverage: '(^|[^a-z-])coverage([^a-z-]|$)'}
+        default: pytest-cov
+        command: pytest --cov --cov-report=xml
+        report: coverage.xml
+      property:
+        found: {hypothesis: 'hypothesis'}
+        default: hypothesis
+
+  go:
+    name: Go
+    manifests: [go.mod]
+    files: [go.mod, Makefile, "*_test.go", "**/*_test.go", .github/workflows/*.yml, .gitlab-ci.yml, e2e/package.json]
+    areas:
+      unit:
+        found: {go-test: 'func Test[A-Z_]'}
+        default: go test
+      api:
+        found: {httptest: 'net/http/httptest'}
+        inherits: unit
+        default: net/http/httptest
+      e2e:
+        found: {playwright: '"@playwright/test"|playwright-go', chromedp: 'chromedp', rod: 'go-rod'}
+        default: playwright (TypeScript, e2e/)
+      coverage:
+        found: {coverprofile: '-coverprofile', gocover-cobertura: 'gocover-cobertura'}
+        default: go test -coverprofile + gocover-cobertura
+        command: go test -coverprofile=coverage.out ./... && gocover-cobertura < coverage.out > coverage.xml
+        report: coverage.xml
+      property:
+        found: {rapid: 'pgregory.net/rapid', gopter: 'leanovate/gopter', testing-quick: '"testing/quick"'}
+        default: rapid
+
+  jvm:
+    name: Java / Kotlin
+    manifests: [pom.xml, build.gradle, build.gradle.kts]
+    files: [pom.xml, build.gradle, build.gradle.kts, .github/workflows/*.yml, .gitlab-ci.yml]
+    areas:
+      unit:
+        found: {junit5: 'junit-jupiter|org\.junit\.jupiter', junit4: 'junit:junit|<artifactId>junit</artifactId>', kotest: 'io\.kotest', testng: 'testng'}
+        default: junit 5
+      api:
+        found: {rest-assured: 'rest-assured', mockmvc: 'spring-boot-starter-test'}
+        inherits: unit
+        default: rest assured
+      e2e:
+        found: {playwright: 'com\.microsoft\.playwright', selenium: 'selenium', selenide: 'selenide'}
+        default: playwright (Java)
+      coverage:
+        found: {jacoco: 'jacoco', kover: 'kover'}
+        default: jacoco
+        command: mvn -B verify jacoco:report
+        report: target/site/jacoco/jacoco.xml
+      property:
+        found: {jqwik: 'jqwik', kotest-property: 'kotest-property', junit-quickcheck: 'junit-quickcheck'}
+        default: jqwik
+
+  dotnet:
+    name: C# / .NET
+    manifests: ["*.csproj", "**/*.csproj", "*.sln", "*.fsproj", "**/*.fsproj"]
+    files: ["*.csproj", "**/*.csproj", "*.fsproj", "**/*.fsproj", Directory.Packages.props, .github/workflows/*.yml, .gitlab-ci.yml]
+    areas:
+      unit:
+        found: {xunit: '"xunit"|Include="xunit', nunit: 'NUnit', mstest: 'MSTest'}
+        default: xunit
+      api:
+        found: {webapplicationfactory: 'Microsoft\.AspNetCore\.Mvc\.Testing'}
+        inherits: unit
+        default: WebApplicationFactory
+      e2e:
+        found: {playwright: 'Microsoft\.Playwright', selenium: 'Selenium'}
+        default: playwright (.NET)
+      coverage:
+        found: {coverlet: 'coverlet'}
+        default: coverlet
+        command: dotnet test /p:CollectCoverage=true /p:CoverletOutputFormat=cobertura /p:CoverletOutput=./coverage/
+        report: coverage/coverage.cobertura.xml
+      property:
+        found: {fscheck: 'FsCheck', csharpcheck: 'CsCheck'}
+        default: fscheck
+
+  ruby:
+    name: Ruby
+    manifests: [Gemfile]
+    files: [Gemfile, "*.gemspec", .rspec, .github/workflows/*.yml, .gitlab-ci.yml, e2e/package.json]
+    areas:
+      unit:
+        found: {rspec: 'rspec', minitest: 'minitest'}
+        default: rspec
+      api:
+        found: {rack-test: 'rack-test'}
+        inherits: unit
+        default: rack-test
+      e2e:
+        found: {playwright: '"@playwright/test"|playwright-ruby', capybara: 'capybara'}
+        default: playwright (TypeScript, e2e/)
+      coverage:
+        found: {simplecov: 'simplecov'}
+        default: simplecov (Cobertura)
+        command: COVERAGE=1 bundle exec rspec
+        report: coverage/coverage.xml
+      property:
+        found: {prop_check: 'prop_check', rantly: 'rantly'}
+        default: prop_check
+
+  php:
+    name: PHP
+    manifests: [composer.json]
+    files: [composer.json, phpunit.xml, phpunit.xml.dist, pest.php, .github/workflows/*.yml, .gitlab-ci.yml, e2e/package.json]
+    areas:
+      unit:
+        found: {phpunit: 'phpunit', pest: 'pestphp', codeception: 'codeception'}
+        default: phpunit
+      api:
+        found: {}
+        inherits: unit
+        default: phpunit + the framework's test client
+      e2e:
+        found: {playwright: '"@playwright/test"', dusk: 'laravel/dusk', panther: 'symfony/panther'}
+        default: playwright (TypeScript, e2e/)
+      coverage:
+        found: {phpunit-coverage: 'coverage-cobertura|coverage-clover'}
+        default: phpunit (Cobertura)
+        command: XDEBUG_MODE=coverage vendor/bin/phpunit --coverage-cobertura coverage.xml
+        report: coverage.xml
+      property:
+        found: {eris: 'giorgiosironi/eris'}
+        default: none (table-driven tests)
+
+  rust:
+    name: Rust
+    manifests: [Cargo.toml]
+    files: [Cargo.toml, "**/Cargo.toml", .github/workflows/*.yml, .gitlab-ci.yml, e2e/package.json]
+    areas:
+      unit:
+        found: {cargo-test: '\[package\]'}
+        default: cargo test
+      api:
+        found: {reqwest: 'reqwest', axum-test: 'axum-test'}
+        inherits: unit
+        default: reqwest in tests/
+      e2e:
+        found: {playwright: '"@playwright/test"', fantoccini: 'fantoccini', thirtyfour: 'thirtyfour'}
+        default: playwright (TypeScript, e2e/)
+      coverage:
+        found: {cargo-llvm-cov: 'llvm-cov', tarpaulin: 'tarpaulin'}
+        default: cargo-llvm-cov
+        command: cargo llvm-cov --lcov --output-path lcov.info
+        report: lcov.info
+      property:
+        found: {proptest: 'proptest', quickcheck: 'quickcheck'}
+        default: proptest
+
+  bash:
+    name: Bash
+    manifests: ["*.bats", "**/*.bats"]
+    manifests_if_alone: ["*.sh", "**/*.sh"]   # shell scripts count only when no other language is found
+    files: ["*.bats", "**/*.bats", Makefile, .github/workflows/*.yml, .gitlab-ci.yml]
+    areas:
+      unit:
+        found: {bats: '@test '}
+        default: bats-core
+      api:
+        found: {}
+        inherits: unit
+        default: bats + curl
+      e2e:
+        found: {}
+        default: none (no browser)
+      coverage:
+        found: {kcov: 'kcov'}
+        default: kcov
+        command: kcov --include-path=. coverage bats tests
+        report: coverage/kcov-merged/cobertura.xml
+      property:
+        found: {}
+        default: none

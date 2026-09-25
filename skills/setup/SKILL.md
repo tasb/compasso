@@ -29,6 +29,8 @@ Ask one topic at a time, show the default, and accept "default" as an answer. Ne
 
    **Coverage.** Find the repo's coverage command and the Cobertura or LCOV file it writes, and the product-code paths (for example `src/**`). Default threshold: 80% of changed lines; below it is a warning, never a block. Without a command, every merge request shows coverage as "not measured" - say so.
 
+   **Test frameworks.** `bash ${CLAUDE_PLUGIN_ROOT}/bin/test-stack.sh detect --repo .` shows, per language and area (unit, API, browser e2e, coverage, property-based), what the project already uses, and Compasso's default where it has nothing. Defaults never replace what exists: they fill only empty areas, and are added by the first story that needs them. Let the user change any default, then `bash ${CLAUDE_PLUGIN_ROOT}/bin/test-stack.sh write --repo .` (edit `testing` in the config for their changes). When there is no coverage command and coverage shows a default, propose its `command` and `report` from `test-stack.sh detect --json`.
+
    **Tests.** Show `test_paths` (what counts as a test file; the builder may never change these) and adjust it to the repo's layout.
 
    **Pipeline.** Ask for the CI image that has the repo's toolchain (`ci.image`, for example the image the repo's CI already uses), then run `bash ${CLAUDE_PLUGIN_ROOT}/bin/ci.sh --repo .`.

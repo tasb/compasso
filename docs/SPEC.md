@@ -598,3 +598,21 @@ Roles used to run as general-purpose tasks on Claude Code: a subagent told to re
 - **No recursion.** No role has the Agent tool, and the generator refuses a role that lists it: only the flow dispatches.
 - **A budget per flow run.** `bin/budget.sh claim` runs before every dispatch and every continuation of an agent. It refuses (exit 3) once a role has used its runs in this flow run (`limits.agent_runs`: tester 5, builder 7, reviewer 3, security 4, approver 1, shipper 2, mutator 2) or all roles together have used `total` (20). The flow then stops, changes nothing more on the tracker, and hands back. Claims live in `RUN/budget.jsonl`, so restarting a flow continues its budget; only a person resets it. With each agent's `maxTurns`, the work of a flow run is bounded: at most `total` agent runs, each of at most its role's turns. There is no wall-clock limit, so a run resumed the next day is not refused.
 - **Codex.** The same budget applies. Per-role tools are not set for Codex agents yet; that waits until Codex's agent options are verified.
+
+## 25. Test framework defaults (2026-09-25)
+
+Every language and test area has a default, used only where the project has nothing yet: "the project's own first, a default only for an empty area". Decided with the user from the table in `templates/test-defaults.yaml`.
+
+- **Areas:** unit; API and integration; browser e2e; coverage (Cobertura, LCOV or JaCoCo, which diff-cover reads); property-based. Accessibility, performance, API fuzzing and ZAP are language-free and already set in `harden.images`.
+- **Browser e2e:** Playwright in the project's language where Playwright has an official binding (JavaScript/TypeScript, Python, Java, .NET), otherwise Playwright (TypeScript) in a separate `e2e/` folder.
+- **Detection** (`bin/test-stack.sh detect`):
+  - A language is present when its manifests are tracked. Shell scripts make a Bash project only when nothing else is found. Dependency folders don't count.
+  - For each area, the first framework whose sign appears in the language's manifests, configs, CI files or test files is what the project uses.
+  - API tests fall back to the unit framework.
+  - An area whose command is already in the config (`commands.test`, `commands.e2e`, `coverage.command`) counts as existing.
+- **Use.**
+  - Setup shows the result, and `test-stack.sh write` records it as `testing` in the config, per language and area, with `source: existing | default`.
+  - The tester uses the framework it names. The first story that needs a `default` area adds it in its test commit, and never adds a second framework to an area that already has one.
+  - The planner writes Verify commands with these frameworks.
+  - The walking skeleton uses the defaults of the stack chosen (`test-stack.sh defaults --lang <id>`).
+  - Hardening's property-based tests use `testing.<language>.property`.

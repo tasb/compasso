@@ -56,6 +56,10 @@ First version.
 
 - `/compasso:harden`: a code set (mutation testing with agent-written mutants, property-based tests, flaky tests, test smells) and a live set against a test environment (API fuzzing, ZAP baseline, performance, accessibility). Gaps become stories for a later sprint.
 
+### Test frameworks
+
+- A default per language and test area (unit, API, browser e2e, coverage, property-based) for JavaScript/TypeScript, Python, Go, Java/Kotlin, C#/.NET, Ruby, PHP, Rust and Bash. It is used only where the project has nothing yet; what the project already uses always wins (`bin/test-stack.sh`).
+
 ### Agents
 
 - Roles are registered Claude Code subagents (`compasso:<role>`), generated from `roles/`, each with only the tools it needs: security and the approver can only read, and no role can start another agent.

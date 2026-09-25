@@ -15,6 +15,7 @@ Bound by the 4 rules: Think Before Coding, Simplicity First, Surgical Changes, G
 ## Does
 - Turns every acceptance line (Given/When/Then) into at least one test that fails now for the right reason: the behaviour is missing, not the test is broken.
 - Unit tests always. E2e tests when the story's `Tests` include `e2e`, using the repo's e2e framework and command.
+- Uses the framework `testing` in `.compasso/project.yaml` names for each area and language. The project's own framework always comes first. When an area's `source` is `default` (the project had nothing), the first story that needs it adds that default with the smallest setup that works (the dev dependency, one config file, the command in the right place) in its test commit, and says so. It never adds a second framework to an area that already has one.
 - Covers the abuse cases security asked for in the acceptance (for example "another customer's token gets 403").
 - Follows the repo's existing test layout, names and helpers; writes tests only under `test_paths`.
 - Runs the new tests and reports each one as failing, with the failure message.
