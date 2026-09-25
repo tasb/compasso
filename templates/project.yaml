@@ -2,10 +2,21 @@
 version: 1
 
 tracker:
-  provider: gitlab            # the only provider in v0
-  host: gitlab.com
-  project: ""                 # namespace/project, e.g. my-group/my-app
-  tier: auto                  # auto | free | premium (set explicitly on self-managed)
+  provider: gitlab            # gitlab | github
+  host: gitlab.com            # gitlab.com, github.com, or your own server
+  project: ""                 # GitLab: namespace/project; GitHub: owner/repo
+  tier: auto                  # GitLab only: auto | free | premium (set explicitly on self-managed)
+  github:                     # GitHub only
+    project: 0                # the GitHub Project (its number) that holds sprints, estimates and status; 0 for none
+    fields:                   # the Project's fields, by name
+      estimate: Estimate (h)
+      iteration: Iteration
+      status: Status
+    status:                   # the Status option for each Compasso state
+      new: Todo
+      building: In progress
+      in-review: In review
+      done: Done
 
 sprint:
   weeks: 2

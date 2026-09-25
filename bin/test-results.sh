@@ -65,7 +65,7 @@ for sc in $(jq -r '.results[] | select(.status == "fail") | .scenario' "$RESULTS
       "", "## Evidence", "- Reported by \($r.tester) in the \($gid) test guide, scenario \"\($x.s.title)\"",
       "", "<!-- compasso:guide=\($gid) scenario=\($x.s.id) tester=\($slug) -->"' > "$body"
   title="$(jq -r '"\(.f.title): \(.s.title) does not work"' <<<"$info")"
-  iid="$("$BIN/tracker/gitlab.sh" followup --repo "$REPO" --parent "$(jq -r .f.iid <<<"$info")" \
+  iid="$("$BIN/tracker.sh" followup --repo "$REPO" --parent "$(jq -r .f.iid <<<"$info")" \
           --title "$title" --body-file "$body" --labels type::bug,severity::major,owner::agent)" ||
     { echo "test-results: could not file the bug for $sc" >&2; exit 1; }
   jq --arg k "$key" --argjson i "$iid" '.[$k] = $i' "$LEDGER" > "$LEDGER.new" && mv "$LEDGER.new" "$LEDGER"
@@ -81,6 +81,6 @@ jq -rn --slurpfile r "$RESULTS" --slurpfile g "$GUIDE" --argjson filed "$filed" 
   ($filed[] | "- \($dw): \($t[.scenario]) → #\(.iid)"),
   ($r.results[] | select(.status == "blocked") | "- \($ct): \($t[.scenario])" + (if (.comment // "") != "" then " — \(.comment)" else "" end))
 ' > "$summary"
-"$BIN/tracker/gitlab.sh" comment --repo "$REPO" --iid "$EPIC" --body-file "$summary" >/dev/null ||
+"$BIN/tracker.sh" comment --repo "$REPO" --iid "$EPIC" --body-file "$summary" >/dev/null ||
   { echo "test-results: could not post the summary on #$EPIC" >&2; exit 1; }
 cat "$summary"

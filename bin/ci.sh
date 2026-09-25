@@ -10,19 +10,22 @@
 #   GitLab SAST and Secret Detection                                         (security scans, every tier)
 #   compasso-scan-gate  fails on any high or critical scan finding           (gate)
 # The product repo includes the file from its .gitlab-ci.yml.
+# A GitHub project (tracker.provider: github) gets ci-github.sh's workflow instead.
 # Exit: 0 written | 1 config problem
 set -u
 
 BIN="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO="."
+REPO="." ARGS=("$@")
 while [ $# -gt 0 ]; do
   case "$1" in
     --repo) REPO="$2"; shift 2 ;;
+    --scans) shift 2 ;;   # GitHub only
     *) echo "ci: unknown argument '$1'" >&2; exit 1 ;;
   esac
 done
 "$BIN/config.sh" validate --repo "$REPO" >/dev/null || exit 1
 cfg() { "$BIN/config.sh" get --repo "$REPO" "$1"; }
+[ "$(cfg .tracker.provider)" = github ] && exec "$BIN/ci-github.sh" "${ARGS[@]}"
 
 image="$(cfg .ci.image)"
 [ -n "$image" ] || { echo "ci: set ci.image in .compasso/project.yaml to the image that has the repo's toolchain" >&2; exit 1; }

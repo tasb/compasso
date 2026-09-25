@@ -1,11 +1,11 @@
 ---
 name: report
-description: Compasso report - build the sprint's HTML report (delivery, flow and waiting, quality, agent effort and cost) from GitLab and the stories' metrics, and open it. Use when the user invokes /compasso:report or $compasso-report, and at sprint close.
+description: Compasso report - build the sprint's HTML report (delivery, flow and waiting, quality, agent effort and cost) from the tracker and the stories' metrics, and open it. Use when the user invokes /compasso:report or $compasso-report, and at sprint close.
 ---
 
 Build the current sprint's report. Scripts are in `${CLAUDE_PLUGIN_ROOT}/bin`.
 
-1. **Tracker gate.** `bash ${CLAUDE_PLUGIN_ROOT}/bin/tracker/gitlab.sh check --repo .` Stop on a non-zero exit. `git fetch` and read the default branch, where merged stories' metrics files are.
+1. **Tracker gate.** `bash ${CLAUDE_PLUGIN_ROOT}/bin/tracker.sh check --repo .` Stop on a non-zero exit. `git fetch` and read the default branch, where merged stories' metrics files are.
 
 2. **Collect.** `bash ${CLAUDE_PLUGIN_ROOT}/bin/metrics.sh collect --repo . --out .compasso/runs/report/S<n>.json`.
 

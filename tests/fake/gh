@@ -1,0 +1,145 @@
+#!/usr/bin/env bash
+# A tiny in-memory GitHub behind `gh api`, `gh api graphql` and `gh pr merge`, for the
+# GitHub adapter's tests. State lives in $FAKE_GH:
+#   calls.log         one "METHOD path field=value..." line per call (bodies left out)
+#   issues/<n>.json   issues as GitHub returns them; next_number
+#   parent/<n>        the parent issue number of a sub-issue
+#   blocked/<n>       issue numbers blocking <n>, one per line
+#   milestones.json   labels.txt (label names)   est/<n> (Project estimate)   status/<n>
+#   project.json      the GitHub Project with its fields; absent means none
+#   pr-<n>.json pr-query.json closing/<n>.json events/<n>.json search.json rulesets.json repo.json
+# $FAKE_GH_FAIL: a "METHOD path" glob that fails.
+set -u
+D="$FAKE_GH"; mkdir -p "$D/issues" "$D/parent" "$D/blocked" "$D/est" "$D/status"
+[ -f "$D/milestones.json" ] || echo '[]' > "$D/milestones.json"
+touch "$D/labels.txt" "$D/calls.log"
+
+if [ "$1 $2" = "pr merge" ]; then echo "PR merge $3 ${*:4}" >> "$D/calls.log"; exit 0; fi
+[ "$1" = api ] || { echo "fake gh: only api and pr merge are supported" >&2; exit 1; }
+shift
+method="" path="" fields="" jqf="" input="" labels="[]"
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --hostname) shift 2 ;;
+    --paginate) shift ;;
+    --jq) jqf="$2"; shift 2 ;;
+    --input) if [ "$2" = - ]; then input="$(cat)"; else input="$(cat "$2")"; fi; shift 2 ;;
+    -X) method="$2"; shift 2 ;;
+    -f|-F|--raw-field)
+      k="${2%%=*}"; v="${2#*=}"
+      case "$v" in @*) v="$(cat "${v#@}")" ;; esac
+      case "$k" in
+        body) body="$v" ;;
+        query) q="$v" ;;
+        'labels[]') labels="$(jq -c --arg l "$v" '. + [$l]' <<<"$labels")"; fields="$fields labels[]=$v" ;;
+        *) fields="$fields $k=$v"; eval "f_${k//[^A-Za-z0-9_]/_}=\$v" ;;
+      esac
+      shift 2 ;;
+    *) path="$1"; shift ;;
+  esac
+done
+[ -n "$method" ] || { [ -n "$fields${body+x}${q+x}$input" ] && method=POST || method=GET; }
+echo "$method $path$fields" >> "$D/calls.log"
+[ -n "${FAKE_GH_FAIL:-}" ] && case "$method $path" in $FAKE_GH_FAIL) echo '{"message":"Server Error"}'; exit 1 ;; esac
+
+out() { if [ -n "$jqf" ]; then jq -r "$jqf"; else cat; fi; }
+nf() { echo '{"message":"Not Found","status":"404"}'; exit 1; }
+next() { n="$(cat "$D/next_number" 2>/dev/null || echo 1)"; echo $((n + 1)) > "$D/next_number"; echo "$n"; }
+milestone_obj() { jq -c --argjson n "$1" '[.[] | select(.number == $n)][0] // null' "$D/milestones.json"; }
+save_labels() { # n json-array: add labels to issue n
+  jq --argjson l "$2" '.labels = (.labels + ($l | map({name: .})) | unique_by(.name))' "$D/issues/$1.json" > "$D/tmp" && mv "$D/tmp" "$D/issues/$1.json"
+}
+
+R='repos/[^/]*/[^/]*'
+case "$method $path" in
+  "GET user") echo '{"login":"dev"}' | out ;;
+  "GET repos/"*"/labels?"*) jq -R . "$D/labels.txt" | jq -s 'map({name: .})' | out ;;
+  "POST repos/"*"/issues/"*"/labels")
+    n="${path%/labels}"; n="${n##*/}"; save_labels "$n" "$labels"; jq .labels "$D/issues/$n.json" | out ;;
+  "POST repos/"*"/labels") echo "$f_name" >> "$D/labels.txt"; echo '{}' | out ;;
+  "GET repos/"*"/milestones?"*) out < "$D/milestones.json" ;;
+  "POST repos/"*"/milestones")
+    n=$(( $(jq length "$D/milestones.json") + 1 ))
+    jq --argjson n "$n" --arg t "$f_title" '. + [{number: $n, title: $t}]' "$D/milestones.json" > "$D/tmp" && mv "$D/tmp" "$D/milestones.json"
+    milestone_obj "$n" | out ;;
+  "POST repos/"*"/issues")
+    n="$(next)"
+    jq -n --argjson n "$n" --arg t "$f_title" --arg b "${body:-}" --argjson l "$labels" --argjson m "$(milestone_obj "${f_milestone:-0}")" \
+      '{number: $n, id: (1000 + $n), node_id: "I_\($n)", title: $t, body: $b, state: "open", labels: ($l | map({name: .})),
+        milestone: $m, assignees: [], created_at: "2026-10-05T09:00:00Z", closed_at: null}' > "$D/issues/$n.json"
+    out < "$D/issues/$n.json" ;;
+  "PATCH repos/"*"/issues/"*)
+    n="${path##*/}"; [ -f "$D/issues/$n.json" ] || nf
+    jq --arg t "${f_title:-}" --arg b "${body-__keep__}" --argjson m "$(milestone_obj "${f_milestone:-0}")" \
+      '(if $t != "" then .title = $t else . end) | (if $b != "__keep__" then .body = $b else . end) | (if $m then .milestone = $m else . end)' \
+      "$D/issues/$n.json" > "$D/tmp" && mv "$D/tmp" "$D/issues/$n.json"
+    out < "$D/issues/$n.json" ;;
+  "DELETE repos/"*"/issues/"*"/labels/"*)
+    n="${path%/labels/*}"; n="${n##*/}"; l="$(printf '%s' "${path##*/labels/}" | sed 's/%3A/:/g')"
+    jq --arg l "$l" '.labels |= map(select(.name != $l))' "$D/issues/$n.json" > "$D/tmp" && mv "$D/tmp" "$D/issues/$n.json" ;;
+  "POST repos/"*"/issues/"*"/assignees")
+    n="${path%/assignees}"; n="${n##*/}"; who="${f_assignees__:-}"
+    [ "$who" = ghost ] || jq --arg a "$who" '.assignees = [{login: $a}]' "$D/issues/$n.json" > "$D/tmp" && mv "$D/tmp" "$D/issues/$n.json"
+    out < "$D/issues/$n.json" ;;
+  "GET repos/"*"/issues/"*"/parent") n="${path%/parent}"; n="${n##*/}"; p="$(cat "$D/parent/$n" 2>/dev/null)"; [ -n "$p" ] || nf; out < "$D/issues/$p.json" ;;
+  "POST repos/"*"/issues/"*"/sub_issues")
+    p="${path%/sub_issues}"; p="${p##*/}"; c=$(( f_sub_issue_id - 1000 ))
+    [ -e "$D/parent/$c" ] && [ "${f_replace_parent:-}" != true ] && { echo '{"message":"Validation Failed"}'; exit 1; }
+    echo "$p" > "$D/parent/$c"; out < "$D/issues/$p.json" ;;
+  "GET repos/"*"/dependencies/blocked_by")
+    n="${path%/dependencies/blocked_by}"; n="${n##*/}"
+    { cat "$D/blocked/$n" 2>/dev/null || true; } | while read -r b; do cat "$D/issues/$b.json"; done | jq -s . | out ;;
+  "POST repos/"*"/dependencies/blocked_by")
+    n="${path%/dependencies/blocked_by}"; n="${n##*/}"; echo $(( f_issue_id - 1000 )) >> "$D/blocked/$n"; echo '{}' | out ;;
+  "GET repos/"*"/issues/"*"/events"*) n="${path%/events*}"; n="${n##*/}"; { cat "$D/events/$n.json" 2>/dev/null || echo '[]'; } | out ;;
+  "POST repos/"*"/issues/"*"/comments") echo '{"id":900}' | out ;;
+  "GET repos/"*"/issues?"*)
+    m="$(printf '%s' "$path" | sed -n 's/.*milestone=\([^&]*\).*/\1/p')"; lb="$(printf '%s' "$path" | sed -n 's/.*labels=\([^&]*\).*/\1/p')"
+    cat "$D"/issues/*.json 2>/dev/null | jq -s --arg m "$m" --arg lb "$lb" 'map(select((.milestone.number | tostring) == $m)
+      | select($lb == "" or ([.labels[].name] | index($lb)))) | sort_by(.number)' | out ;;
+  "GET repos/"*"/issues/"*) out < "$D/issues/${path##*/}.json" 2>/dev/null || nf ;;
+  "GET repos/"*"/pulls?"*) { cat "$D/pr-query.json" 2>/dev/null || echo '[]'; } | out ;;
+  "POST repos/"*"/pulls") echo "{\"number\":31,\"html_url\":\"https://github.com/acme/app/pull/31\",\"base\":\"${f_base:-}\"}" | out ;;
+  "PATCH repos/"*"/pulls/"*) echo "{\"number\":${path##*/},\"html_url\":\"https://github.com/acme/app/pull/${path##*/}\"}" | out ;;
+  "GET search/issues") { cat "$D/search.json" 2>/dev/null || echo '{"items":[]}'; } | out ;;
+  "GET repos/"*"/rulesets") { cat "$D/rulesets.json" 2>/dev/null || echo '[]'; } | out ;;
+  "POST repos/"*"/rulesets"|"PUT repos/"*"/rulesets/"*) printf '%s' "$input" > "$D/ruleset.json"; echo '{"id":5}' | out ;;
+  "PATCH repos/"*"/code-scanning/default-setup") echo '{}' ;;
+  "PATCH repos/"*) [ -n "$input" ] && printf '%s' "$input" > "$D/repo-patch.json"; echo '{}' ;;
+  "GET repos/"*)
+    { cat "$D/repo.json" 2>/dev/null ||
+      echo '{"id":7,"default_branch":"main","visibility":"public","permissions":{"push":true},"security_and_analysis":{"secret_scanning":{"status":"enabled"}}}'; } | out ;;
+  *" graphql")
+    [ -n "$input" ] && q="$(jq -r .query <<<"$input")"
+    case "$q" in
+      *"fields(first"*)
+        if [ -f "$D/project.json" ]; then jq '{data: {repositoryOwner: {projectV2: .}}}' "$D/project.json"
+        else echo '{"data":{"repositoryOwner":{"projectV2":null}}}'; fi | out ;;
+      *"items(first"*)
+        for f in "$D"/est/*; do [ -e "$f" ] || continue
+          jq -n --argjson n "${f##*/}" --argjson v "$(cat "$f")" '{content: {number: $n, repository: {nameWithOwner: "acme/app"}}, fieldValueByName: {number: $v}}'
+        done | jq -s '{data: {repositoryOwner: {projectV2: {items: {nodes: .}}}}}' | out ;;
+      *addProjectV2ItemById*)
+        c="$(printf '%s' "$q" | sed -E 's/.*contentId: "I_([0-9]+)".*/\1/')"; echo "ITEM add #$c" >> "$D/calls.log"
+        echo "{\"data\":{\"addProjectV2ItemById\":{\"item\":{\"id\":\"PVTI_$c\"}}}}" | out ;;
+      *updateProjectV2ItemFieldValue*)
+        c="$(printf '%s' "$q" | sed -E 's/.*itemId: "PVTI_([0-9]+)".*/\1/')"; fid="$(printf '%s' "$q" | sed -E 's/.*fieldId: "([^"]+)".*/\1/')"
+        v="$(printf '%s' "$q" | sed -E 's/.*value: \{([^}]*)\}.*/\1/')"
+        echo "ITEM set #$c $fid $v" >> "$D/calls.log"
+        case "$v" in number:*) echo "${v#number: }" > "$D/est/$c" ;; singleSelectOptionId:*) echo "$v" | sed -E 's/.*"(.*)"/\1/' > "$D/status/$c" ;; esac
+        echo '{"data":{"updateProjectV2ItemFieldValue":{"projectV2Item":{"id":"x"}}}}' ;;
+      *updateProjectV2Field*)
+        echo "FIELD iterations $(jq -c '[.variables.c.iterations[].title]' <<<"$input")" >> "$D/calls.log"
+        jq --argjson c "$(jq -c .variables.c <<<"$input")" '(.fields.nodes[] | select(.id == "F_ITER") | .configuration.iterations) =
+          ($c.iterations | to_entries | map(.value + {id: "IT_\(.value.title)"}))' "$D/project.json" > "$D/tmp" && mv "$D/tmp" "$D/project.json"
+        echo '{"data":{}}' ;;
+      *"pullRequest(number"*)
+        n="$(printf '%s' "$q" | grep -o 'pullRequest(number: [0-9]*' | grep -o '[0-9]*$')"
+        if [ -f "$D/pr-$n.json" ]; then jq '{data: {repository: {pullRequest: .}}}' "$D/pr-$n.json"; else echo '{"data":{"repository":{"pullRequest":null}}}'; fi | out ;;
+      *closedByPullRequestsReferences*)
+        n="$(printf '%s' "$q" | grep -o 'issue(number: [0-9]*' | grep -o '[0-9]*$')"
+        { cat "$D/closing/$n.json" 2>/dev/null || echo '[]'; } | jq '{data: {repository: {issue: {closedByPullRequestsReferences: {nodes: .}}}}}' | out ;;
+      *) echo "fake gh: unknown graphql query" >&2; exit 1 ;;
+    esac ;;
+  *) echo "fake gh: no route for $method $path" >&2; exit 1 ;;
+esac

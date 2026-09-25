@@ -37,11 +37,27 @@ it() { "$ROOT/bin/issue-templates.sh" --repo "$REPO"; }
 
 @test "every label a template applies is one ensure-labels creates" {
   for l in $(cat "$ROOT"/templates/issue_templates/*.md | grep -o '~"[^"]*"' | tr -d '~"' | sort -u); do
-    grep -qE "(^|')$l\\|" "$ROOT/bin/tracker/gitlab.sh"
+    grep -q "^$l|" "$ROOT/bin/tracker/labels.txt"
   done
 }
 
 @test "the blocker template is urgent and asks for a person" {
   grep -qF '/label ~"type::blocker" ~"priority::urgent"' "$ROOT/templates/issue_templates/Blocker.md"
   grep -q '^/assign ' "$ROOT/templates/issue_templates/Blocker.md"
+}
+
+@test "on GitHub: .github/ISSUE_TEMPLATE, each type's labels, no Depends on line" {
+  "$ROOT/bin/config.sh" init --repo "$REPO" --project acme/app >/dev/null
+  yq -i '.tracker.provider = "github"' "$REPO/.compasso/project.yaml"
+  run it
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"5 added, 0 unchanged"* ]] || false
+  [ ! -e "$REPO/.gitlab" ]
+  D="$REPO/.github/ISSUE_TEMPLATE"
+  [ "$(yq --front-matter=extract '.labels' "$D/blocker.md")" = "type::blocker, priority::urgent" ]
+  [ "$(yq --front-matter=extract '.title' "$D/epic.md")" = "S<sprint>: " ]
+  [ "$(grep -c 'Depends on' "$D/story.md" || true)" -eq 0 ]
+  grep -q 'Blocked by' "$D/story.md"
+  run it
+  [[ "$output" == *"0 added, 5 unchanged"* ]] || false
 }

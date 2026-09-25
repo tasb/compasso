@@ -37,7 +37,7 @@ for id in $(jq -r 'to_entries[] | select(.value.by == "reviewer" and .value.seve
     "", "## Verify", "- `\(if $cmd == "" then "the repo tests" else $cmd end)`",
     "", "**Tests:** unit", "", "<!-- compasso:followup story=\($story) -->"' <<<"$f" > "$body"
   title="$(jq -r '.summary | if length > 80 then .[0:77] + "..." else . end' <<<"$f")"
-  new="$("$BIN/tracker/gitlab.sh" followup --repo "$REPO" --parent "${feature:-$iid}" --title "$title" \
+  new="$("$BIN/tracker.sh" followup --repo "$REPO" --parent "${feature:-$iid}" --title "$title" \
           --body-file "$body" --labels owner::either --milestone none)" || { echo "ship: could not file the follow-up for finding $id" >&2; exit 1; }
   jq --argjson i "$id" --argjson n "$new" '.[$i] += {status: "followup", followup_iid: $n}' "$RUN/findings.json" > "$RUN/findings.new" \
     && mv "$RUN/findings.new" "$RUN/findings.json"

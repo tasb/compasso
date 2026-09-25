@@ -44,7 +44,12 @@ validate() {
   yq -e '.' "$CFG" >/dev/null 2>&1 || { echo "config: $CFG is not valid YAML" >&2; return 1; }
 
   [ "$(val .version)" = "1" ] || err "version must be 1"
-  [ "$(val .tracker.provider)" = "gitlab" ] || err "tracker.provider must be gitlab"
+  case "$(val .tracker.provider)" in gitlab|github) ;; *) err "tracker.provider must be gitlab or github" ;; esac
+  if [ "$(val .tracker.provider)" = github ]; then
+    v="$(val .tracker.github.project)"; is_int "${v:-0}" || err "tracker.github.project must be a Project number (0 for none)"
+    for k in estimate iteration status; do [ -n "$(val ".tracker.github.fields.$k")" ] || err "tracker.github.fields.$k is required"; done
+    for k in new building in-review done; do [ -n "$(val ".tracker.github.status.\"$k\"")" ] || err "tracker.github.status.$k is required"; done
+  fi
   [ -n "$(val .tracker.host)" ] || err "tracker.host is required"
   case "$(val .tracker.project)" in
     */*) : ;;

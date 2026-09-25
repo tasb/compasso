@@ -15,6 +15,8 @@
 #   gitlab.sh merge-commit  --repo R --iid N                      the commit the story's merge request put on the default branch
 #   gitlab.sh digest        --repo R --since YYYY-MM-DD           merge requests merged without a person, as a comment
 #   gitlab.sh open-mr-branch --repo R --iid N                     the branch of the open MR that closes #N (to stack a story on)
+#   gitlab.sh sprint-items  --repo R --milestone S20              the sprint's work items with their label history (the report)
+#   gitlab.sh sprint-done   --repo R --milestone S19              hours done in a sprint, or null
 #
 # Exit: 0 ok | 1 config/usage | 2 not logged in | 3 project not found or no access
 #       4 role below Developer | 5 tier cannot be detected (set tracker.tier)
@@ -51,26 +53,9 @@ PID="$(printf '%s' "$PROJECT" | sed 's#/#%2F#g')"
 
 api() { glab api --hostname "$HOST" "$@"; }
 
-# Labels Compasso owns. Free tier does not make scoped labels exclusive, so
-# state changes must remove the previous compasso:: label explicitly.
-LABELS='compasso::new|#6699cc|Feature waiting for the planner
-compasso::building|#1f75cb|Stories being built
-compasso::in-review|#3498db|Story merge request open; waiting for approval
-compasso::verifying|#e67e22|Feature integration, e2e and bug fixing
-compasso::done|#2da160|Delivered; test guide attached
-type::epic|#34495e|One per sprint
-type::feature|#16a085|At most half a sprint
-type::bug|#c0392b|Defect found by verification or review
-owner::agent|#5b6abf|An agent builds this story
-owner::human|#8e6c3a|A person builds this story
-owner::either|#7f8c8d|Whoever starts it first
-severity::blocker|#a93226|Stops the feature from shipping
-severity::major|#d35400|Wrong behaviour with a workaround
-severity::minor|#b7950b|Cosmetic or low impact
-type::blocker|#6c3483|Something outside the plan a story waits for
-priority::urgent|#e74c3c|Needs action now
-compasso::auto-merged|#8e44ad|Merged by the approver agent, without a person; listed in the daily digest
-blocked|#d9534f|Waiting on a blocker task'
+# Labels Compasso owns (name|colour|description), shared with the GitHub adapter. Free tier does
+# not make scoped labels exclusive, so state changes remove the previous compasso:: label explicitly.
+LABELS="$(cat "$BIN/tracker/labels.txt")"
 
 check() {
   local user proj level tier plan
@@ -512,6 +497,26 @@ open_mr_branch() { # the source branch of the open merge request that closes a s
 }
 
 
+sprint_items() { # a sprint's work items with their label history, for the report
+  local items with='[]' i ev
+  need MILESTONE
+  items="$(api --paginate "projects/$PID/issues?milestone=$MILESTONE&state=all&per_page=100" | jq -s 'add // []')" ||
+    { echo "gitlab: cannot read the work items of $MILESTONE" >&2; return 1; }
+  for i in $(jq -r '.[] | select(.issue_type == "task") | .iid' <<<"$items"); do
+    ev="$(api --paginate "projects/$PID/issues/$i/resource_label_events?per_page=100" | jq -s 'add // []')" || ev='[]'
+    with="$(jq -c --argjson i "$i" --argjson ev "$ev" '. + [{iid: $i, label_events: $ev}]' <<<"$with")"
+  done
+  jq -c --argjson with "$with" 'map(. as $it | . + {label_events: ([$with[] | select(.iid == $it.iid) | .label_events][0] // [])})' <<<"$items"
+}
+
+sprint_done() { # hours of work done in a sprint, or null when the sprint does not exist
+  need MILESTONE
+  api --paginate "projects/$PID/issues?milestone=$MILESTONE&state=closed&per_page=100" | jq -s '
+    add // [] | map(select(.issue_type == "task" and ((.labels | index("type::blocker")) | not)))
+    | if length == 0 then null else (map(.time_stats.time_estimate // 0) | add / 3600 * 10 | round / 10) end'
+}
+
+
 case "$CMD" in
   check) check ;;
   ensure-labels) ensure_labels ;;
@@ -527,5 +532,7 @@ case "$CMD" in
   merge-commit) merge_commit ;;
   digest) digest ;;
   open-mr-branch) open_mr_branch ;;
-  *) echo "usage: gitlab.sh check|ensure-labels|push-plan|story|set-state|open-mr|followup|merge|mr-info|comment|sprint-sync|merge-commit|digest|open-mr-branch --repo R ..." >&2; exit 1 ;;
+  sprint-items) sprint_items ;;
+  sprint-done) sprint_done ;;
+  *) echo "usage: gitlab.sh check|ensure-labels|push-plan|story|set-state|open-mr|followup|merge|mr-info|comment|sprint-sync|merge-commit|digest|open-mr-branch|sprint-items|sprint-done --repo R ..." >&2; exit 1 ;;
 esac

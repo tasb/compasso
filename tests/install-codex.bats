@@ -31,7 +31,7 @@ toml() { python3 -c 'import tomllib,sys,json; print(json.dumps(tomllib.load(open
   engine >/dev/null
   [ "$(cat "$SK"/*/SKILL.md | grep -c 'CLAUDE_PLUGIN_ROOT')" -eq 0 ]
   [ "$(cat "$SK"/*/SKILL.md | grep -c '/compasso:')" -eq 0 ]
-  grep -q "bash $H/engine/bin/tracker/gitlab.sh check" "$SK/compasso-story/SKILL.md"
+  grep -q "bash $H/engine/bin/tracker.sh check" "$SK/compasso-story/SKILL.md"
   grep -q '\$compasso-plan' "$SK/compasso-feature/SKILL.md"
   grep -q 'custom agent `compasso-<role>`' "$SK/compasso-story/SKILL.md"
 }

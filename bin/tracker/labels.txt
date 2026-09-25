@@ -1,0 +1,18 @@
+compasso::new|#6699cc|Feature waiting for the planner
+compasso::building|#1f75cb|Stories being built
+compasso::in-review|#3498db|Story merge request open; waiting for approval
+compasso::verifying|#e67e22|Feature integration, e2e and bug fixing
+compasso::done|#2da160|Delivered; test guide attached
+type::epic|#34495e|One per sprint
+type::feature|#16a085|At most half a sprint
+type::bug|#c0392b|Defect found by verification or review
+owner::agent|#5b6abf|An agent builds this story
+owner::human|#8e6c3a|A person builds this story
+owner::either|#7f8c8d|Whoever starts it first
+severity::blocker|#a93226|Stops the feature from shipping
+severity::major|#d35400|Wrong behaviour with a workaround
+severity::minor|#b7950b|Cosmetic or low impact
+type::blocker|#6c3483|Something outside the plan a story waits for
+priority::urgent|#e74c3c|Needs action now
+compasso::auto-merged|#8e44ad|Merged by the approver agent, without a person; listed in the daily digest
+blocked|#d9534f|Waiting on a blocker task

@@ -181,3 +181,19 @@ setup() { setup_repo; }
   run "$ROOT/bin/config.sh" validate --repo "$REPO"
   [ "$status" -eq 0 ]
 }
+
+@test "tracker: the provider is gitlab or github, and GitHub needs its Project fields and status options" {
+  cfg_set '.tracker.provider = "jira"'
+  run "$ROOT/bin/config.sh" validate --repo "$REPO"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"tracker.provider must be gitlab or github"* ]] || false
+  cfg_set '.tracker.provider = "github" | .tracker.github.project = "seven" | .tracker.github.fields.estimate = "" | del(.tracker.github.status.done)'
+  run "$ROOT/bin/config.sh" validate --repo "$REPO"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"tracker.github.project must be a Project number"* ]] || false
+  [[ "$output" == *"tracker.github.fields.estimate is required"* ]] || false
+  [[ "$output" == *"tracker.github.status.done is required"* ]] || false
+  cfg_set '.tracker.github.project = 7 | .tracker.github.fields.estimate = "Estimate (h)" | .tracker.github.status.done = "Done"'
+  run "$ROOT/bin/config.sh" validate --repo "$REPO"
+  [ "$status" -eq 0 ]
+}

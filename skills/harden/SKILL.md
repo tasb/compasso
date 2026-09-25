@@ -7,9 +7,9 @@ Harden one delivered feature, or every feature of an epic. It runs only when a p
 
 **Which checks.** `--set code` (the default): mutation, property, flaky, smells. `--set live`: fuzz, zap, perf, a11y. `--set all`: both. `--checks` picks individual ones. A check that cannot run (for example no OpenAPI schema, or a feature with no UI for accessibility) writes `{"check", "title", "ran": false, "reason"}` instead of being skipped silently.
 
-1. **Tracker gate.** `bash ${CLAUDE_PLUGIN_ROOT}/bin/tracker/gitlab.sh check --repo .` Stop on a non-zero exit. `git fetch` and work in a clean worktree of the default branch.
+1. **Tracker gate.** `bash ${CLAUDE_PLUGIN_ROOT}/bin/tracker.sh check --repo .` Stop on a non-zero exit. `git fetch` and work in a clean worktree of the default branch.
 
-2. **Scope.** The feature's stories are its child tasks (`gitlab.sh sprint-sync --parent <feature>`). For each closed one, `gitlab.sh merge-commit --iid <story>`; skip stories that were not merged. Then `bash ${CLAUDE_PLUGIN_ROOT}/bin/mutate.sh scope --repo . --commits "<the merge commits>" --out RUN/scope.patch`. Stop if it has no changed lines. The feature's acceptance comes from `gitlab.sh story --iid <feature>`.
+2. **Scope.** The feature's stories are its child tasks (`tracker.sh sprint-sync --parent <feature>`). For each closed one, `tracker.sh merge-commit --iid <story>`; skip stories that were not merged. Then `bash ${CLAUDE_PLUGIN_ROOT}/bin/mutate.sh scope --repo . --commits "<the merge commits>" --out RUN/scope.patch`. Stop if it has no changed lines. The feature's acceptance comes from `tracker.sh story --iid <feature>`.
 
 ## Code set (no infrastructure)
 
@@ -28,8 +28,8 @@ Harden one delivered feature, or every feature of an epic. It runs only when a p
 
 ## Record
 
-8. **Gaps become stories for a later sprint.** For each gap, or group of gaps about one behaviour, write a story in the Story format (what to strengthen or fix, acceptance a test can check, Verify, `Tests: unit` or `unit, e2e`, owner agent, 1–4h) and file it: `gitlab.sh followup --parent <feature> --title "<title>" --body-file <story> --labels owner::agent --milestone none` (bugs from broken rules or failing live checks: `--labels type::bug,severity::<level>,owner::agent`). Put each story's iid on its gap as `story`.
+8. **Gaps become stories for a later sprint.** For each gap, or group of gaps about one behaviour, write a story in the Story format (what to strengthen or fix, acceptance a test can check, Verify, `Tests: unit` or `unit, e2e`, owner agent, 1–4h) and file it: `tracker.sh followup --parent <feature> --title "<title>" --body-file <story> --labels owner::agent --milestone none` (bugs from broken rules or failing live checks: `--labels type::bug,severity::<level>,owner::agent`). Put each story's iid on its gap as `story`.
 
-9. **Report.** `bash ${CLAUDE_PLUGIN_ROOT}/bin/harden-report.sh --results RUN/results --set <set> --feature <feature> > RUN/report.md`, then `gitlab.sh comment --iid <feature> --body-file RUN/report.md`.
+9. **Report.** `bash ${CLAUDE_PLUGIN_ROOT}/bin/harden-report.sh --results RUN/results --set <set> --feature <feature> > RUN/report.md`, then `tracker.sh comment --iid <feature> --body-file RUN/report.md`.
 
 10. **Hand back:** per check what ran, what it found, and the new stories. The next `/compasso:plan` offers them.

@@ -1,11 +1,11 @@
 ---
 name: plan
-description: Compasso plan - turn a sprint goal into an epic, features and one-day user stories with dependencies, check them, get approval and push them to GitLab. Use when the user invokes /compasso:plan or $compasso-plan.
+description: Compasso plan - turn a sprint goal into an epic, features and one-day user stories with dependencies, check them, get approval and push them to the tracker (GitLab or GitHub). Use when the user invokes /compasso:plan or $compasso-plan.
 ---
 
 Plan one sprint top-down. You act as the planner: read `roles/planner.md` in the Compasso plugin root (`${CLAUDE_PLUGIN_ROOT}` on Claude Code) and follow it. Scripts are in `${CLAUDE_PLUGIN_ROOT}/bin`.
 
-1. **Tracker gate.** `bash ${CLAUDE_PLUGIN_ROOT}/bin/tracker/gitlab.sh check --repo .` On a non-zero exit, show its message and stop; exit 3 on the config means `/compasso:setup` has not run.
+1. **Tracker gate.** `bash ${CLAUDE_PLUGIN_ROOT}/bin/tracker.sh check --repo .` On a non-zero exit, show its message and stop; exit 3 on the config means `/compasso:setup` has not run.
 
 2. **Plan file.** If `.compasso/plan.yaml` exists, this re-plans that sprint: read it and change only what the user asks; never touch `gitlab` fields. Otherwise copy `${CLAUDE_PLUGIN_ROOT}/templates/plan.yaml` there.
 
@@ -16,7 +16,7 @@ Plan one sprint top-down. You act as the planner: read `roles/planner.md` in the
 
 5. **Stories.** Read the lessons for planning (`bash ${CLAUDE_PLUGIN_ROOT}/bin/learnings.sh recall --repo . --role planner`) and the code, then split each feature into stories that follow `roles/planner.md`. For every story set `title`, `as`/`want`/`so_that`, `acceptance`, `verify`, `tests`, `touches`, `depends_on`, `owner` and `estimate_h`. Ask the user who owns stories you cannot assign (`agent`, `human` or `either`). Add a `coverage` override only when the user asks for one.
 
-   **Blockers.** For anything outside the plan a story waits for (credentials, another team, a decision), add a blocker: a title, the GitLab username of the project member who will resolve it (ask; it is required), and the steps to resolve it, one clear action each. List it in the story's `blocked_by`.
+   **Blockers.** For anything outside the plan a story waits for (credentials, another team, a decision), add a blocker: a title, the tracker username of the project member who will resolve it (ask; it is required), and the steps to resolve it, one clear action each. List it in the story's `blocked_by`.
 
 6. **Check.** `bash ${CLAUDE_PLUGIN_ROOT}/bin/plan-check.sh --repo .` Fix every error and re-run until it passes. Mention its notes (stories above the target) and the overlapping paths.
 
@@ -28,6 +28,6 @@ Plan one sprint top-down. You act as the planner: read `roles/planner.md` in the
 
 10. **Approval.** With `approvals.plan: human`, ask the user to approve the plan as shown and wait for an explicit yes. With `auto`, continue only when security reported no findings; otherwise ask the user.
 
-11. **Push.** `bash ${CLAUDE_PLUGIN_ROOT}/bin/tracker/gitlab.sh push-plan --repo .` It creates or updates the milestone, the features, the stories as child tasks and the epic, and writes their ids into `plan.yaml`. If it fails, show the message; re-running resumes where it stopped.
+11. **Push.** `bash ${CLAUDE_PLUGIN_ROOT}/bin/tracker.sh push-plan --repo .` It creates or updates the milestone, the features, the stories as child tasks and the epic, and writes their ids into `plan.yaml`. If it fails, show the message; re-running resumes where it stopped.
 
 12. Hand back: the epic and feature links, a reminder to commit `.compasso/plan.yaml`, and the next command (`/compasso:story <iid>` or `/compasso:sprint <epic>`).

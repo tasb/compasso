@@ -26,29 +26,18 @@ done
 PLAN="$REPO/.compasso/plan.yaml"
 [ -f "$PLAN" ] || { echo "metrics: no $PLAN - run /compasso:plan" >&2; exit 1; }
 cfg() { "$BIN/config.sh" get --repo "$REPO" "$1"; }
-HOST="$(cfg .tracker.host)"; PID="$(cfg .tracker.project | sed 's#/#%2F#g')"
-api() { glab api --hostname "$HOST" "$@"; }
 
 n="$(yq -r .epic.sprint.number "$PLAN")"; ms="S$n"
-"$BIN/tracker/gitlab.sh" check --repo "$REPO" >/dev/null || exit 1
-sync="$("$BIN/tracker/gitlab.sh" sprint-sync --repo "$REPO" --milestone "$ms")" || exit 1
+"$BIN/tracker.sh" check --repo "$REPO" >/dev/null || exit 1
+sync="$("$BIN/tracker.sh" sprint-sync --repo "$REPO" --milestone "$ms")" || exit 1
 
-items="$(api --paginate "projects/$PID/issues?milestone=$ms&state=all&per_page=100" | jq -s 'add // []')" ||
-  { echo "metrics: cannot read the work items of $ms" >&2; exit 1; }
-with='[]'
-for i in $(jq -r '.[] | select(.issue_type == "task") | .iid' <<<"$items"); do
-  ev="$(api --paginate "projects/$PID/issues/$i/resource_label_events?per_page=100" | jq -s 'add // []')" || ev='[]'
-  with="$(jq -c --argjson i "$i" --argjson ev "$ev" '. + [{iid: $i, label_events: $ev}]' <<<"$with")"
-done
-items="$(jq -c --argjson with "$with" 'map(. as $it | . + {label_events: ([$with[] | select(.iid == $it.iid) | .label_events][0] // [])})' <<<"$items")"
+items="$("$BIN/tracker.sh" sprint-items --repo "$REPO" --milestone "$ms")" || { echo "metrics: cannot read the work items of $ms" >&2; exit 1; }
 
 history='[]'
 for k in 4 3 2 1; do
   p=$((n - k)); [ "$p" -ge 1 ] || continue
-  done_h="$(api --paginate "projects/$PID/issues?milestone=S$p&state=closed&per_page=100" | jq -s '
-    add // [] | map(select(.issue_type == "task" and ((.labels | index("type::blocker")) | not)))
-    | if length == 0 then null else (map(.time_stats.time_estimate // 0) | add / 3600) end')" || done_h=null
-  [ "$done_h" = null ] || history="$(jq -c --arg s "S$p" --argjson h "$done_h" '. + [{sprint: $s, done_h: ($h * 10 | round / 10)}]' <<<"$history")"
+  done_h="$("$BIN/tracker.sh" sprint-done --repo "$REPO" --milestone "S$p")" || done_h=null
+  [ "${done_h:-null}" = null ] || history="$(jq -c --arg s "S$p" --argjson h "$done_h" '. + [{sprint: $s, done_h: $h}]' <<<"$history")"
 done
 
 iids="$(jq -c '[.[].iid]' <<<"$items")"

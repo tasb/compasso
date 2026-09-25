@@ -6,7 +6,7 @@ A *compasso* is a musical measure: one bar of a fixed length. Here, one sprint.
 
 ## 1. Principles
 
-1. **The tracker is the source of truth; the merge request is the audit trail.** Work items, states, links and conversation live in GitLab. Proof that gates ran lives in MR pipelines and approvals. Locally, Compasso keeps one plan file and run logs.
+1. **The tracker is the source of truth; the merge request is the audit trail.** Work items, states, links and conversation live in the tracker (GitLab or GitHub, section 19). Proof that gates ran lives in MR pipelines and approvals. Locally, Compasso keeps one plan file and run logs.
 2. **The 4 rules still bind every agent:** Think Before Coding, Simplicity First, Surgical Changes, Goal-Driven Execution.
 3. **Security review is mandatory and never traded for speed.** No setting disables it, and no auto-approval passes an open security finding.
 4. **Humans approve by default.** Plan approval and merge approval are human unless the project config says otherwise.
@@ -493,3 +493,27 @@ A review of the first live runs showed where time and quality went: story #8 too
 - **Quality up front.** A story on a sensitive path needs security's abuse cases in its acceptance before plan-check passes (`security_reviewed: true`); the tester checks every story is testable before a plan is approved; review runs a quick mutation check on a story's sensitive lines (`mutate.sh scope --base --sensitive`).
 
 Still open from the same review: planning around people's review time, preview environments per merge request, nightly hardening, feature flags, and one shared glob-overlap function (the same jq mistake happened twice).
+
+## 19. GitHub as tracker (2026-09-25)
+
+`tracker.provider: github` sends every tracker call to `bin/tracker/github.sh` instead of `bin/tracker/gitlab.sh`. Both have the same commands and options (`bin/tracker.sh` picks one), and the GitHub adapter returns issues in the GitLab shape (`iid`, `opened`/`closed`, `issue_type`, `time_stats.time_estimate`, label events), so plan, sprint, story, review and report logic is shared. The plan file's `gitlab:` fields hold the item's number on either tracker. The labels live in one list, `bin/tracker/labels.txt`.
+
+Decided with the user; nothing assumed:
+
+| Concept | GitHub |
+|---|---|
+| Sprint | A milestone `S<n>` (due on the sprint's last day) and an iteration `S<n>` in the GitHub Project, kept in step |
+| Epic, feature | Issues labelled `type::epic`, `type::feature`; features are sub-issues of the epic |
+| Story, bug | Sub-issues of their feature; blockers are `type::blocker` issues outside the hierarchy (sprint logic counts a feature's sub-issues as its stories) |
+| Dependencies | GitHub's own "blocked by", for `depends_on` and `blocked_by` both; no `**Depends on:**` line |
+| Estimate | The Project's number field (`tracker.github.fields.estimate`), in hours |
+| State | A `compasso::` label and the Project's Status (`tracker.github.status` maps each state to an option; `verifying` has none by default) |
+| Merge request | A pull request; its comments are issue comments |
+| Approval | Merging is the approval: the ruleset requires a pull request and the gate checks, not an approving review (GitHub forbids approving your own pull request) |
+| Agent merge | `gh pr merge --auto --merge` after the review gate, with the `compasso::auto-merged` label for the digest |
+| Scans | GitHub's CodeQL and secret scanning where available (public, or private with Advanced Security); otherwise `compasso-scan-gate` in the workflow runs Gitleaks on the pull request's commits and Semgrep, and fails on any secret or high finding |
+
+- **Workflow.** `ci.sh` on a GitHub project runs `ci-github.sh`, which writes `.github/workflows/compasso.yml` with the same jobs as the GitLab pipeline. Coverage below the threshold adds a warning annotation and passes.
+- **Protection.** `github.sh protect` (setup asks first) writes the `compasso` ruleset on the default branch: pull requests only, no force push or deletion, the workflow's gate jobs required, and a CodeQL rule blocking high or critical alerts only once CodeQL default setup is on (otherwise pull requests would wait forever for results). It also allows auto-merge and deletes merged branches, so a stacked pull request is retargeted when its base merges.
+- **Iterations.** GitHub replaces an iteration field's whole configuration on update, so `push-plan` sends every existing iteration back with the new sprint's.
+- **Issue templates** go to `.github/ISSUE_TEMPLATE/` with each type's labels in the frontmatter.
