@@ -23,7 +23,7 @@ Plan and build one feature. The conversation happens here; the tracker gets the 
 
 7. **Testability.** Dispatch the **tester** with the feature's stories: can a test fail before each is built, and is every acceptance line observable? Fix what it flags (usually by merging enabling work into the story that uses it) and repeat step 5.
 
-8. **Approval.** Show the plan: `bash ${CLAUDE_PLUGIN_ROOT}/bin/comment.sh plan --repo . --feature <key> --approver <user> --security-file RUN/security.md` (the Approved line is only a preview). With `approvals.plan: human`, wait for an explicit yes. With `auto`, continue only when security found nothing; otherwise ask.
+8. **Approval.** Show the plan: `bash ${CLAUDE_PLUGIN_ROOT}/bin/comment.sh plan --repo . --feature <key> --approver <user> --security-file RUN/security.md` (the Approved line is only a preview). With `approvals.plan: human`, wait for an explicit yes. With `auto`, continue only when security found nothing; otherwise ask. Then show the Verify commands not yet approved (`trust.sh check --repo . --plan`), ask whether they may run when the stories are built (always asked, in any mode), and after an explicit yes run `trust.sh approve --repo . --plan`.
 
 9. **Record on the tracker.**
    - `tracker.sh push-plan --repo .` creates or updates the feature, its stories and blockers.

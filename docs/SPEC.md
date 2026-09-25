@@ -344,6 +344,7 @@ A **gate** stops the flow; a **check** reports and never stops it.
 | Tracker connected | every command | gate |
 | `plan-check` (sizes, dependencies, capacity) | before any push | gate |
 | Story has Acceptance + Verify | story flow start | gate |
+| Verify commands approved by a person (`trust.sh`) | plan approval, story start, `verify.sh` | gate: tracker text never runs unapproved |
 | Test immutability (hashes) | after each builder turn | gate |
 | `verify.sh`: tests, lint, typecheck, build, the story's Verify commands, e2e | before review, before the MR, and in the MR pipeline | gate |
 | Security review | every plan, every MR, sprint end | gate, never skippable |
@@ -534,3 +535,12 @@ Each record has the same five sections, in order, and an empty one says "None", 
 
 - **Written by a script.** The agent writes `RUN/record.json`; `bin/record.sh write` checks that all five lists are there and renders the file, so headings never drift. `record.sh story` builds a story's record from its findings (with their outcome: fixed, open, follow-up #n) plus the run's own `record.json`.
 - **How records reach the default branch.** A story's record is committed in its merge request by `ship.sh`. A plan or feature plan goes through its own merge request: `bin/plan-pr.sh` commits `.compasso/plan.yaml` and the sprint's records onto `plan/S<n>` (or `plan/S<n>-<F-key>`) in a temporary worktree, pushes it, and opens or updates the merge request; the current branch is left alone. On GitHub this is required anyway: the ruleset only takes changes through pull requests.
+
+## 21. Approving Verify commands (2026-09-25)
+
+A story's Verify commands are tracker text that `verify.sh` executes, so editing a story could run code on the machine that builds it. A person now approves each exact command, once per checkout, before it runs; Harmonia's consent record for its coverage command is the model.
+
+- `bin/trust.sh check|approve --story F | --plan` and `list`. Records: `${COMPASSO_HOME:-$HOME/.compasso}/trust/<sha256 of the checkout's physical path>`, one `<sha256 of command>  <command>` line each. A home inside the repository is refused.
+- `verify.sh` stops with exit 4 before running anything while a story's Verify command is not approved, so a skill that skips the question still cannot run it.
+- Asked at plan and feature approval for the whole plan (always, even with `approvals.plan: auto`), again at story start or once per sprint batch for anything unapproved (a command edited on the tracker, a story planned elsewhere). Never approved on the person's behalf, except the reproducing test a tester wrote for a bug in the same run.
+- `.compasso/project.yaml` commands are not covered: they change through merge requests, which the security role flags and a person merges.

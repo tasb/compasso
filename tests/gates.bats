@@ -13,9 +13,10 @@ setup() {
   echo "test a" > tests/test_a.py
   git add . && git commit -qm base
 }
-story() { # tests verify-command...
+story() { # tests verify-command... (approved, as a person would after reading them)
   local tests="$1"; shift
   jq -n --argjson t "$tests" '{story: {tests: $t, verify: $ARGS.positional}}' --args "$@" > "$BATS_TEST_TMPDIR/story.json"
+  "$ROOT/bin/trust.sh" approve --repo "$REPO" --story "$BATS_TEST_TMPDIR/story.json" >/dev/null
 }
 findings() { echo "$1" > "$BATS_TEST_TMPDIR/f.json"; "$ROOT/bin/review-gate.sh" --findings "$BATS_TEST_TMPDIR/f.json" "${@:2}"; }
 
@@ -241,4 +242,24 @@ cov() { "$ROOT/bin/coverage.sh" --repo . --base main --run "$RUN" "$@"; }
   run cov
   [ "$status" -eq 0 ]
   [[ "$output" == *"no changed lines"* ]] || false
+}
+
+@test "verify: an unapproved Verify command stops the gate before anything runs" {
+  cfg_set '.commands.test = "touch ran-test"'
+  jq -n '{story: {tests: ["unit"], verify: ["touch ran-verify"]}}' > "$BATS_TEST_TMPDIR/story.json"
+  run "$ROOT/bin/verify.sh" --repo . --run "$RUN" --story "$BATS_TEST_TMPDIR/story.json"
+  [ "$status" -eq 4 ]
+  [[ "$output" == *"not approved to run on this machine"* ]] || false
+  [[ "$output" == *"touch ran-verify"* ]] || false
+  [ ! -e ran-test ] && [ ! -e ran-verify ]
+}
+
+@test "verify: an approved command edited on the tracker needs approving again" {
+  cfg_set '.commands.test = "true"'
+  story '["unit"]' "true"
+  "$ROOT/bin/verify.sh" --repo . --run "$RUN" --story "$BATS_TEST_TMPDIR/story.json" >/dev/null
+  jq '.story.verify = ["true; touch pwned"]' "$BATS_TEST_TMPDIR/story.json" > "$BATS_TEST_TMPDIR/s2.json"
+  run "$ROOT/bin/verify.sh" --repo . --run "$RUN" --story "$BATS_TEST_TMPDIR/s2.json"
+  [ "$status" -eq 4 ]
+  [ ! -e pwned ]
 }

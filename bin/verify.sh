@@ -6,7 +6,10 @@
 #
 # F is the JSON from `gitlab.sh story`. Each command runs with bash from the
 # repo root; its output goes to DIR/verify-<n>.log and a summary to DIR/verify.json.
+# The story's Verify commands come from the tracker, so each must first be approved for
+# this checkout by a person (bin/trust.sh); an unapproved one stops verify before anything runs.
 # Exit: 0 all passed | 1 a command failed, or the story needs e2e and there is no e2e command | 2 usage
+#       4 a Verify command is not approved (listed)
 set -u
 
 BIN="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -29,6 +32,15 @@ plan="$(for k in test lint typecheck build; do c="$(cfg ".commands.$k")"; [ -n "
 e2e_needed=0
 if [ -n "$STORY" ]; then
   [ -f "$STORY" ] || { echo "verify: no story file $STORY" >&2; exit 2; }
+  unapproved="$("$BIN/trust.sh" check --repo "$REPO" --story "$STORY")"; rc=$?
+  case "$rc" in
+    0) ;;
+    3) echo "verify: STOP - the story's Verify commands below are not approved to run on this machine."
+       printf '%s\n' "$unapproved" | sed 's/^/      /'
+       echo "      Read them; if they are safe, a person approves them: bin/trust.sh approve --repo $REPO --story $STORY"
+       exit 4 ;;
+    *) exit 2 ;;
+  esac
   plan="$plan"$'\n'"$(jq -r '.story.verify[] | "story\t\(.)"' "$STORY")"
   jq -e '.story.tests | index("e2e")' "$STORY" >/dev/null && e2e_needed=1
 fi

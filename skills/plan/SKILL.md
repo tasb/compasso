@@ -27,6 +27,7 @@ Plan one sprint top-down. You act as the planner: read `roles/planner.md` in the
 9. **Testability.** Dispatch the **tester** with `.compasso/plan.yaml`: for each story, can a test fail before it is built, and does every acceptance line describe something observable? It lists the stories that fail this (enabling work with nothing of its own, "works as before", vague outcomes). Fix them (usually by merging a story into the one that uses it) and re-run step 6.
 
 10. **Approval.** With `approvals.plan: human`, ask the user to approve the plan as shown and wait for an explicit yes. With `auto`, continue only when security reported no findings; otherwise ask the user.
+    **Verify commands.** `bash ${CLAUDE_PLUGIN_ROOT}/bin/trust.sh check --repo . --plan` lists the stories' Verify commands not yet approved on this machine. Show them and ask whether they may run when the stories are built; this question is always asked, even with `approvals.plan: auto`. After an explicit yes, `bash ${CLAUDE_PLUGIN_ROOT}/bin/trust.sh approve --repo . --plan`. Without it the plan is still pushed, and each story asks again when it is built.
 
 11. **Push.** `bash ${CLAUDE_PLUGIN_ROOT}/bin/tracker.sh push-plan --repo .` It creates or updates the milestone, the features, the stories as child tasks and the epic, and writes their ids into `plan.yaml`. If it fails, show the message; re-running resumes where it stopped.
 

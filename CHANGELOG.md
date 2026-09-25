@@ -16,6 +16,7 @@ First version.
 ### Building
 
 - `/compasso:story` builds a story test-first: the tester's failing tests, then the builder, who may never change them (test immutability by hashes).
+- A story's Verify commands come from the tracker, so each exact command runs only after a person approved it for this checkout (`bin/trust.sh`); `verify.sh` refuses unapproved ones.
 - The verify gate runs the repo's commands, the story's Verify commands and e2e before review, before the merge request and in CI.
 - Review and the mandatory security review run with an automatic fix loop of at most 3 rounds. Only security can close a security finding. Open minor findings become backlog stories.
 - `/compasso:sprint` builds everything that can run now, in dependency order and in parallel where paths do not overlap. A story can stack on the open merge request of the story it depends on.

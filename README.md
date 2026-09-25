@@ -84,6 +84,7 @@ A gate stops the flow. A check reports and never stops it.
 - **Tracker.** Every command first checks the login, access and project.
 - **Plan check.** Story and feature sizes, dependencies, cycles and capacity are checked before anything is pushed. Stories that touch sensitive paths need a security review at planning.
 - **Story contract.** A story needs Acceptance and Verify before it is built. A story that cannot be tested goes back to the planner.
+- **Verify commands approved.** A story's Verify commands are tracker text, so they run only after a person approved each exact command on this machine. Plans ask once for all their stories; a command edited later asks again.
 - **Test immutability.** Test files are hashed after the tester writes them, and the builder may never change them.
 - **Verify.** Tests, lint, typecheck, build, the story's own Verify commands and e2e run before review, before the merge request and in CI.
 - **Security review.** Runs on every plan, every merge request and at sprint end, and is never skipped. Only security can close a security finding, and no approval mode merges with one open.
@@ -147,6 +148,7 @@ bin/plan-check.sh --repo .                             # sizes, dependencies, ca
 bin/ci.sh --repo .                                     # the merge request pipeline or pull request workflow
 bin/issue-templates.sh --repo .                        # the work-item formats as issue templates
 bin/verify.sh --repo . --run DIR --story F             # the verify gate
+bin/trust.sh check|approve --repo . --story F|--plan   # approve the Verify commands a story runs
 bin/coverage.sh --repo . --base origin/main --run DIR  # changed-line coverage (warning)
 bin/test-hashes.sh record|verify --repo . --run DIR    # test immutability
 bin/review-gate.sh --findings F [--for merge]          # do review findings still block?

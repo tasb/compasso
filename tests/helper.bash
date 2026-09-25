@@ -1,6 +1,7 @@
 ROOT="$(cd "$(dirname "$BATS_TEST_FILENAME")/.." && pwd)"
 
 setup_repo() {
+  export COMPASSO_HOME="$BATS_TEST_TMPDIR/compasso-home"   # approvals never touch the real home
   REPO="$BATS_TEST_TMPDIR/repo"
   mkdir -p "$REPO"
   "$ROOT/bin/config.sh" init --repo "$REPO" --project acme/app >/dev/null
