@@ -1,7 +1,7 @@
 {
   "name": "compasso",
   "version": "0.1.0",
-  "description": "Sprint-sized SDLC for Claude Code and Codex: plans epics, features and one-day stories in GitLab, builds them test-first, and reviews every merge request with a mandatory security review.",
+  "description": "Sprint-sized SDLC for Claude Code and Codex: plans epics, features and one-day stories in GitLab or GitHub, builds them test-first, and reviews every merge request with a mandatory security review.",
   "author": {
     "name": "Tiago Bernardo"
   }
