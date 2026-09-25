@@ -373,3 +373,10 @@ workflow() { cfg_set '.ci.image = "node:22" | .commands.test = "npm test"'"${1:-
   [[ "$output" == *"run protect again later"* ]] || false
   [ "$(jq -c '[.rules[].type] | index("code_scanning")' "$FAKE_GH/ruleset.json")" = null ]
 }
+
+@test "check: a failing login call is not logged in, even though gh prints the error body" {
+  export FAKE_GH_FAIL='GET user'
+  run gh_ check
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"not logged in"* ]] || false
+}

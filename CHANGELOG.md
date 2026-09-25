@@ -21,6 +21,7 @@ First version.
 - Review and the mandatory security review run with an automatic fix loop of at most 3 rounds. Only security can close a security finding. Open minor findings become backlog stories.
 - `/compasso:sprint` builds everything that can run now, in dependency order and in parallel where paths do not overlap. A story can stack on the open merge request of the story it depends on.
 - `/compasso:review` reviews any merge request.
+- `/compasso:status` is a read-only readout of the sprint or one story: what can be built, what waits and on whom, and where an interrupted run stopped.
 
 ### Approvals
 

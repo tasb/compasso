@@ -127,3 +127,11 @@ field() { sync | jq -c "$1"; }
   echo "$items" > "$FAKE_GL/issue-query.json"
   [ "$(field '[.waiting[] | select(.iid == 17) | .on]')" = '[[14]]' ]
 }
+
+@test "--read-only reports the same sprint and changes nothing on the tracker" {
+  run "$ROOT/bin/tracker/gitlab.sh" sprint-sync --repo "$REPO" --milestone S20 --read-only
+  [ "$status" -eq 0 ]
+  [ "$(jq -c '[.runnable[].iid]' <<<"$output")" = "[11,14]" ]
+  [ "$(jq -c .cleaned <<<"$output")" = "[]" ]
+  [ "$(grep -c '^PUT' "$FAKE_GL/calls.log" || true)" -eq 0 ]
+}

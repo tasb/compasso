@@ -23,7 +23,7 @@ set -u
 
 BIN="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CMD="${1:-}"; shift || true
-REPO="." IID="" STATE="" BRANCH="" BODY="" TITLE="" PARENT="" MR="" LABELS_ARG="owner::either" MILESTONE="" RISK="" TARGET="" SINCE=""
+REPO="." IID="" STATE="" BRANCH="" BODY="" TITLE="" PARENT="" MR="" LABELS_ARG="owner::either" MILESTONE="" RISK="" TARGET="" SINCE="" READ_ONLY=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --repo) REPO="$2"; shift 2 ;;
@@ -39,6 +39,7 @@ while [ $# -gt 0 ]; do
     --risk) RISK="$2"; shift 2 ;;
     --target) TARGET="$2"; shift 2 ;;
     --since) SINCE="$2"; shift 2 ;;
+    --read-only) READ_ONLY=1; shift ;;
     *) echo "github: unknown argument '$1'" >&2; exit 1 ;;
   esac
 done
@@ -102,7 +103,7 @@ iteration_id() { jq -r --arg n "$2" --arg t "$3" '.fields.nodes[] | select(.name
 # ---------- check ----------
 check() {
   local user repo push proj code
-  user="$(api user --jq .login 2>/dev/null)"
+  user="$(api user --jq .login 2>/dev/null)" || user=""   # on an HTTP error gh prints the error body
   [ -n "$user" ] || { echo "github: not logged in to $HOST - run: gh auth login --hostname $HOST --web" >&2; return 2; }
   repo="$(api "repos/$R" 2>/dev/null)"
   [ -n "$(jq -r '.id // empty' <<<"$repo" 2>/dev/null)" ] || { echo "github: repository $R not found on $HOST, or $user has no access to it" >&2; return 3; }
@@ -494,6 +495,7 @@ sprint_sync() {
   done
   for i in $(jq -r '.[] | select(.state == "closed" and .issue_type == "task")
       | select(.labels | index("compasso::building") or index("compasso::in-review")) | .iid' <<<"$enriched"); do
+    [ "$READ_ONLY" -eq 1 ] && continue   # status: report, never change the tracker
     label_remove "$i" compasso::building; label_remove "$i" compasso::in-review
     cleaned="$(jq -c --argjson i "$i" '. + [$i]' <<<"$cleaned")"
   done

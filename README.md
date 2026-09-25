@@ -49,6 +49,7 @@ Run `/compasso:setup` once in the product repository. It connects the tracker, a
 | `/compasso:story <iid>` | The story flow: failing tests first, the smallest change that passes, the verify gate, review and security review with an automatic fix loop, then the merge request |
 | `/compasso:sprint [feature]` | Builds everything that can be built now, in dependency order and in parallel where paths do not overlap. Verifies each finished feature with e2e. At sprint end, writes the test guide |
 | `/compasso:review <mr>` | Review and the mandatory security review on any merge request (a pull request on GitHub), findings posted, fixes on request |
+| `/compasso:status [iid]` | A read-only readout. For the sprint: what can be built now, what waits and on whom, features, the plan on the default branch and local runs. For a story: its state, what it waits on, how far its run got and the step to resume from. Changes nothing |
 | `/compasso:report` | The sprint's HTML report: delivery, flow and waiting, quality, agent effort and cost |
 | `/compasso:harden <iid>` | Optional, after the MVP: mutation, property-based, flaky and test-smell checks; with `--set live`, API fuzzing, a ZAP scan, performance and accessibility checks. Gaps become stories for a later sprint |
 
@@ -145,6 +146,7 @@ bin/tracker.sh check|ensure-labels|push-plan|story|set-state|open-mr|followup|me
                |sprint-sync|sprint-items|sprint-done|merge-commit|open-mr-branch|digest --repo .
 bin/tracker.sh protect --repo .                        # GitHub: the ruleset, CodeQL and auto-merge
 bin/plan-check.sh --repo .                             # sizes, dependencies, capacity
+bin/status.sh --repo . [--iid N] [--json]              # where the sprint or a story stands (read-only)
 bin/ci.sh --repo .                                     # the merge request pipeline or pull request workflow
 bin/issue-templates.sh --repo .                        # the work-item formats as issue templates
 bin/verify.sh --repo . --run DIR --story F             # the verify gate

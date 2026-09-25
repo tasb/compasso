@@ -24,7 +24,7 @@ set -u
 
 BIN="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CMD="${1:-}"; shift || true
-REPO="." IID="" STATE="" BRANCH="" BODY="" TITLE="" PARENT="" MR="" LABELS_ARG="owner::either" MILESTONE="" RISK="" TARGET="" SINCE=""
+REPO="." IID="" STATE="" BRANCH="" BODY="" TITLE="" PARENT="" MR="" LABELS_ARG="owner::either" MILESTONE="" RISK="" TARGET="" SINCE="" READ_ONLY=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --repo) REPO="$2"; shift 2 ;;
@@ -40,6 +40,7 @@ while [ $# -gt 0 ]; do
     --risk) RISK="$2"; shift 2 ;;
     --target) TARGET="$2"; shift 2 ;;
     --since) SINCE="$2"; shift 2 ;;
+    --read-only) READ_ONLY=1; shift ;;
     *) echo "gitlab: unknown argument '$1'" >&2; exit 1 ;;
   esac
 done
@@ -458,6 +459,7 @@ sprint_sync() {
   # closed stories and bugs keep no in-progress state label
   for i in $(jq -r '.[] | select(.state == "closed" and .issue_type == "task")
       | select(.labels | index("compasso::building") or index("compasso::in-review")) | .iid' <<<"$enriched"); do
+    [ "$READ_ONLY" -eq 1 ] && continue   # status: report, never change the tracker
     api -X PUT "projects/$PID/issues/$i" -f remove_labels="compasso::building,compasso::in-review" >/dev/null ||
       { echo "gitlab: could not clear the state of #$i" >&2; return 1; }
     cleaned="$(jq -c --argjson i "$i" '. + [$i]' <<<"$cleaned")"

@@ -544,3 +544,13 @@ A story's Verify commands are tracker text that `verify.sh` executes, so editing
 - `verify.sh` stops with exit 4 before running anything while a story's Verify command is not approved, so a skill that skips the question still cannot run it.
 - Asked at plan and feature approval for the whole plan (always, even with `approvals.plan: auto`), again at story start or once per sprint batch for anything unapproved (a command edited on the tracker, a story planned elsewhere). Never approved on the person's behalf, except the reproducing test a tester wrote for a bug in the same run.
 - `.compasso/project.yaml` commands are not covered: they change through merge requests, which the security role flags and a person merges.
+
+## 22. Status (2026-09-25)
+
+`/compasso:status [iid]` answers "where are we?" without starting anything. It adapts Harmonia's `/harmonia:status`, which derives a task's stage from the files in its workspace. `/harmonia:remember` and `/harmonia:recall` were reviewed at the same time and not adopted for now.
+
+- **Read-only.** It changes no tracker state or label, writes no file, approves nothing and does not fetch. `sprint-sync --read-only` reports the sprint without clearing stale labels from closed stories.
+- **Sprint:** sprint-sync's view (build now, building, in review, waiting, blocked with the blocker's assignee, for a person, features and whether they are ready to verify). It adds whether `.compasso/plan.yaml` is on the default branch, as of the last fetch, how many Verify commands are not approved on this machine, and every local story run with its stage.
+- **Story:** tracker state, owner, estimate, open dependencies, Verify commands not approved here, and the run's stage with the step to resume from.
+- **Run stage** is read from the files the story flow leaves in `.compasso/runs/<iid>/`, in step order: `story.json` (2), `test-hashes` (4), `verify.json` (5, with failures counted from `events.jsonl`), `coverage.json` (6), `findings.json` and review rounds (7, decided by `review-gate.sh`), committed metrics and `changes.md` (8), `mr.md` (9). The tracker's `in-review` state means the merge request is open.
+- When the tracker cannot be read, the local part is still shown and it exits 1. Built as `bin/status.sh` (`--json` for scripts).
