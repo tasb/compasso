@@ -25,6 +25,8 @@ ship() { "$ROOT/bin/ship.sh" --repo "$REPO" --run "$RUN"; }
   [ "$(grep -c 'milestone_id' "$FAKE_GL/calls.log")" -eq 0 ]
   [ "$(jq -c '[.[] | select(.severity == "minor" and .by == "reviewer") | [.status, (.followup_iid | type)]]' "$RUN/findings.json")" = '[["followup","number"]]' ]
   [ "$(jq -r '.[1].status' "$RUN/findings.json")" = fixed ]
+  [ "$(grep -c 'POST projects/acme%2Fapp/issues ' "$FAKE_GL/calls.log")" -eq 1 ]
+  [ "$(jq -c '.[2] | [.status, .followup_iid]' "$RUN/findings.json")" = '["fixed",null]' ]
 }
 
 @test "the follow-up is a story in the Story format" {
