@@ -35,7 +35,7 @@ The first command installs the engine in `~/.compasso/engine` and the skills in 
 
 ### Requirements
 
-`bash` (3.2 or later), `git`, `jq`, `yq` (mikefarah v4), and the tracker's CLI, logged in: `glab` for GitLab, `gh` for GitHub (with the `project` scope when you use a GitHub Project). Hardening's live checks need Docker.
+`bash` (3.2 or later), `git`, `jq`, `yq` (mikefarah v4), and the tracker's CLI, logged in: `glab` for GitLab, `gh` for GitHub (with the `project` scope when you use a GitHub Project). Hardening's live checks need Docker and `xmllint`.
 
 ## Using it
 

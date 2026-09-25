@@ -13,7 +13,7 @@ setup() {
   M="$BATS_TEST_TMPDIR/mutants"; mkdir -p "$M"
 }
 mutant() { # id sed-expr file [behaviour]
-  sed -i '' "$2" "$3"; p="$(git diff -- "$3")"; git checkout -q -- "$3"
+  sed "$2" "$3" > "$3.mutant" && mv "$3.mutant" "$3"; p="$(git diff -- "$3")"; git checkout -q -- "$3"
   jq -n --arg id "$1" --arg f "$3" --arg p "$p" --arg b "${4:-Adults are 18 or older}" \
     '{id: $id, file: $f, behaviour: $b, description: "d", patch: $p}' > "$M/$1.json"
 }
@@ -291,4 +291,16 @@ EOF2
   run "$ROOT/bin/mutate.sh" scope --repo "$REPO" --base "$base" --sensitive --out "$BATS_TEST_TMPDIR/s.patch"
   [[ "$output" == *"nothing sensitive to check"* ]] || false
   [ ! -s "$BATS_TEST_TMPDIR/s.patch" ]
+}
+
+@test "live parse fuzz: without xmllint the check did not run, never 0 operations" {
+  mkdir -p "$BATS_TEST_TMPDIR/live" "$BATS_TEST_TMPDIR/noxml"
+  echo '<testsuites><testsuite><testcase name="GET /x"/></testsuite></testsuites>' > "$BATS_TEST_TMPDIR/live/junit.xml"
+  # every command on PATH except xmllint
+  IFS=: read -r -a dirs <<<"$PATH"
+  for d in "${dirs[@]}"; do for f in "$d"/*; do n="${f##*/}"
+    [ "$n" = xmllint ] || [ -e "$BATS_TEST_TMPDIR/noxml/$n" ] || ln -s "$f" "$BATS_TEST_TMPDIR/noxml/$n" 2>/dev/null || true
+  done; done
+  PATH="$BATS_TEST_TMPDIR/noxml" run live parse fuzz
+  [ "$(lresult fuzz '[.ran, .reason]')" = '[false,"xmllint is not installed, so the Schemathesis report cannot be read"]' ]
 }

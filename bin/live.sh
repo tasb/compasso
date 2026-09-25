@@ -50,6 +50,7 @@ parse() {
                 | {summary: "\(.name) (\(risk), \((.instances // []) | length) places)"}]}' "$OUT/zap.json" > "$RESULT" ;;
     fuzz)
       [ -f "$OUT/junit.xml" ] || not_run "Schemathesis wrote no report"
+      command -v xmllint >/dev/null || not_run "xmllint is not installed, so the Schemathesis report cannot be read"
       cases="$(xmllint --xpath 'count(//testcase)' "$OUT/junit.xml" 2>/dev/null || echo 0)"
       failed="$(xmllint --xpath '//testcase[failure or error]/@name' "$OUT/junit.xml" 2>/dev/null | sed -E 's/ name="([^"]*)"/\1\n/g' | sed '/^$/d')"
       jq -n --argjson cases "${cases%.*}" --arg failed "$failed" '

@@ -23,17 +23,18 @@ jobs:
 
       # bats from apt, not npm: `npm install -g` fails with EACCES on the runner's /usr/local man tree.
       # diff-cover with pipx: the runner's Python is PEP 668 managed, so pip install fails.
+      # xmllint (libxml2-utils) reads hardening's fuzz report.
       # yq must be mikefarah's v4; the runner image ships it, and apt's `yq` is a different tool.
       - name: Install the toolchain
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends bats
+          sudo apt-get install -y --no-install-recommends bats libxml2-utils
           pipx install diff-cover
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
       - name: Record the toolchain
         run: |
-          for t in bash bats jq yq git perl shasum node diff-cover; do
+          for t in bash bats jq yq git perl shasum node diff-cover xmllint; do
             printf '%-11s %s\n' "$t" "$(command -v "$t" || echo MISSING)"
           done
           bash --version | head -1
@@ -61,7 +62,7 @@ jobs:
 
       - name: Record the toolchain
         run: |
-          for t in bash bats jq yq git perl shasum node diff-cover; do
+          for t in bash bats jq yq git perl shasum node diff-cover xmllint; do
             printf '%-11s %s\n' "$t" "$(command -v "$t" || echo MISSING)"
           done
           bash --version | head -1
