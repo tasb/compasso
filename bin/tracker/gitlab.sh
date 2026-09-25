@@ -354,10 +354,14 @@ set_state() {
 
 open_mr() {
   local title target mr out
-  need IID BRANCH BODY
+  need BRANCH BODY
   [ -f "$BODY" ] || { echo "gitlab: no body file $BODY" >&2; return 1; }
-  title="$(api "projects/$PID/issues/$IID" | jq -r '.title // empty')"
-  [ -n "$title" ] || { echo "gitlab: no work item #$IID" >&2; return 1; }
+  [ -n "$IID$TITLE" ] || { echo "gitlab: open-mr needs --iid (the story's title) or --title" >&2; return 1; }
+  title="$TITLE"
+  if [ -z "$title" ]; then
+    title="$(api "projects/$PID/issues/$IID" | jq -r '.title // empty')"
+    [ -n "$title" ] || { echo "gitlab: no work item #$IID" >&2; return 1; }
+  fi
   target="${TARGET:-$(api "projects/$PID" | jq -r .default_branch)}"   # --target: stack on another story's branch
   mr="$(api "projects/$PID/merge_requests?source_branch=$BRANCH&state=opened" | jq -r '.[0].iid // empty')"
   if [ -n "$mr" ]; then

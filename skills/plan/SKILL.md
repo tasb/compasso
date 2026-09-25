@@ -30,4 +30,8 @@ Plan one sprint top-down. You act as the planner: read `roles/planner.md` in the
 
 11. **Push.** `bash ${CLAUDE_PLUGIN_ROOT}/bin/tracker.sh push-plan --repo .` It creates or updates the milestone, the features, the stories as child tasks and the epic, and writes their ids into `plan.yaml`. If it fails, show the message; re-running resumes where it stopped.
 
-12. Hand back: the epic and feature links, a reminder to commit `.compasso/plan.yaml`, and the next command (`/compasso:story <iid>` or `/compasso:sprint <epic>`).
+12. **Record.** `RUN` is `.compasso/runs/plan-S<n>`. write `RUN/record.json` for `bin/record.sh` (its header describes the fields; every list is required, empty when there is nothing): **findings** - security's and the tester's findings on the plan and what changed for each, plan-check's notes (overlapping paths, stories above the target); **decisions** - every answer with who gave it and when, owners chosen, the approval, and assumptions (`"assumed": true`); **takeaways** - what planning taught about the product or the code; **constraints** - capacity used of available, sensitive paths, outside dependencies, dates; **missing** - questions still open and blockers (`"status": "open"` or `"blocker"`). Then `bash ${CLAUDE_PLUGIN_ROOT}/bin/record.sh write --data RUN/record.json --out "$(bash ${CLAUDE_PLUGIN_ROOT}/bin/record.sh path --repo . --kind plan --key plan)"`.
+
+13. **Plan merge request.** `bash ${CLAUDE_PLUGIN_ROOT}/bin/plan-pr.sh --repo . --title "Plan S<n>: <goal>"` commits `.compasso/plan.yaml` and the sprint's records on `plan/S<n>` and opens (or, on a re-plan, updates) its merge request. It leaves the current branch alone.
+
+14. Hand back: the epic and feature links, the plan merge request to merge, and the next command (`/compasso:story <iid>` or `/compasso:sprint <epic>`).

@@ -30,6 +30,7 @@ Plan and build one feature. The conversation happens here; the tracker gets the 
    - For each question round: `comment.sh qa --file RUN/qa-<round>.json > RUN/qa-<round>.md` and `tracker.sh comment --repo . --iid <feature iid> --body-file RUN/qa-<round>.md`.
    - `comment.sh plan ... > RUN/plan.md` and post it the same way.
    - `tracker.sh set-state --repo . --iid <feature iid> --state building`.
-   - Remind the user to commit `.compasso/plan.yaml`.
+   - **Record.** write `RUN/record.json` for `bin/record.sh` (its header describes the fields; every list is required, empty when there is nothing): **findings** - security's and the tester's findings on the plan and what changed for each, plan-check's notes (overlapping paths, stories above the target); **decisions** - every answer from `RUN/qa-*.json` with who gave it and when, owners chosen, the approval, and assumptions (`"assumed": true`); **takeaways** - what planning taught about the product or the code; **constraints** - capacity used of available, sensitive paths, outside dependencies, dates; **missing** - questions still open and blockers (`"status": "open"` or `"blocker"`). Then `bash ${CLAUDE_PLUGIN_ROOT}/bin/record.sh write --data RUN/record.json --out "$(bash ${CLAUDE_PLUGIN_ROOT}/bin/record.sh path --repo . --kind feature --key <key>)"`.
+   - `bash ${CLAUDE_PLUGIN_ROOT}/bin/plan-pr.sh --repo . --title "Plan <key>: <feature title>" --branch plan/S<n>-<key>` sends `plan.yaml` and the record to the default branch through a merge request.
 
 10. **Build.** Run the sprint flow for this feature: `${CLAUDE_PLUGIN_ROOT}/skills/sprint/SKILL.md` with the feature's iid, which builds its stories in dependency order and verifies the feature when they are all merged.

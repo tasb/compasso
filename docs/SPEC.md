@@ -6,7 +6,7 @@ A *compasso* is a musical measure: one bar of a fixed length. Here, one sprint.
 
 ## 1. Principles
 
-1. **The tracker is the source of truth; the merge request is the audit trail.** Work items, states, links and conversation live in the tracker (GitLab or GitHub, section 19). Proof that gates ran lives in MR pipelines and approvals. Locally, Compasso keeps one plan file and run logs.
+1. **The tracker is the source of truth; the merge request is the audit trail.** Work items, states, links and conversation live in the tracker (GitLab or GitHub, section 19). Proof that gates ran lives in MR pipelines and approvals. In the repository, Compasso keeps the plan file and a decision record for every plan, feature and story (section 20), so what was found and decided is versioned with the code; run logs stay local.
 2. **The 4 rules still bind every agent:** Think Before Coding, Simplicity First, Surgical Changes, Goal-Driven Execution.
 3. **Security review is mandatory and never traded for speed.** No setting disables it, and no auto-approval passes an open security finding.
 4. **Humans approve by default.** Plan approval and merge approval are human unless the project config says otherwise.
@@ -517,3 +517,20 @@ Decided with the user; nothing assumed:
 - **Protection.** `github.sh protect` (setup asks first) writes the `compasso` ruleset on the default branch: pull requests only, no force push or deletion, the workflow's gate jobs required, and a CodeQL rule blocking high or critical alerts only once CodeQL default setup is on (otherwise pull requests would wait forever for results). It also allows auto-merge and deletes merged branches, so a stacked pull request is retargeted when its base merges.
 - **Iterations.** GitHub replaces an iteration field's whole configuration on update, so `push-plan` sends every existing iteration back with the new sprint's.
 - **Issue templates** go to `.github/ISSUE_TEMPLATE/` with each type's labels in the frontmatter.
+
+## 20. Decision records (2026-09-25)
+
+The tracker holds the work; the repository holds why. Every plan, feature and story run writes one Markdown record under `.compasso/records/S<n>/` (`plan.md`, `<F-key>.md`, `stories/<iid>.md`; stories without a sprint go to `backlog/`). Harmonia's equivalent is its task workspace (`scope.md`, `design.md`, `falsification.md` with each finding's disposition); Compasso keeps one file per run and commits it.
+
+Each record has the same five sections, in order, and an empty one says "None", so a reader knows it was considered:
+
+| Section | Holds |
+|---|---|
+| Findings | security's and the tester's findings, plan-check notes, review findings, each with what happened to it |
+| Decisions | answers with who gave them and when, the approval, owners; assumptions marked `Assumed:` |
+| Takeaways | what the run taught about the product or the code |
+| Constraints | capacity, sensitive paths, outside dependencies, dates, technical limits |
+| Missing points | open questions and blockers, with their status |
+
+- **Written by a script.** The agent writes `RUN/record.json`; `bin/record.sh write` checks that all five lists are there and renders the file, so headings never drift. `record.sh story` builds a story's record from its findings (with their outcome: fixed, open, follow-up #n) plus the run's own `record.json`.
+- **How records reach the default branch.** A story's record is committed in its merge request by `ship.sh`. A plan or feature plan goes through its own merge request: `bin/plan-pr.sh` commits `.compasso/plan.yaml` and the sprint's records onto `plan/S<n>` (or `plan/S<n>-<F-key>`) in a temporary worktree, pushes it, and opens or updates the merge request; the current branch is left alone. On GitHub this is required anyway: the ruleset only takes changes through pull requests.

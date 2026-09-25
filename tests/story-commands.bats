@@ -198,3 +198,13 @@ findings() { echo "$1" > "$BATS_TEST_TMPDIR/findings.json"; }
   gl open-mr --iid 8 --branch story/9-next --body-file "$BATS_TEST_TMPDIR/body.md" --target story/8-list >/dev/null
   grep -q "source_branch=story/9-next target_branch=story/8-list" "$FAKE_GL/calls.log"
 }
+
+@test "open-mr --title opens a merge request that is not a story's" {
+  echo "The plan" > "$BATS_TEST_TMPDIR/body.md"
+  run gl open-mr --branch plan/S20 --title "Plan S20: invoices" --body-file "$BATS_TEST_TMPDIR/body.md"
+  [ "$status" -eq 0 ]
+  grep -q "source_branch=plan/S20 target_branch=main title=Plan S20: invoices" "$FAKE_GL/calls.log"
+  run gl open-mr --branch plan/S20 --body-file "$BATS_TEST_TMPDIR/body.md"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"needs --iid"* ]] || false
+}

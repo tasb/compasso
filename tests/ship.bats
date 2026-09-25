@@ -37,13 +37,13 @@ ship() { "$ROOT/bin/ship.sh" --repo "$REPO" --run "$RUN"; }
   grep -qx -- '- `npm test`' "$FAKE_GL/desc/$f"
 }
 
-@test "the story's metrics and lessons are committed, and nothing else" {
+@test "the story's metrics, record and lessons are committed, and nothing else" {
   mkdir -p docs/learnings && printf -- '---\ntitle: t\npaths: []\nroles: [builder]\ndate: 2026-09-25\n---\nLesson.\n' > docs/learnings/l.md
   echo stray > stray.txt
   run ship
   [ "$status" -eq 0 ]
-  [ "$(git log -1 --format=%s)" = "Record the metrics and lessons of #8" ]
-  [ "$(git show --name-only --format= HEAD | sort | tr '\n' ' ')" = ".compasso/metrics/8.json docs/learnings/l.md " ]
+  [ "$(git log -1 --format=%s)" = "Record the metrics, decisions and lessons of #8" ]
+  [ "$(git show --name-only --format= HEAD | sort | tr '\n' ' ')" = ".compasso/metrics/8.json .compasso/records/backlog/stories/8.md docs/learnings/l.md " ]
   [ "$(git status --porcelain stray.txt)" = "?? stray.txt" ]
 }
 

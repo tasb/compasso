@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 # Finish a story run without an agent: file the open minor findings as backlog
-# stories, write the story's metrics, and commit the metrics and any lessons.
+# stories, write the story's metrics and decision record, and commit them with any lessons.
 #
 #   ship.sh --repo R --run DIR
 #
 # DIR/story.json names the story and its feature; DIR/findings.json gets each
 # filed minor marked {status: "followup", followup_iid}. The builder has already
-# committed the code (DIR/commit-msg.txt) and written DIR/changes.md.
+# committed the code (DIR/commit-msg.txt) and written DIR/changes.md; DIR/record.json
+# (optional) holds the run's decisions, takeaways, constraints and missing points.
 # Exit: 0 | 1 a tracker or git step failed | 2 usage or missing input
 set -u
 
@@ -45,9 +46,10 @@ for id in $(jq -r 'to_entries[] | select(.value.by == "reviewer" and .value.seve
 done
 
 "$BIN/story-metrics.sh" write --run "$RUN" --repo "$REPO" >/dev/null || exit 1
-git -C "$REPO" add ".compasso/metrics/$iid.json" || exit 1
+"$BIN/record.sh" story --repo "$REPO" --run "$RUN" >/dev/null || exit 1
+git -C "$REPO" add ".compasso/metrics/$iid.json" .compasso/records || exit 1
 [ -d "$REPO/docs/learnings" ] && git -C "$REPO" add docs/learnings
-if ! git -C "$REPO" diff --cached --quiet; then
-  git -C "$REPO" commit -q -m "Record the metrics and lessons of #$iid" || { echo "ship: could not commit the metrics" >&2; exit 1; }
+if ! git -C "$REPO" diff --cached --quiet >/dev/null; then
+  git -C "$REPO" commit -q -m "Record the metrics, decisions and lessons of #$iid" || { echo "ship: could not commit the metrics" >&2; exit 1; }
 fi
 echo "ship: #$iid ready for its merge request"

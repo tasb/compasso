@@ -108,6 +108,10 @@ Eight roles, each defined once in `roles/`, each with its own model per harness 
 
 `security` and `approver` have a floor: no fast-tier model and no low effort.
 
+## Decision records
+
+The tracker holds the work; the repository holds why. Every plan, feature and story writes a record under `.compasso/records/S<n>/` with five fixed sections: findings, decisions, takeaways, constraints and missing points. An empty section says "None". Records are rendered by `bin/record.sh` from the run's data, and reach the default branch through a merge request: a story's record rides in the story's own, a plan's in a plan merge request.
+
 ## Memory
 
 Lessons live in the product repo's `docs/learnings/`, one file each, tagged with the paths and roles they apply to. When a story runs, each role gets only the lessons that match the story's paths and that role, so the prompts stay small.
@@ -123,7 +127,8 @@ Lessons live in the product repo's `docs/learnings/`, one file each, tagged with
 | Path | Committed | What |
 |---|---|---|
 | `.compasso/project.yaml` | yes | The configuration |
-| `.compasso/plan.yaml` | yes | The sprint plan: the source for everything pushed to the tracker |
+| `.compasso/plan.yaml` | yes | The sprint plan: the source for everything pushed to the tracker. It reaches the default branch through a plan merge request |
+| `.compasso/records/S<n>/` | yes | A decision record per plan, feature and story: findings, decisions, takeaways, constraints and missing points |
 | `.compasso/metrics/` | yes | One metrics file per story |
 | `.compasso/runs/` | no | Run logs, findings and intermediate files |
 | `docs/learnings/` | yes | Targeted lessons |
@@ -146,7 +151,9 @@ bin/coverage.sh --repo . --base origin/main --run DIR  # changed-line coverage (
 bin/test-hashes.sh record|verify --repo . --run DIR    # test immutability
 bin/review-gate.sh --findings F [--for merge]          # do review findings still block?
 bin/risk.sh --repo . --run DIR --base REF              # low or high risk
-bin/ship.sh --repo . --run DIR                         # finish a story: follow-ups, metrics, commit
+bin/ship.sh --repo . --run DIR                         # finish a story: follow-ups, metrics, record, commit
+bin/record.sh path|write|story ...                     # decision records
+bin/plan-pr.sh --repo . --title T                      # the plan and its records, as a merge request
 bin/learnings.sh recall --role R --story F             # the lessons one role needs for one story
 bin/metrics.sh collect --repo . --out F                # the sprint report's data
 bin/report.sh --data F --out O                         # the sprint report page

@@ -393,9 +393,12 @@ set_state() {
 # ---------- pull requests ----------
 open_mr() {
   local title target pr out
-  need IID BRANCH BODY
+  need BRANCH BODY
   [ -f "$BODY" ] || { echo "github: no body file $BODY" >&2; return 1; }
-  title="$(issue "$IID" | jq -r '.title // empty')"; [ -n "$title" ] || { echo "github: no work item #$IID" >&2; return 1; }
+  [ -n "$IID$TITLE" ] || { echo "github: open-mr needs --iid (the story's title) or --title" >&2; return 1; }
+  title="$TITLE"
+  [ -n "$title" ] || title="$(issue "$IID" | jq -r '.title // empty')"
+  [ -n "$title" ] || { echo "github: no work item #$IID" >&2; return 1; }
   target="${TARGET:-$(api "repos/$R" --jq .default_branch)}"
   pr="$(api "repos/$R/pulls?head=$OWNER:$BRANCH&state=open" --jq '.[0].number // empty')"
   if [ -n "$pr" ]; then out="$(api -X PATCH "repos/$R/pulls/$pr" -F body=@"$BODY" -f base="$target")"
