@@ -169,3 +169,7 @@ bats tests/
 ```
 
 The tests run offline against fake `glab` and `gh` (`tests/fake/`). New behaviour is proven by breaking it on purpose and watching a test fail.
+
+## License
+
+MIT. See [LICENSE](LICENSE). Security reports: [SECURITY.md](SECURITY.md). Contributing: [CONTRIBUTING.md](CONTRIBUTING.md).
