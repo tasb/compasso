@@ -135,6 +135,8 @@ Eight roles, each defined once in `roles/`, each with its own model per harness 
 
 `security` and `approver` have a floor: no fast-tier model and no low effort.
 
+Each role is a registered subagent (`compasso:<role>`), generated from `roles/` by `bin/gen-agents.sh`, with only the tools it needs: security and the approver can only read, and no role can start another agent. Every run is bounded: each agent has a turn limit, and `bin/budget.sh` caps how many times each role runs in one story or plan (`limits.agent_runs`). When the budget runs out, the flow stops and hands back to a person.
+
 ## Decision records
 
 The tracker holds the work; the repository holds why. Every plan, feature and story writes a record under `.compasso/records/S<n>/` with five fixed sections: findings, decisions, takeaways, constraints and missing points. An empty section says "None". Records are rendered by `bin/record.sh` from the run's data, and reach the default branch through a merge request: a story's record rides in the story's own, a plan's in a plan merge request.
@@ -194,6 +196,8 @@ bin/metrics.sh collect --repo . --out F                # the sprint report's dat
 bin/report.sh --data F --out O                         # the sprint report page
 bin/test-guide.sh --data F --out O                     # the test guide
 bin/mutate.sh, flaky.sh, live.sh, harden-report.sh     # hardening
+bin/gen-agents.sh [--check]                            # the Claude Code subagents, from roles/
+bin/budget.sh claim|show|reset --run DIR               # the agent-run budget of one flow run
 bin/install-codex.sh [--repo R]                        # install for Codex
 ```
 

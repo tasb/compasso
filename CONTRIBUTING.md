@@ -25,6 +25,7 @@ Scripts must run on macOS's bash 3.2. In bats, write `[[ ... ]] || false`: bash 
 - **An abstraction needs a current consumer.** Prefer deleting to configuring.
 - **Scripts decide, agents judge.** Anything a machine can check belongs in `bin/` with a test, not in a skill's prose. Skills and roles say what to run and what to decide.
 - **Both trackers, both harnesses.** A tracker command exists in `bin/tracker/gitlab.sh` and `bin/tracker/github.sh` with the same options and output shape. A skill works on Claude Code and Codex (`bin/install-codex.sh` rewrites it; `tests/install-codex.bats` checks it).
+- **Roles are edited in `roles/`, never in `agents/`.** Run `bin/gen-agents.sh` after changing a role; the tests fail while `agents/` is out of date. No role gets the Agent tool.
 - **Security review stays mandatory.** No change may add a path that skips it, or lets an agent merge with an open security finding.
 - **Update the docs with the behaviour.** `docs/SPEC.md` records design decisions with their date; `README.md` says how to use what shipped.
 

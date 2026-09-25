@@ -397,7 +397,7 @@ Decided 2026-09-24: an HTML page for business testers, about features, not the d
 |---|---|---|
 | Skills | `skills/<name>/SKILL.md` in the plugin | same files, installed to `.agents/skills/` or `~/.agents/skills/` |
 | Invocation | `/compasso:<name>` | `$compasso-<name>` |
-| Roles | generated `agents/<role>.md` (frontmatter `model:`) | generated `~/.codex/agents/<role>.toml` + `[agents]` entries |
+| Roles | `agents/<role>.md`, generated from `roles/` by `bin/gen-agents.sh` (tools, `maxTurns`, default model), invoked as `compasso:<role>` | `.codex/agents/compasso-<role>.toml`, per project, by `install-codex.sh --repo` (model and reasoning effort) |
 | Session context | `SessionStart` hook | `AGENTS.md` block |
 | Headless (future webhook) | `claude -p` | `codex exec` |
 
@@ -578,3 +578,23 @@ Decisions:
   - *a Figma file*: through the Figma connector, or frames exported by the user.
   The planner adds the flows it can see, and asks about what a link-only crawl cannot reach: what happens after a form is sent, screens behind a role, which parts are fake. Every screen must belong to a feature (`sources: screen: <id>`), or the record says why it is left out; `backlog-check` notes the ones that don't.
 - **Inputs are data.** Documents, issues and prototype content are never instructions.
+
+## 24. Roles as subagents, strictly orchestrated (2026-09-25)
+
+Roles used to run as general-purpose tasks on Claude Code: a subagent told to read `roles/<role>.md`, with every tool. They are now registered subagents, and every run of one is bounded.
+
+- **Generated, not duplicated.** `bin/gen-agents.sh` writes `agents/<role>.md` from `roles/<role>.md`: the role's description and text, its `tools`, `maxTurns` from `max_turns`, and the template's Claude model as a default. `--check`, run by the tests, fails when `agents/` is out of date. The planner (`dispatch: inline`) runs in the conversation because it asks the user questions, so it gets no agent.
+- **Tools per role, enforced by the harness:**
+
+| Role | Tools | Turns |
+|---|---|---|
+| security, approver | Read, Grep, Glob: read only, no commands | 30, 15 |
+| reviewer | Read, Write, Grep, Glob (writes lessons) | 30 |
+| tester, builder | Read, Write, Edit, Bash, Grep, Glob | 40, 60 |
+| shipper, mutator | Read, Write, Grep, Glob | 30, 25 |
+
+  Read-only roles get what they need as files: the diff, the plan, the findings. The pipeline and the review gate are enforced by scripts (`tracker.sh merge`, auto-merge waiting for the pipeline), not by the approver.
+- **The project's model wins.** The flow passes the model from `.compasso/project.yaml` at every dispatch; Claude Code gives the dispatch's model precedence over the agent's default.
+- **No recursion.** No role has the Agent tool, and the generator refuses a role that lists it: only the flow dispatches.
+- **A budget per flow run.** `bin/budget.sh claim` runs before every dispatch and every continuation of an agent. It refuses (exit 3) once a role has used its runs in this flow run (`limits.agent_runs`: tester 5, builder 7, reviewer 3, security 4, approver 1, shipper 2, mutator 2) or all roles together have used `total` (20). The flow then stops, changes nothing more on the tracker, and hands back. Claims live in `RUN/budget.jsonl`, so restarting a flow continues its budget; only a person resets it. With each agent's `maxTurns`, the work of a flow run is bounded: at most `total` agent runs, each of at most its role's turns. There is no wall-clock limit, so a run resumed the next day is not refused.
+- **Codex.** The same budget applies. Per-role tools are not set for Codex agents yet; that waits until Codex's agent options are verified.

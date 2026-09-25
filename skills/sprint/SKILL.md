@@ -5,6 +5,8 @@ description: Compasso sprint flow - build everything that can be built in the cu
 
 Move the sprint forward as far as it can go, then say exactly what waits and on whom. Re-running continues where it stopped. Scripts are in `${CLAUDE_PLUGIN_ROOT}/bin`, roles in `${CLAUDE_PLUGIN_ROOT}/roles`. `RUN` is `.compasso/runs/sprint-S<n>`.
 
+**Agents, strictly orchestrated.** Each role runs as the `compasso:<role>` subagent (on Codex, the `compasso-<role>` agent), given the model set for it in `.compasso/project.yaml` for this harness. Only this flow dispatches agents; none can start another. Before every dispatch, and before continuing an agent, claim it: `bash ${CLAUDE_PLUGIN_ROOT}/bin/budget.sh claim --repo . --run RUN --role <role>`. On exit 3 do not dispatch: stop where you are, change nothing more on the tracker, and hand back with its message. Never reset a budget yourself: `budget.sh reset` is a person's decision. An agent that stopped at its turn limit has not finished: treat its output as incomplete.
+
 1. **Tracker gate.** `bash ${CLAUDE_PLUGIN_ROOT}/bin/tracker.sh check --repo .` Stop on a non-zero exit. `git fetch` and update the default branch.
 
 2. **Where the sprint stands.** `tracker.sh sprint-sync --repo . > RUN/sync.json`. With a feature iid, add `--parent <iid>`: only that feature's stories and bugs count.
@@ -22,7 +24,7 @@ Move the sprint forward as far as it can go, then say exactly what waits and on 
 
 5. **Close the sprint** when `sprint_done` is true:
    - Regression: `verify.sh` on the default branch with the e2e command.
-   - Security pass over everything the sprint changed: the **security** role on `git diff <last commit of the default branch before the sprint's start date>..origin/<default branch>` (`git rev-list -1 --before=<start> origin/<default branch>`). Every finding becomes a Bug on the epic's feature it touches (or on the epic), severity as found.
+   - Security pass over everything the sprint changed: write `git diff <last commit of the default branch before the sprint's start date>..origin/<default branch>` (`git rev-list -1 --before=<start> origin/<default branch>`) to `RUN/sprint.patch` and dispatch **security** with it: security only reads files, it cannot run commands. Every finding becomes a Bug on the epic's feature it touches (or on the epic), severity as found.
    - The test guide, for business testers: the **shipper** writes `docs/releases/S<n>-test-guide.json` in the language of `test_guide.language`, for people who do not know the code:
      - one entry per feature a person can try on a screen, with what is new and why it matters in plain words, what to prepare (accounts, data, where: `test_guide.where`), and scenarios turned from the feature's acceptance into steps and an expected result a person can see. No work items, merge requests, commits, status codes or file names. Security fixes become plain scenarios ("try to open another customer's invoice: you are told you have no access").
      - features with nothing to try on a screen go in `verified_automatically`, by name only.

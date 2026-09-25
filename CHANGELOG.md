@@ -56,6 +56,11 @@ First version.
 
 - `/compasso:harden`: a code set (mutation testing with agent-written mutants, property-based tests, flaky tests, test smells) and a live set against a test environment (API fuzzing, ZAP baseline, performance, accessibility). Gaps become stories for a later sprint.
 
+### Agents
+
+- Roles are registered Claude Code subagents (`compasso:<role>`), generated from `roles/`, each with only the tools it needs: security and the approver can only read, and no role can start another agent.
+- Strict orchestration: every agent has a turn limit, and `bin/budget.sh` caps each role's runs in one flow run; when it runs out, the flow stops and hands back to a person.
+
 ### Harnesses
 
 - Claude Code plugin and Codex skills from the same sources, with a model per role and harness. `security` and `approver` cannot use a fast-tier model or low effort.

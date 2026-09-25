@@ -1,6 +1,7 @@
 ---
 role: planner
 description: Turns a sprint goal or a feature into an epic, features and one-day stories with dependencies.
+dispatch: inline   # runs in the conversation: it asks the user its questions
 ---
 
 # Planner

@@ -3,7 +3,9 @@ name: review
 description: Compasso review - run the review and the mandatory security review on any merge request (a pull request on GitHub), post the findings, and fix them on request. Use when the user invokes /compasso:review <mr> or $compasso-review <mr>.
 ---
 
-Review one merge request, whoever wrote it. Scripts are in `${CLAUDE_PLUGIN_ROOT}/bin`, roles in `${CLAUDE_PLUGIN_ROOT}/roles`. `RUN` is `.compasso/runs/mr-<mr>`. Each role runs as a subagent with the model set for it in `.compasso/project.yaml`.
+Review one merge request, whoever wrote it. Scripts are in `${CLAUDE_PLUGIN_ROOT}/bin`, roles in `${CLAUDE_PLUGIN_ROOT}/roles`. `RUN` is `.compasso/runs/mr-<mr>`.
+
+**Agents, strictly orchestrated.** Each role runs as the `compasso:<role>` subagent (on Codex, the `compasso-<role>` agent), given the model set for it in `.compasso/project.yaml` for this harness. Only this flow dispatches agents; none can start another. Before every dispatch, and before continuing an agent, claim it: `bash ${CLAUDE_PLUGIN_ROOT}/bin/budget.sh claim --repo . --run RUN --role <role>`. On exit 3 do not dispatch: stop where you are, change nothing more on the tracker, and hand back with its message. Never reset a budget yourself: `budget.sh reset` is a person's decision. An agent that stopped at its turn limit has not finished: treat its output as incomplete.
 
 1. **Tracker gate.** `bash ${CLAUDE_PLUGIN_ROOT}/bin/tracker.sh check --repo .` Stop on a non-zero exit.
 

@@ -5,6 +5,8 @@ description: Compasso feature flow - take a feature from a tracker issue or an i
 
 Plan and build one feature. The conversation happens here; the tracker gets the record. Scripts are in `${CLAUDE_PLUGIN_ROOT}/bin`, roles in `${CLAUDE_PLUGIN_ROOT}/roles`; you act as the planner (`roles/planner.md`). `RUN` is `.compasso/runs/feature-<key>`.
 
+**Agents, strictly orchestrated.** Each role runs as the `compasso:<role>` subagent (on Codex, the `compasso-<role>` agent), given the model set for it in `.compasso/project.yaml` for this harness. Only this flow dispatches agents; none can start another. Before every dispatch, and before continuing an agent, claim it: `bash ${CLAUDE_PLUGIN_ROOT}/bin/budget.sh claim --repo . --run RUN --role <role>`. On exit 3 do not dispatch: stop where you are, change nothing more on the tracker, and hand back with its message. Never reset a budget yourself: `budget.sh reset` is a person's decision. An agent that stopped at its turn limit has not finished: treat its output as incomplete.
+
 1. **Tracker gate.** `bash ${CLAUDE_PLUGIN_ROOT}/bin/tracker.sh check --repo .` Stop on a non-zero exit.
 
 2. **Sprint.** The feature joins the current sprint in `.compasso/plan.yaml`. Without one, stop and point to `/compasso:plan`.
@@ -19,7 +21,7 @@ Plan and build one feature. The conversation happens here; the tracker gets the 
 
 5. **Stories.** Split the feature into stories and blockers as `roles/planner.md` says, in `plan.yaml`. Then `bash ${CLAUDE_PLUGIN_ROOT}/bin/plan-check.sh --repo .` until it passes; it also checks the sprint's capacity with the feature added. If capacity is exceeded, say by how much and let the user choose what moves out.
 
-6. **Security review of the plan (mandatory).** Dispatch the security role (`roles/security.md`, model from the config) with `.compasso/plan.yaml` and the feature's key. Write its result to `RUN/security.md` ("no findings", or one bullet per finding). Fix blocker and major findings in the plan and repeat steps 5 and 6. For every story on a sensitive path (`risk.sensitive_paths`), security's abuse cases go into its acceptance and the story gets `security_reviewed: true`; plan-check refuses the plan until then.
+6. **Security review of the plan (mandatory).** Dispatch **security** with `.compasso/plan.yaml` and the feature's key. Write its result to `RUN/security.md` ("no findings", or one bullet per finding). Fix blocker and major findings in the plan and repeat steps 5 and 6. For every story on a sensitive path (`risk.sensitive_paths`), security's abuse cases go into its acceptance and the story gets `security_reviewed: true`; plan-check refuses the plan until then.
 
 7. **Testability.** Dispatch the **tester** with the feature's stories: can a test fail before each is built, and is every acceptance line observable? Fix what it flags (usually by merging enabling work into the story that uses it) and repeat step 5.
 

@@ -28,6 +28,15 @@ limits:
   story_max_hours: 8          # hard limit: one working day
   story_target_hours: 4       # what the planner aims for
   # A feature may take at most half a sprint; derived from sprint, not configured.
+  agent_runs:                 # strict orchestration: how many times each role may run, or be continued,
+    tester: 5                 # in one flow run (a story, a plan, a review...); bin/budget.sh refuses the next one
+    builder: 7
+    reviewer: 3
+    security: 4
+    approver: 1
+    shipper: 2
+    mutator: 2
+    total: 20                 # every role together
 
 commands:                     # the repo's own commands; empty means "not applicable"
   test: ""

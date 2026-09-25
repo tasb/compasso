@@ -78,6 +78,10 @@ validate() {
   else
     err "limits.story_target_hours must be a positive integer"
   fi
+  for k in tester builder reviewer security approver shipper mutator total; do
+    v="$(val ".limits.agent_runs.$k")"
+    is_int "$v" && [ "$v" -gt 0 ] || err "limits.agent_runs.$k must be a positive integer (run: config.sh upgrade)"
+  done
 
   [ "$(yq -r '.test_paths | length' "$CFG" 2>/dev/null)" -ge 1 ] 2>/dev/null || err "test_paths must list at least one pattern (run: config.sh upgrade)"
 
