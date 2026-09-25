@@ -8,11 +8,12 @@
 #   gitlab.sh set-state     --repo R --iid N --state S            S: building | in-review; drops the other compasso:: states
 #   gitlab.sh open-mr       --repo R --iid N --branch B --body-file F   create or update the story's MR -> JSON {iid, web_url}
 #   gitlab.sh followup      --repo R --parent N --title T --body-file F [--labels a,b]  a task under N (a minor finding, a bug) -> iid
-#   gitlab.sh merge         --repo R --mr N                       merge when the pipeline succeeds (approvals.merge: agent only)
+#   gitlab.sh merge         --repo R --mr N --body-file F [--risk R]  merge when the pipeline succeeds (approvals.merge agent, or risk with a low-risk R)
 #   gitlab.sh mr-info       --repo R --mr N                       branches, author and the issues it closes -> JSON
 #   gitlab.sh comment       --repo R --mr N|--iid N --body-file F  post F as a comment on a merge request or an issue
 #   gitlab.sh sprint-sync   --repo R [--milestone S20] [--parent F] what can be built now, what waits and on whom -> JSON
 #   gitlab.sh merge-commit  --repo R --iid N                      the commit the story's merge request put on the default branch
+#   gitlab.sh digest        --repo R --since YYYY-MM-DD           merge requests merged without a person, as a comment
 #
 # Exit: 0 ok | 1 config/usage | 2 not logged in | 3 project not found or no access
 #       4 role below Developer | 5 tier cannot be detected (set tracker.tier)
@@ -20,7 +21,7 @@ set -u
 
 BIN="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CMD="${1:-}"; shift || true
-REPO="." IID="" STATE="" BRANCH="" BODY="" TITLE="" PARENT="" MR="" LABELS_ARG="owner::either" MILESTONE=""
+REPO="." IID="" STATE="" BRANCH="" BODY="" TITLE="" PARENT="" MR="" LABELS_ARG="owner::either" MILESTONE="" RISK="" TARGET="" SINCE=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --repo) REPO="$2"; shift 2 ;;
@@ -33,6 +34,9 @@ while [ $# -gt 0 ]; do
     --mr) MR="$2"; shift 2 ;;
     --labels) LABELS_ARG="$2"; shift 2 ;;
     --milestone) MILESTONE="$2"; shift 2 ;;
+    --risk) RISK="$2"; shift 2 ;;
+    --target) TARGET="$2"; shift 2 ;;
+    --since) SINCE="$2"; shift 2 ;;
     *) echo "gitlab: unknown argument '$1'" >&2; exit 1 ;;
   esac
 done
@@ -64,6 +68,7 @@ severity::major|#d35400|Wrong behaviour with a workaround
 severity::minor|#b7950b|Cosmetic or low impact
 type::blocker|#6c3483|Something outside the plan a story waits for
 priority::urgent|#e74c3c|Needs action now
+compasso::auto-merged|#8e44ad|Merged by the approver agent, without a person; listed in the daily digest
 blocked|#d9534f|Waiting on a blocker task'
 
 check() {
@@ -394,10 +399,18 @@ followup() {
 }
 
 merge() {
+  local mode
   need MR
-  [ "$(cfg .approvals.merge)" = agent ] || { echo "gitlab: approvals.merge is human - a person merges this merge request" >&2; return 1; }
+  mode="$(cfg .approvals.merge)"
+  case "$mode" in agent|risk) ;; *) echo "gitlab: approvals.merge is human - a person merges this merge request" >&2; return 1 ;; esac
   [ -n "$BODY" ] && [ -f "$BODY" ] || { echo "gitlab: merge needs --body-file with the review findings" >&2; return 1; }
   "$BIN/review-gate.sh" --findings "$BODY" --for merge || return 1
+  if [ "$mode" = risk ]; then
+    [ -n "$RISK" ] && [ -f "$RISK" ] || { echo "gitlab: approvals.merge is risk - merge needs --risk with risk.sh's decision" >&2; return 1; }
+    [ "$(jq -r .level "$RISK")" = low ] || { echo "gitlab: the change is high risk - a person merges it" >&2; return 1; }
+  fi
+  api -X PUT "projects/$PID/merge_requests/$MR" -f add_labels=compasso::auto-merged >/dev/null ||
+    { echo "gitlab: could not label !$MR" >&2; return 1; }
   api -X PUT "projects/$PID/merge_requests/$MR/merge" -f merge_when_pipeline_succeeds=true >/dev/null ||
     { echo "gitlab: could not merge !$MR" >&2; return 1; }
   echo "gitlab: !$MR merges when its pipeline succeeds"
@@ -476,6 +489,18 @@ merge_commit() { # the commit a story's merge request put on the default branch
 }
 
 
+digest() { # merge requests merged without a person since a date, for the daily digest
+  local mrs
+  need SINCE
+  mrs="$(api --paginate "projects/$PID/merge_requests?state=merged&labels=compasso::auto-merged&updated_after=${SINCE}T00:00:00Z&per_page=100" | jq -s 'add // []')" ||
+    { echo "gitlab: cannot read the merged merge requests" >&2; return 1; }
+  jq -r --arg since "$SINCE" '
+    "**Merged without a person** · since \($since)", "",
+    (if length == 0 then "- Nothing" else (sort_by(.merged_at)[] | "- !\(.iid) \(.title) · merged \(.merged_at[0:16] | sub("T"; " "))") end),
+    "", "Each one passed review, the mandatory security review and CI, and was low risk. To undo one, revert its merge request."' <<<"$mrs"
+}
+
+
 case "$CMD" in
   check) check ;;
   ensure-labels) ensure_labels ;;
@@ -489,5 +514,6 @@ case "$CMD" in
   comment) comment ;;
   sprint-sync) sprint_sync ;;
   merge-commit) merge_commit ;;
-  *) echo "usage: gitlab.sh check|ensure-labels|push-plan|story|set-state|open-mr|followup|merge|mr-info|comment|sprint-sync|merge-commit --repo R ..." >&2; exit 1 ;;
+  digest) digest ;;
+  *) echo "usage: gitlab.sh check|ensure-labels|push-plan|story|set-state|open-mr|followup|merge|mr-info|comment|sprint-sync|merge-commit|digest --repo R ..." >&2; exit 1 ;;
 esac

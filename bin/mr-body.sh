@@ -20,10 +20,12 @@ for f in "$STORY" "$RUN/changes.md" "$RUN/findings.json"; do
   [ -f "$f" ] || { echo "mr-body: missing $f" >&2; exit 2; }
 done
 cov="$RUN/coverage.json"; [ -f "$cov" ] || cov=/dev/null
+risk="$RUN/risk.json"; [ -f "$risk" ] || risk=/dev/null
 
 jq -rn --slurpfile s "$STORY" --slurpfile f "$RUN/findings.json" --rawfile changes "$RUN/changes.md" \
-  --slurpfile c <(cat "$cov"; [ "$cov" = /dev/null ] && echo '{"status":"not-measured"}') '
-  $s[0] as $s | $f[0] as $f | $c[0] as $c
+  --slurpfile c <(cat "$cov"; [ "$cov" = /dev/null ] && echo '{"status":"not-measured"}') \
+  --slurpfile k <(cat "$risk"; [ "$risk" = /dev/null ] && echo null) '
+  $s[0] as $s | $f[0] as $f | $c[0] as $c | $k[0] as $k
   | ($f | map(select(.by == "reviewer"))) as $r
   | ($f | map(select(.by == "security"))) as $sec
   | "Closes #\($s.iid)",
@@ -49,5 +51,8 @@ jq -rn --slurpfile s "$STORY" --slurpfile f "$RUN/findings.json" --rawfile chang
     "- Coverage: " + (if $c.status == "ok" then "\($c.percent)% of changed lines (min \($c.min)%)"
         elif $c.status == "below" then "below min: \($c.percent)% of \($c.min)% · uncovered: \($c.uncovered | join(", "))"
         else "not measured" end),
+    (if $k == null then empty elif $k.level == "low"
+      then "- Merge: low risk, may merge without a person (\($k.changed_lines) changed lines in \($k.files) files, nothing sensitive)"
+      else "- Merge: a person approves: " + ($k.reasons | join("; ")) end),
     "",
     "<!-- compasso:story=\($s.story.key // $s.iid) -->"'

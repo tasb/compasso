@@ -54,7 +54,7 @@ setup() { setup_repo; }
   run "$ROOT/bin/config.sh" validate --repo "$REPO"
   [ "$status" -eq 1 ]
   [[ "$output" == *"approvals.plan"* ]] || false
-  [[ "$output" == *"approvals.merge"* ]] || false
+  [[ "$output" == *"approvals.merge must be human, agent or risk"* ]] || false
 }
 
 @test "the security role cannot run on a fast-tier Claude model" {

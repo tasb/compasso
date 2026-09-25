@@ -33,10 +33,11 @@ Build one story end to end. Scripts are in `${CLAUDE_PLUGIN_ROOT}/bin`, roles in
 
 8. **Ship.** Dispatch the **shipper** with `RUN/story.json` and `RUN/findings.json`: it commits, writes `RUN/changes.md`, and files each open minor finding as a follow-up under the story's feature (`gitlab.sh followup`). If this run showed something went wrong (a blocker or major finding, a test-immutability violation, verify failing 3 times, the story needing re-planning), tell the shipper which, so it captures a lesson (at most 2), checked with `learnings.sh check` and committed in this merge request. Then `bash ${CLAUDE_PLUGIN_ROOT}/bin/story-metrics.sh write --run RUN --repo .` and commit `.compasso/metrics/<iid>.json` with the story, so the sprint report has its numbers. Push the branch.
 
-9. **Merge request.** `bash ${CLAUDE_PLUGIN_ROOT}/bin/mr-body.sh --story RUN/story.json --run RUN > RUN/mr.md`, then `gitlab.sh open-mr --iid <iid> --branch <branch> --body-file RUN/mr.md` and `gitlab.sh set-state --iid <iid> --state in-review`.
+9. **Merge request.** `bash ${CLAUDE_PLUGIN_ROOT}/bin/risk.sh --repo . --run RUN --base <base>` (low or high risk, with the reasons; always, so the merge request says whether a person must approve), then `bash ${CLAUDE_PLUGIN_ROOT}/bin/mr-body.sh --story RUN/story.json --run RUN > RUN/mr.md`, then `gitlab.sh open-mr --iid <iid> --branch <branch> --body-file RUN/mr.md` and `gitlab.sh set-state --iid <iid> --state in-review`.
 
 10. **Approval.**
     - `approvals.merge: human` (default): stop here. A person reviews and merges.
+    - `approvals.merge: risk`: a high-risk change stops here for a person, the reasons in its merge request. A low-risk one goes to the approver as below, and `gitlab.sh merge` also gets `--risk RUN/risk.json` (it refuses anything but low).
     - `approvals.merge: agent`: dispatch the **approver** with the MR, `RUN/story.json` and `RUN/findings.json`. If it approves, `gitlab.sh merge --mr <mr> --body-file RUN/findings.json` (it refuses on any open security finding). If not, post its reasons with `gitlab.sh comment` and stop.
 
 11. Hand back: the MR link, the verify and coverage results, the findings fixed and followed up, and anything a person must do.

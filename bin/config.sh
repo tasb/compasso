@@ -91,7 +91,9 @@ validate() {
   [ -z "$v" ] || { is_int "$v" && [ "$v" -ge 2 ]; } || err "harden.flaky_runs must be a number of at least 2"
 
   case "$(val .approvals.plan)" in human|auto) : ;; *) err "approvals.plan must be human or auto" ;; esac
-  case "$(val .approvals.merge)" in human|agent) : ;; *) err "approvals.merge must be human or agent" ;; esac
+  case "$(val .approvals.merge)" in human|agent|risk) : ;; *) err "approvals.merge must be human, agent or risk" ;; esac
+  v="$(val .risk.max_changed_lines)"
+  [ -z "$v" ] || { is_int "$v" && [ "$v" -ge 1 ]; } || err "risk.max_changed_lines must be a positive number"
 
   [ "$(yq -r '.harnesses | length' "$CFG")" -ge 1 ] 2>/dev/null || err "harnesses must list claude and/or codex"
   for h in $(yq -r '.harnesses[]?' "$CFG"); do

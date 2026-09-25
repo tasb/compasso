@@ -70,7 +70,12 @@ harden:                       # optional hardening, after the MVP (/compasso:har
 
 approvals:
   plan: human                 # human | auto  (auto still requires a clean security review of the plan)
-  merge: human                # human | agent (agent never approves with an open security finding)
+  merge: human                # human | agent | risk: low-risk changes merge automatically, the rest wait for a person
+                              # (an agent never merges with an open security finding)
+
+risk:                         # what makes a change need a person (approvals.merge: risk), abuse cases and a mutation check
+  sensitive_paths: []         # globs where a change always needs a person, e.g. ["src/auth/**", "src/billing/payments/**"]
+  max_changed_lines: 200      # a bigger change needs a person
 
 harnesses: [claude]           # claude and/or codex
 
