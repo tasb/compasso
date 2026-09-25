@@ -4,7 +4,7 @@ A sprint-sized SDLC for Claude Code and Codex. It plans one epic per sprint, fea
 
 Humans approve plans and merges by default. Security review is never skipped, in any mode.
 
-Design and decisions: [docs/SPEC.md](docs/SPEC.md).
+Guides for each starting point (greenfield, brownfield, a prototype, requirements, one idea, a bug): [docs/guides](docs/guides/README.md). Design and decisions: [docs/SPEC.md](docs/SPEC.md).
 
 ## Why "Compasso"
 
