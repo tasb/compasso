@@ -1,0 +1,74 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # The suite runs offline: glab, gh and docker are faked (tests/fake, stubs written by the tests).
+  linux:
+    name: tests (ubuntu, bash 5)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      # bats from apt, not npm: `npm install -g` fails with EACCES on the runner's /usr/local man tree.
+      # diff-cover with pipx: the runner's Python is PEP 668 managed, so pip install fails.
+      # yq must be mikefarah's v4; the runner image ships it, and apt's `yq` is a different tool.
+      - name: Install the toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends bats
+          pipx install diff-cover
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Record the toolchain
+        run: |
+          for t in bash bats jq yq git perl shasum node diff-cover; do
+            printf '%-11s %s\n' "$t" "$(command -v "$t" || echo MISSING)"
+          done
+          bash --version | head -1
+          yq --version | grep -q 'mikefarah' || { echo "yq is not mikefarah's yq v4: $(yq --version)"; exit 1; }
+
+      - name: Run the suite
+        run: bats tests/
+
+  # Compasso promises macOS's bash 3.2: run the suite with /bin/bash first on PATH,
+  # so every `#!/usr/bin/env bash` script and bats itself get 3.2.
+  macos:
+    name: tests (macOS, bash 3.2)
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install the toolchain
+        run: |
+          brew install bats-core yq jq
+          pipx install diff-cover
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          mkdir -p "$RUNNER_TEMP/bash32" && ln -s /bin/bash "$RUNNER_TEMP/bash32/bash"
+          echo "$RUNNER_TEMP/bash32" >> "$GITHUB_PATH"
+
+      - name: Record the toolchain
+        run: |
+          for t in bash bats jq yq git perl shasum node diff-cover; do
+            printf '%-11s %s\n' "$t" "$(command -v "$t" || echo MISSING)"
+          done
+          bash --version | head -1
+          yq --version | grep -q 'mikefarah' || { echo "yq is not mikefarah's yq v4: $(yq --version)"; exit 1; }
+
+      - name: Check that bash is 3.2
+        run: bash -c 'echo "$BASH_VERSION"; [ "${BASH_VERSINFO[0]}" = 3 ]'
+
+      - name: Run the suite
+        run: bats tests/
