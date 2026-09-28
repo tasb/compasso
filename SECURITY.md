@@ -22,6 +22,19 @@ Report it privately through GitHub's private vulnerability reporting: the **Repo
 
 **Lessons in `docs/learnings/` reach agent prompts.** They are committed files, so changing them goes through review like code. A lesson that tells an agent to skip a check is still a lesson, and does not override the role files or the gates.
 
+## Hooks
+
+Compasso's hooks (`bin/hook.sh`) deny, in the harness:
+- an agent writing outside its role's paths (the builder writing tests, security writing anything, any agent writing Compasso's settings, a budget ledger, `.claude/`, `.codex/`, `.git/` or outside the repository);
+- a dispatch beyond the run's budget;
+- a force-push of the default branch, `rm -r` outside the repository, reading secrets, and a download piped into a shell.
+
+The guards fail closed: when a guard itself fails, the action is denied. Two limits:
+- Files written by a shell command are recognised by pattern. A determined agent could still write through a script, so the test hashes stay as the backstop.
+- The command guard is a pattern list, not a sandbox.
+
+`COMPASSO_HOOKS=off` turns every hook off. It is a person's switch: agents cannot change the settings that would disable hooks.
+
 ## Guarantees
 
 - **Security review is never skipped.** It runs on every plan, every merge request and at sprint end, in every approval mode.

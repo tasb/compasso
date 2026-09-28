@@ -616,3 +616,34 @@ Every language and test area has a default, used only where the project has noth
   - The planner writes Verify commands with these frameworks.
   - The walking skeleton uses the defaults of the stack chosen (`test-stack.sh defaults --lang <id>`).
   - Hardening's property-based tests use `testing.<language>.property`.
+
+## 26. Hooks (2026-09-28)
+
+Compasso's promises used to be kept by instructions and by gate scripts the flow was told to run. Hooks now enforce the checkable ones in the harness, on Claude Code and on Codex. Decided with the user after a review of Harmonia (one SessionStart hook injecting rules and lessons), superpowers (context only), tdd-guard (PreToolUse denies code written without a failing test), oh-my-claudecode (hooks on nearly every event; Stop kept it running, capped), the official security-guidance, hookify and ralph plugins, and the plugins that ship no hooks (compound-engineering, mattpocock/skills, spec-workflow, agent-skills).
+
+One script, `bin/hook.sh <event>`: `hooks/hooks.json` wires it on Claude Code, and `install-codex.sh --repo` writes `.codex/hooks.json`, which the person approves once with `/hooks`.
+
+| Hook | Event | Enforces | On failure |
+|---|---|---|---|
+| Role guard | PreToolUse: Write, Edit, MultiEdit, NotebookEdit, apply_patch, and the files a shell command writes | Only for Compasso's agents. The builder never writes `test_paths`; the tester writes tests, manifests and test configs only; the reviewer only `docs/learnings/`; the shipper `docs/releases/`; the mutator its run folder; security and the approver nothing. No agent writes Compasso's settings, a budget ledger, `.claude/`, `.codex/`, `.git/` or outside the repository | denies (fails closed) |
+| Budget guard | PreToolUse: Agent, Task, SendMessage (Claude Code); spawn_agent (Codex) | Claude Code: a dispatch or continuation claims its run's budget from the run folder its prompt names; no run folder is a denial. Codex encrypts spawn messages, so the flow claims with `budget.sh` and a spawn needs an unused claim of its role from the last 10 minutes | denies (fails closed) |
+| Command guard | PreToolUse: Bash, Read; for everyone | No force-push of the default branch, no `rm -r` outside the repository and temporary folders, no reading or copying secrets (`.env`, private keys, credential files; example files allowed), no download piped into a shell | denies (fails closed) |
+| Metrics | PostToolUse on Agent; SubagentStart and SubagentStop | Records each agent run's role, model, tokens and time into the run's `events.jsonl`, from the harness's own totals (the Agent response, or the agent's transcript for a continuation or a Codex agent) | silent |
+| Resume | SessionStart: compact, resume | Prints the local story runs in progress, each with the step to resume from (`status.sh --local`) | silent |
+
+- **Verified live, 2026-09-28.**
+  - Both harnesses report the agent making a tool call: `compasso:<role>` on Claude Code, `compasso-<role>` on Codex.
+  - A builder whose instructions were removed was denied a test edit through Write on Claude Code, and through a shell redirect on Codex.
+  - `cat .env` was denied.
+  - Claims and metrics were written: Claude Code, sonnet, 15,513 tokens.
+  - Plugin hooks run in headless `claude -p`.
+- **Scope.** Plugin hooks fire in every repository; each hook exits at once outside a repository with `.compasso/project.yaml`.
+- **Off switch.** `COMPASSO_HOOKS=off`, set by a person. The role guard denies agents writes to `.claude/` and `.codex/`, where hooks could be turned off.
+- **Honest limits.**
+  - Shell writes are recognised by pattern: redirects, `tee`, `sed -i`, `cp`/`mv`, `rm`, `touch`, `mkdir`. A determined agent could still write through a script, so the test hashes stay as the backstop.
+  - The command guard is a pattern list, not a sandbox.
+  - On Codex, a spawned agent's run is recorded only if the agent stops before the session ends.
+- **Not adopted:**
+  - instant regex security hints: noisy, and the mandatory review and scans cover them;
+  - a Stop hook that keeps the flow running: it works against strict orchestration;
+  - an LLM review on every commit: it duplicates the mandatory security review.

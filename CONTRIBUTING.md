@@ -26,6 +26,7 @@ Scripts must run on macOS's bash 3.2. In bats, write `[[ ... ]] || false`: bash 
 - **Scripts decide, agents judge.** Anything a machine can check belongs in `bin/` with a test, not in a skill's prose. Skills and roles say what to run and what to decide.
 - **Both trackers, both harnesses.** A tracker command exists in `bin/tracker/gitlab.sh` and `bin/tracker/github.sh` with the same options and output shape. A skill works on Claude Code and Codex (`bin/install-codex.sh` rewrites it; `tests/install-codex.bats` checks it).
 - **Roles are edited in `roles/`, never in `agents/`.** Run `bin/gen-agents.sh` after changing a role; the tests fail while `agents/` is out of date. No role gets the Agent tool.
+- **Hooks stay fast and scoped.** `bin/hook.sh` exits at once outside a Compasso repository; guards fail closed, the other hooks fail silently. A new rule comes with tests for what it refuses and what it still allows (`tests/hooks.bats`).
 - **Security review stays mandatory.** No change may add a path that skips it, or lets an agent merge with an open security finding.
 - **Update the docs with the behaviour.** `docs/SPEC.md` records design decisions with their date; `README.md` says how to use what shipped.
 

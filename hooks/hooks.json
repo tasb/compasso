@@ -1,0 +1,29 @@
+{
+  "description": "Compasso: role guard, agent-run budget and command guard (deny), agent-run metrics, and where local runs stand after compaction. Every hook does nothing outside a repository with .compasso/project.yaml; COMPASSO_HOOKS=off turns them all off.",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit|NotebookEdit|Agent|Task|SendMessage|Bash|Read",
+        "hooks": [{ "type": "command", "command": "bash \"${CLAUDE_PLUGIN_ROOT}/bin/hook.sh\" pre-tool", "timeout": 20 }]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Agent|Task",
+        "hooks": [{ "type": "command", "command": "bash \"${CLAUDE_PLUGIN_ROOT}/bin/hook.sh\" post-agent", "timeout": 20 }]
+      }
+    ],
+    "SubagentStart": [
+      { "hooks": [{ "type": "command", "command": "bash \"${CLAUDE_PLUGIN_ROOT}/bin/hook.sh\" subagent-start", "timeout": 10 }] }
+    ],
+    "SubagentStop": [
+      { "hooks": [{ "type": "command", "command": "bash \"${CLAUDE_PLUGIN_ROOT}/bin/hook.sh\" subagent-stop", "timeout": 20 }] }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "compact|resume",
+        "hooks": [{ "type": "command", "command": "bash \"${CLAUDE_PLUGIN_ROOT}/bin/hook.sh\" resume", "timeout": 10 }]
+      }
+    ]
+  }
+}

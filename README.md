@@ -155,6 +155,17 @@ Eight roles, each defined once in `roles/`, each with its own model per harness 
 
 Each role is a registered subagent (`compasso:<role>`), generated from `roles/` by `bin/gen-agents.sh`, with only the tools it needs: security and the approver can only read, and no role can start another agent. Every run is bounded: each agent has a turn limit, and `bin/budget.sh` caps how many times each role runs in one story or plan (`limits.agent_runs`). When the budget runs out, the flow stops and hands back to a person.
 
+## Hooks
+
+Compasso's hooks enforce in the harness what used to rest on instructions, on Claude Code and on Codex, and only in repositories with `.compasso/project.yaml`:
+
+- **Role guard:** each agent writes only where its role may. The builder never touches tests, security and the approver write nothing, and no agent touches Compasso's settings, the budget, the harness's config or anything outside the repository.
+- **Budget guard:** every dispatch and continuation of an agent is claimed against the run's budget, and denied when it is spent.
+- **Command guard:** no force-push of the default branch, no `rm -r` outside the repository, no reading secrets, no download piped into a shell.
+- **Metrics** are recorded from the harness's own totals, and after a compaction the flow is told where each local run stopped.
+
+The guards fail closed. `COMPASSO_HOOKS=off` in a person's shell turns every hook off. On Codex, approve the hooks once with `/hooks`.
+
 ## Decision records
 
 The tracker holds the work; the repository holds why. Every plan, feature and story writes a record under `.compasso/records/S<n>/` with five fixed sections: findings, decisions, takeaways, constraints and missing points. An empty section says "None". Records are rendered by `bin/record.sh` from the run's data, and reach the default branch through a merge request: a story's record rides in the story's own, a plan's in a plan merge request.

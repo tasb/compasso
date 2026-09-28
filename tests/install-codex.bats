@@ -97,3 +97,18 @@ toml() { python3 -c 'import tomllib,sys,json; print(json.dumps(tomllib.load(open
   [ "$status" -eq 1 ]
   [ "$(cat "$REPO/.codex/agents/compasso-tester.toml")" = 'name = "mine"' ]
 }
+
+@test "per project: Compasso's hooks for Codex, running the engine's hook.sh; a hooks file not Compasso's is kept" {
+  engine >/dev/null
+  agents >/dev/null
+  j="$REPO/.codex/hooks.json"
+  [ "$(jq -r '[.hooks | keys[]] | sort | join(",")' "$j")" = "PreToolUse,SessionStart,SubagentStart,SubagentStop" ]
+  [ "$(jq -r '.hooks.PreToolUse[0].hooks[0].command' "$j")" = "bash $H/engine/bin/hook.sh pre-tool" ]
+  [ -f "$H/engine/bin/hook.sh" ] && [ -f "$H/engine/hooks/hooks.json" ]
+  agents >/dev/null
+  echo '{"hooks": {}}' > "$j"
+  run agents
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"hooks.json is not Compasso's"* ]] || false
+  [ "$(cat "$j")" = '{"hooks": {}}' ]
+}

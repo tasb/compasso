@@ -4,6 +4,8 @@
 #
 #   status.sh --repo R [--milestone S<n>] [--json]   the sprint: what can be built, what waits and on whom,
 #                                                    the plan on the default branch, approvals, local runs
+#   status.sh --repo R --local                       only the local story runs touched in the last 3 days
+#                                                    (no tracker): what the resume hook shows after compaction
 #   status.sh --repo R --iid N [--json]              one story: tracker state, open dependencies, how far
 #                                                    its local run got and the step to resume from
 #
@@ -16,13 +18,14 @@
 set -u
 
 BIN="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO="." IID="" MS="" JSON=0
+REPO="." IID="" MS="" JSON=0 LOCAL=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --repo) REPO="$2"; shift 2 ;;
     --iid) IID="$2"; shift 2 ;;
     --milestone) MS="$2"; shift 2 ;;
     --json) JSON=1; shift ;;
+    --local) LOCAL=1; shift ;;
     *) echo "status: unknown argument '$1'" >&2; exit 2 ;;
   esac
 done
@@ -83,6 +86,21 @@ plan_on_default() { # -> {branch, state}
 }
 
 names() { jq -r '[.[] | "#\(.iid) \(.title)"] | join(", ")'; }
+
+if [ "$LOCAL" -eq 1 ]; then
+  [ -d "$RUNS" ] || exit 0
+  lines=""
+  for d in $(find "$RUNS" -mindepth 1 -maxdepth 1 -type d -mtime -3 2>/dev/null | sort); do
+    i="$(basename "$d")"; case "$i" in ''|*[!0-9]*) continue ;; esac
+    st="$(stage "$i")"
+    [ "$(jq -r .step <<<"$st")" -ge 9 ] && continue
+    lines="$lines$(jq -r '"  #\(.iid) \(.stage) → \(.next)"' <<<"$st")"$'\n'
+  done
+  [ -n "$lines" ] || exit 0
+  echo "Compasso: story runs in progress here (resume each from its step; /compasso:status for the whole sprint):"
+  printf '%s' "$lines"
+  exit 0
+fi
 
 if [ -n "$IID" ]; then
   story="$("$BIN/tracker.sh" story --repo "$REPO" --iid "$IID" 2>&1)"; rc=$?

@@ -60,6 +60,14 @@ First version.
 
 - A default per language and test area (unit, API, browser e2e, coverage, property-based) for JavaScript/TypeScript, Python, Go, Java/Kotlin, C#/.NET, Ruby, PHP, Rust and Bash. It is used only where the project has nothing yet; what the project already uses always wins (`bin/test-stack.sh`).
 
+### Hooks
+
+- Hooks enforce in the harness, on Claude Code and Codex:
+  - a role guard (each agent writes only where its role may);
+  - the agent-run budget;
+  - a command guard (force-push of the default branch, `rm -r` outside the repository, secrets, downloads piped into a shell).
+  They also record agent-run metrics, and say where local runs stopped after a compaction. The guards fail closed; `COMPASSO_HOOKS=off` turns them off.
+
 ### Agents
 
 - Roles are registered Claude Code subagents (`compasso:<role>`), generated from `roles/`, each with only the tools it needs: security and the approver can only read, and no role can start another agent.

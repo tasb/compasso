@@ -3,6 +3,7 @@
 #
 #   install-codex.sh [--home DIR] [--skills DIR]   once per machine: the engine and the skills
 #   install-codex.sh --repo R [--home DIR]         per project: R/.codex/agents/compasso-<role>.toml
+#                                                  and R/.codex/hooks.json (Compasso's hooks, bin/hook.sh)
 #
 # Engine: a copy of bin/, roles/, templates/ and skills/ in <home>/engine
 #   (default home ${COMPASSO_HOME:-$HOME/.compasso}).
@@ -41,7 +42,7 @@ install_engine() {
     if [ -f "$dest" ] && ! grep -qF "$MARK" "$dest"; then die "$dest is not Compasso's; left untouched"; fi
   done
   rm -rf "$ENGINE" && mkdir -p "$ENGINE" || die "cannot write $ENGINE"
-  cp -R "$ROOT/bin" "$ROOT/roles" "$ROOT/templates" "$ROOT/skills" "$ENGINE/" || die "cannot copy the engine"
+  cp -R "$ROOT/bin" "$ROOT/roles" "$ROOT/templates" "$ROOT/skills" "$ROOT/hooks" "$ENGINE/" || die "cannot copy the engine"
   echo "$MARK" > "$ENGINE/.compasso-engine"
 
   mkdir -p "$SKILLS" || die "cannot write $SKILLS"
@@ -105,6 +106,22 @@ install_agents() {
     } > "$dest" || die "cannot write $dest"
   done
   echo "install-codex: $(ls "$dir"/compasso-*.toml | wc -l | tr -d ' ') agents in $dir"
+  install_hooks
+}
+
+# Compasso's hooks for Codex: the same bin/hook.sh as on Claude Code. Codex runs a repository's hooks
+# only after the person approves them once in /hooks.
+install_hooks() {
+  local dest="$REPO/.codex/hooks.json" h="bash $ENGINE/bin/hook.sh"
+  if [ -f "$dest" ] && ! grep -qF "$MARK" "$dest"; then die "$dest is not Compasso's; left untouched (merge Compasso's hooks into it by hand: see $ENGINE/hooks/hooks.json)"; fi
+  jq -n --arg mark "$MARK --repo" --arg h "$h" '{
+    description: "Compasso: role guard, agent-run budget and command guard, agent-run metrics, runs in progress. \($mark).",
+    hooks: {
+      PreToolUse: [{matcher: ".*", hooks: [{type: "command", command: "\($h) pre-tool", timeout: 20}]}],
+      SubagentStart: [{hooks: [{type: "command", command: "\($h) subagent-start", timeout: 10}]}],
+      SubagentStop: [{hooks: [{type: "command", command: "\($h) subagent-stop", timeout: 20}]}],
+      SessionStart: [{hooks: [{type: "command", command: "\($h) resume", timeout: 10}]}]}}' > "$dest" || die "cannot write $dest"
+  echo "install-codex: hooks in $dest - approve them once in Codex with /hooks"
 }
 
 if [ -n "$REPO" ]; then install_agents; else install_engine; fi
