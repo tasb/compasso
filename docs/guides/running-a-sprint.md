@@ -11,7 +11,7 @@
   - every local run, with the step it stopped at.
 - **`/compasso:sprint`** builds everything that can run now:
   - It asks once for any Verify commands not yet approved.
-  - It runs the ready stories in parallel, in separate worktrees, when their paths don't overlap.
+  - It runs the ready stories side by side, each in its own worktree under `.compasso/worktrees/`, when their paths don't overlap. The conversation you run it in drives them all, and each step's agents for every story start at the same time.
   - A story whose only dependency is waiting for review is stacked on that story's branch instead of waiting.
 - **`/compasso:story <iid>`** builds one story. The steps are:
   1. failing tests first;

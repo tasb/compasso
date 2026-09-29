@@ -228,6 +228,7 @@ bin/test-guide.sh --data F --out O                     # the test guide
 bin/mutate.sh, flaky.sh, live.sh, harden-report.sh     # hardening
 bin/gen-agents.sh [--check]                            # the Claude Code subagents, from roles/
 bin/budget.sh claim|show|reset --run DIR               # the agent-run budget of one flow run
+bin/codex-models.sh check --repo . [--apply]           # Codex models the account can use, by tier
 bin/install-codex.sh [--repo R]                        # install for Codex
 ```
 

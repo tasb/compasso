@@ -5,6 +5,7 @@ setup() {
   H="$BATS_TEST_TMPDIR/home"; SK="$BATS_TEST_TMPDIR/skills"
   setup_repo
   cfg_set '.harnesses = ["claude","codex"]'
+  export PATH="$ROOT/tests/fake:$PATH"   # a fake codex: no network, same on every machine
 }
 engine() { "$ROOT/bin/install-codex.sh" --home "$H" --skills "$SK"; }
 agents() { "$ROOT/bin/install-codex.sh" --home "$H" --repo "$REPO"; }
@@ -111,4 +112,14 @@ toml() { python3 -c 'import tomllib,sys,json; print(json.dumps(tomllib.load(open
   [ "$status" -eq 1 ]
   [[ "$output" == *"hooks.json is not Compasso's"* ]] || false
   [ "$(cat "$j")" = '{"hooks": {}}' ]
+}
+
+@test "per project: warns when a configured model is not available to the Codex account" {
+  engine >/dev/null
+  run agents
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"WARNING - some models.codex models are not available to this Codex account"* ]] || false
+  "$ROOT/bin/codex-models.sh" check --repo "$REPO" --apply >/dev/null || true
+  run agents
+  [[ "$output" != *WARNING* ]] || false
 }

@@ -106,6 +106,10 @@ install_agents() {
     } > "$dest" || die "cannot write $dest"
   done
   echo "install-codex: $(ls "$dir"/compasso-*.toml | wc -l | tr -d ' ') agents in $dir"
+  if command -v codex >/dev/null 2>&1; then   # a model the account cannot use fails the agent at its first run
+    "$ENGINE/bin/codex-models.sh" check --repo "$REPO" >/dev/null 2>&1 ||
+      echo "install-codex: WARNING - some models.codex models are not available to this Codex account: run $ENGINE/bin/codex-models.sh check --repo $REPO" >&2
+  fi
   install_hooks
 }
 

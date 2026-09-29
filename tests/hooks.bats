@@ -209,3 +209,11 @@ dispatch() { jq -cn --arg c "$REPO" --arg t "$1" --arg p "$2" '{hook_event_name:
   [ "$(jq -r '[.hooks | to_entries[] | .key] | sort | join(",")' "$ROOT/hooks/hooks.json")" = "PostToolUse,PreToolUse,SessionStart,SubagentStart,SubagentStop" ]
   [ "$(jq '[.. | .command? // empty | select(test("bin/hook.sh"))] | length' "$ROOT/hooks/hooks.json")" = 5 ]
 }
+
+@test "role guard: a story's worktree is judged as the repository itself" {
+  W=".compasso/worktrees/8"
+  [ "$(decision "$(write_as compasso:builder "$REPO/$W/tests/helpers/db.js")")" = deny ]
+  [ "$(decision "$(write_as compasso:builder "$REPO/$W/src/cart.js")")" = allow ]
+  [ "$(decision "$(write_as compasso:tester "$REPO/$W/src/cart.js")")" = deny ]
+  [ "$(decision "$(write_as compasso:builder "$REPO/$W/.compasso/project.yaml")")" = deny ]
+}

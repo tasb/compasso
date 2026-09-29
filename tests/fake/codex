@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# A fake Codex CLI: `codex debug models` prints the catalog in $FAKE_CODEX_CATALOG
+# (default tests/fixtures/codex-catalog.json).
+set -u
+[ "${1:-} ${2:-}" = "debug models" ] || { echo "fake codex: only 'debug models'" >&2; exit 1; }
+cat "${FAKE_CODEX_CATALOG:-$(cd "$(dirname "$0")/.." && pwd)/fixtures/codex-catalog.json}"

@@ -260,7 +260,7 @@ models:
 ```
 
 - Claude uses aliases (`opus`, `sonnet`, `haiku`, `inherit`) so defaults do not go stale.
-- Codex has no aliases; the defaults are pinned ids and `setup` checks them against the models the local Codex reports.
+- Codex has no aliases, and which models an account may use differs: a ChatGPT login did not offer the default `gpt-6-sol` or `gpt-6-astra` (found 2026-09-28, when a builder failed at its first run). `bin/codex-models.sh check` compares `models.codex` with the account's own catalog (`codex debug models`: listed models, best first, with their efforts) and proposes replacements by tier, never by hard-coded id: strong roles (planner, security, approver, reviewer) get the best non-fast model, standard roles the best model, the shipper the best fast one. When only the effort is unsupported, the model stays. `--apply` writes the proposals. Setup runs it, and `install-codex.sh --repo` warns on any problem.
 - **Floor:** `security` and `approver` may not be set to the fast tier (`haiku` / `gpt-6-luna`) or to low effort. `setup` and config validation refuse it.
 
 ## 5. Flows
@@ -647,3 +647,14 @@ One script, `bin/hook.sh <event>`: `hooks/hooks.json` wires it on Claude Code, a
   - instant regex security hints: noisy, and the mandatory review and scans cover them;
   - a Stop hook that keeps the flow running: it works against strict orchestration;
   - an LLM review on every commit: it duplicates the mandatory security review.
+
+## 27. Parallel stories with one orchestrator (2026-09-28)
+
+The sprint flow used to run a batch's stories "in parallel, one orchestrator per story". A Claude Code subagent cannot start agents, so a per-story orchestrator could not dispatch the tester, builder and reviewers. The conversation running `/compasso:sprint` is now the only orchestrator, and it drives the batch's story flows side by side:
+- **Checkouts.** Each story gets a worktree inside the repository, `.compasso/worktrees/<iid>` (ignored like `.compasso/runs/`), and its run folder stays `.compasso/runs/<iid>` in the repository.
+- **Dispatch.** At each step that dispatches agents, all the stories' agents go out in one message and run at the same time.
+- **Stopping.** A story that stops leaves the batch; the others continue.
+- **Supporting changes:**
+  - the role guard judges a path in a story's worktree as if the worktree were the repository;
+  - Verify-command approvals are keyed to the repository, so its worktrees share them;
+  - test-framework detection ignores the worktrees.

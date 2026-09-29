@@ -5,7 +5,7 @@
 # edit the story could choose what runs on the machine building it. verify.sh runs a
 # Verify command only once a person has approved that exact command for this checkout.
 # Approvals live outside the repository, in ${COMPASSO_HOME:-$HOME/.compasso}/trust/,
-# one file per checkout (keyed by its physical path), one line per command:
+# one file per repository (keyed by its physical path; its worktrees share it), one line per command:
 # "<sha256 of the command>  <command>". A cloned repository brings no approvals, and an
 # edited command no longer matches.
 #
@@ -28,6 +28,9 @@ while [ $# -gt 0 ]; do
   esac
 done
 REPO="$(cd "$REPO" 2>/dev/null && pwd -P)" || { echo "trust: no repository" >&2; exit 2; }
+# a worktree of the repository (the sprint's story checkouts) shares the repository's approvals
+common="$(git -C "$REPO" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)"
+case "$common" in */.git) REPO="$(cd "${common%/.git}" && pwd -P)" ;; esac
 HOME_DIR="${COMPASSO_HOME:-$HOME/.compasso}"
 mkdir -p "$HOME_DIR/trust" || exit 1
 HOME_DIR="$(cd "$HOME_DIR" && pwd -P)"

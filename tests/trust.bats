@@ -58,3 +58,14 @@ t() { "$ROOT/bin/trust.sh" "$@" --repo "$REPO"; }
   run t check
   [ "$status" -eq 2 ]
 }
+
+@test "a story's worktree shares the repository's approvals; another clone does not" {
+  cd "$REPO" && git init -q -b main && git config user.email t@t && git config user.name t && git commit -q --allow-empty -m base
+  t approve --story "$S" >/dev/null
+  git -C "$REPO" worktree add -q "$REPO/.compasso/worktrees/8" -b story/8
+  run "$ROOT/bin/trust.sh" check --repo "$REPO/.compasso/worktrees/8" --story "$S"
+  [ "$status" -eq 0 ]
+  git clone -q "$REPO" "$BATS_TEST_TMPDIR/clone2"
+  run "$ROOT/bin/trust.sh" check --repo "$BATS_TEST_TMPDIR/clone2" --story "$S"
+  [ "$status" -eq 3 ]
+}

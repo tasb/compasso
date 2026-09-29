@@ -18,6 +18,7 @@
 #
 # Role guard (Write, Edit, MultiEdit, NotebookEdit, apply_patch, and files a shell command writes: redirects,
 #   tee, sed -i, cp, mv, rm, touch, mkdir), for Compasso's agents only:
+#   paths in a story's worktree (.compasso/worktrees/<iid>/) are judged as if that worktree were the repository
 #   every role: never outside the repository, never .compasso/project.yaml, .compasso/runs/.agents.json,
 #     a budget ledger, .claude/, .codex/ or .git/
 #   builder: anywhere else except test_paths | tester: test_paths, manifests and test configs, the run
@@ -105,6 +106,8 @@ role_guard() {
     [ -n "$p" ] || continue
     rel="$(relpath "$p")"
     [ -n "$rel" ] || { verdict "the $role may only write inside the repository, not $p"; return 0; }
+    # a story's worktree (the sprint builds stories side by side) is judged as the repository itself
+    case "$rel" in .compasso/worktrees/*/*) rel="${rel#.compasso/worktrees/*/}" ;; esac
     if matches "$rel" '.compasso/project.yaml' '.compasso/runs/.agents.json' '.compasso/runs/*/budget.jsonl' '.claude/*' '.codex/*' '.git/*'; then
       verdict "no agent may change $rel: it holds Compasso's settings, budget or git state"; return 0
     fi

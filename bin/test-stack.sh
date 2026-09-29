@@ -33,7 +33,7 @@ glob_re() { # globs, one per line -> one extended regex matching repository path
 }
 tracked() { # the repository's files, relative, without dependencies and Compasso's runs
   { git -C "$REPO" ls-files 2>/dev/null || ( cd "$REPO" && find . -type f | sed 's#^\./##' ); } |
-    grep -vE '(^|/)(node_modules|vendor|target|dist|build|\.venv|venv)/|^\.compasso/runs/'
+    grep -vE '(^|/)(node_modules|vendor|target|dist|build|\.venv|venv)/|^\.compasso/(runs|worktrees)/'
 }
 cfg() { [ -f "$REPO/.compasso/project.yaml" ] && yq -r "$1 // \"\"" "$REPO/.compasso/project.yaml" 2>/dev/null; }
 
