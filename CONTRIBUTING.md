@@ -48,4 +48,10 @@ One concern per commit, with a message that says what the change does and why. D
 
 ## Releases
 
-A release sets `version` in `.claude-plugin/plugin.json` and adds the matching section to `CHANGELOG.md` in one commit.
+A release sets `version` in `.claude-plugin/plugin.json` and adds the matching section to `CHANGELOG.md` in one commit, then tags that commit with the version:
+
+```bash
+git commit -am "Release 0.3.0" && git tag 0.3.0 && git push origin main --follow-tags
+```
+
+Claude Code updates an installed plugin only when this version changes: a change merged without a new version never reaches people who already installed Compasso. `tests/release.bats` fails when the version has no section in the changelog.

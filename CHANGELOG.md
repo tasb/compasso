@@ -1,10 +1,10 @@
 # Changelog
 
-Versions follow `version` in `.claude-plugin/plugin.json`. Nothing has been released yet; everything below is on `main`.
+Versions follow `version` in `.claude-plugin/plugin.json`. Claude Code updates an installed plugin only when this version changes, so every change users should receive ships in a new version.
 
-## 0.1.0 (unreleased)
+## 1.0.0 (2026-10-03)
 
-First version.
+First release. Installs made before it reported `0.1.0`, a snapshot of work in progress that `claude plugin update` could not move past; update to this version.
 
 ### Planning
 
