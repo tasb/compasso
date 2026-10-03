@@ -5,7 +5,8 @@
 #   start.sh --repo R [--json]
 #
 # Stages, in order: setup (no .compasso/project.yaml) -> discover (no product brief) ->
-# backlog (no .compasso/backlog.yaml) -> roadmap (no .compasso/roadmap.yaml) -> plan (the
+# backlog (no .compasso/backlog.yaml) -> architect (no .compasso/product/architecture.yaml) ->
+# roadmap (no .compasso/roadmap.yaml) -> plan (the
 # roadmap's next sprint is not planned) -> build (a sprint is planned). Also says whether the
 # repository has no product code yet (greenfield), which needs a walking skeleton first.
 # Exit: 0 | 2 usage
@@ -34,8 +35,10 @@ elif [ ! -f "$C/product/brief.md" ] && [ ! -f "$C/backlog.yaml" ]; then
   stage=discover next="/compasso:discover" why="there is no product brief: start from your ideas, a document, tracker issues or a prototype"
 elif [ ! -f "$C/backlog.yaml" ]; then
   stage=backlog next="/compasso:backlog" why="the brief is written; the features and the MVP line are not"
+elif [ ! -f "$C/product/architecture.yaml" ]; then
+  stage=architect next="/compasso:architect" why="the backlog is ready; the technical solution is not designed yet"
 elif [ ! -f "$C/roadmap.yaml" ]; then
-  stage=roadmap next="/compasso:roadmap" why="the backlog is ready; it is not placed into sprints yet"
+  stage=roadmap next="/compasso:roadmap" why="the backlog and the architecture are ready; they are not placed into sprints yet"
 elif [ -z "$plan_n" ]; then
   first="$("$BIN/roadmap.sh" next --repo "$REPO" 2>/dev/null | jq -r '.number // empty')"
   stage=plan next="/compasso:plan" why="sprint S${first:-?} is next in the roadmap: split it into stories"

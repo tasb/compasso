@@ -36,8 +36,8 @@ problems="$(jq -r '
 ' "$DATA" 2>/dev/null)" || { echo "test-guide: $DATA is not valid JSON" >&2; exit 1; }
 [ -z "$problems" ] || { printf 'test-guide: %s\n' "$problems" >&2; exit 1; }
 
-# "</" would end the script element early; "<\/" means the same inside JSON
-json="$(jq -c . "$DATA" | sed 's#</#<\\/#g')"
+# every "<" as \u003c: the same JSON, and HTML never sees a tag (no "</script>", no "<!--") in the data block
+json="$(jq -c . "$DATA" | sed 's/</\\u003c/g')"
 mkdir -p "$(dirname "$OUT")"
 # ENVIRON, not awk -v: -v would turn the JSON's \" escapes into bare quotes
 JSON="$json" awk '{ i = index($0, "__GUIDE_DATA__"); if (i) { print substr($0, 1, i - 1) ENVIRON["JSON"] substr($0, i + 14) } else print }' \

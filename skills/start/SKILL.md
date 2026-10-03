@@ -10,6 +10,7 @@ Find where the product stands and move it one step forward. Scripts are in `${CL
 2. Say in one line what the user can bring to that stage, then run it when they agree:
    - **discover** (`${CLAUDE_PLUGIN_ROOT}/skills/discover/SKILL.md`): ideas in the conversation, a document (Markdown, PDF, Word), tracker issues, or a prototype (a running web app, its source code, or a Figma file).
    - **backlog**: a written brief; or skip discovery when the user already has requirements: the backlog stage reads the document directly and writes the brief from it.
-   - **roadmap**, **plan**, **build**: the next command as `start.sh` names it.
+   - **architect**, **roadmap**, **plan**, **build**: the next command as `start.sh` names it.
+   - At any stage, `/compasso:present` builds the solution presentation from what exists so far.
 
 3. When `start.sh` says there is no product code yet, repeat it at the backlog stage: the first feature is the walking skeleton (F-0).

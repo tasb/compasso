@@ -15,7 +15,8 @@
 
 2. **`/compasso:discover`**, and say you have a prototype.
    - **Running app:** Compasso crawls it in a browser (Docker). It visits every page it can reach through links on the same site, saves a screenshot and the headings, forms, fields and buttons of each, and stops at 40 pages. It **only follows links**: it never clicks buttons, never submits forms, and skips links that look like logout or delete.
-   - **Source code:** the planner reads the routes, pages and forms.
+   - **Source code:** the planner reads the routes, pages and forms. A prototype that is **one HTML file** is read this way: its screens usually change by script, which a crawl that only follows links cannot see.
+   - **Several prototypes**, such as the product and an observability console, go into one inventory, each screen naming its file.
    - **Figma:** the planner reads the frames.
    All three produce the same **screen inventory**, `.compasso/product/prototype.json`: one entry per screen, the forms and actions on it, which screens it links to, and the flows (sign-up, checkout).
    Then come the questions a crawl cannot answer. *You decide:*
@@ -32,9 +33,11 @@
    - Flows show the dependencies: checkout depends on the cart.
    *You decide:* the stack for the walking skeleton, and the MVP line.
 
-4. **`/compasso:roadmap`**, then **`/compasso:plan`** and **`/compasso:sprint`**, as in [Greenfield](greenfield.md).
+4. **`/compasso:architect`.** The technical solution: stack, components, integrations, data, environments and decisions. With an observability prototype, its screens become the dashboards and alerts to build.
 
-5. **UI stories point at the screen** they rebuild, so the builder matches its fields and wording, and the e2e tests follow its flow.
+5. **`/compasso:roadmap`**, then **`/compasso:plan`** and **`/compasso:sprint`**, as in [Greenfield](greenfield.md). At any point, **`/compasso:present`** builds one HTML presentation of the solution, the sprints and the next sprint's stories, to share with the team or the client.
+
+6. **UI stories point at the screen** they rebuild, so the builder matches its fields and wording, and the e2e tests follow its flow.
 
 ## Tips
 

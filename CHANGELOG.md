@@ -2,6 +2,13 @@
 
 Versions follow `version` in `.claude-plugin/plugin.json`. Claude Code updates an installed plugin only when this version changes, so every change users should receive ships in a new version.
 
+## 1.1.0 (2026-10-03)
+
+- `/compasso:architect` designs the technical solution between the backlog and the roadmap: stack, components serving the backlog's features, integrations, data, observability (from an observability prototype), security, environments, decisions with their alternatives, and risks. It is checked by `bin/architecture-check.sh`, reviewed by security, and approved.
+- `/compasso:present` builds one self-contained HTML presentation of the functional and technical solution, the decisions, the sprints and the next sprint's user stories, from Compasso's files.
+- Single-file HTML prototypes are read as source; several prototypes share one screen inventory.
+- The test guide, the sprint report and the presentation write every `<` in their data as `\u003c`, so no text can end the data block or open a tag.
+
 ## 1.0.0 (2026-10-03)
 
 First release. Installs made before it reported `0.1.0`, a snapshot of work in progress that `claude plugin update` could not move past; update to this version.

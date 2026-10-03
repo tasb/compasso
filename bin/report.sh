@@ -25,7 +25,7 @@ problems="$(jq -r '
 [ -z "$problems" ] || { printf 'report: %s\n' "$problems" >&2; exit 1; }
 
 # "</" would end the script element early; ENVIRON keeps awk from reading escapes
-json="$(jq -c . "$DATA" | sed 's#</#<\\/#g')"
+json="$(jq -c . "$DATA" | sed 's/</\\u003c/g')"
 mkdir -p "$(dirname "$OUT")"
 JSON="$json" awk '{ i = index($0, "__REPORT_DATA__"); if (i) { print substr($0, 1, i - 1) ENVIRON["JSON"] substr($0, i + 15) } else print }' \
   "$ROOT/templates/report.html" > "$OUT"

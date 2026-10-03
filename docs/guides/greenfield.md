@@ -21,7 +21,10 @@
    *You decide:* the stack (proposed in one line with its reason), and where the **MVP line** goes: the smallest set of features that proves what the brief says.
    *You get:* `.compasso/backlog.yaml`, features on the tracker in no sprint (MVP ones labelled `mvp`), and a merge request.
 
-4. **`/compasso:roadmap`.** Features are placed into sprints by dependency and capacity, MVP first. Work after the MVP line never delays it.
+4. **`/compasso:architect`.** The technical solution for the backlog: components, integrations, data, observability, environments, and each decision with what was not chosen. Security reviews it.
+   *You decide:* answers on load, hosting, integrations and sign-in, and approval.
+
+4b. **`/compasso:roadmap`.** Features are placed into sprints by dependency and capacity, MVP first. Work after the MVP line never delays it.
    *You decide:* one goal per sprint, and any moves (a demo date, someone's holiday).
    *You get:* `.compasso/roadmap.yaml` with the MVP sprint marked, and a merge request.
 

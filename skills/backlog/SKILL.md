@@ -33,4 +33,4 @@ Shape the product backlog. You act as the planner (`${CLAUDE_PLUGIN_ROOT}/roles/
 
 10. **Record and merge request.** Write `RUN/record.json` (findings: the tester's and security's, and backlog-check's notes; decisions: the MVP line, the stack, answers; takeaways; constraints; missing: open questions and screens left out), then `bash ${CLAUDE_PLUGIN_ROOT}/bin/record.sh write --data RUN/record.json --out .compasso/records/product/backlog.md` and `bash ${CLAUDE_PLUGIN_ROOT}/bin/plan-pr.sh --repo . --title "Product backlog: <n> features, MVP of <m>" --branch product/backlog --include .compasso/backlog.yaml --include .compasso/product --include .compasso/records/product`.
 
-11. Hand back: the MVP in one line with its hours, the merge request, and the next command, `/compasso:roadmap`.
+11. Hand back: the MVP in one line with its hours, the merge request, and the next command, `/compasso:architect` (the technical solution), then `/compasso:roadmap`.

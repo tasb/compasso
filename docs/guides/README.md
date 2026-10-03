@@ -14,6 +14,7 @@ One guide per starting point. Each says when it fits, what to bring, the command
 | A sprint under way | [Running a sprint](running-a-sprint.md) |
 | Merge requests to review, written by anyone | [Reviewing a merge request](reviewing.md) |
 | An MVP that has shipped | [After the MVP: hardening](after-the-mvp.md) |
+| A plan to present to a team or a client | Run `/compasso:present` at any point: one HTML page with the functional and technical solution, the sprints and the next sprint's stories |
 
 Not sure? Run `/compasso:start`: it looks at what the repository holds and tells you which step comes next.
 

@@ -1,0 +1,27 @@
+summary: A web shop as one TypeScript app with a Postgres database and a payment provider, observed through OpenTelemetry.
+stack:
+  - {layer: Frontend, choice: React + Vite, why: The prototype is already React-like; the team knows it}
+  - {layer: Backend, choice: Node.js + Fastify, why: One language end to end}
+  - {layer: Database, choice: PostgreSQL, why: Orders need transactions}
+components:
+  - {name: Web, responsibility: The shop's pages, technology: React, features: [F-0, F-1, F-2, F-4], talks_to: [API], data: []}
+  - {name: API, responsibility: Catalog, cart and orders, technology: Fastify, features: [F-0, F-1, F-2, F-3, F-5], talks_to: [Payments], data: [Order, Customer]}
+  - {name: Payments, responsibility: Charges cards through the provider, technology: Stripe SDK, features: [F-3], talks_to: [], data: []}
+integrations:
+  - {name: Stripe, direction: out, protocol: HTTPS, auth: API key in the secret store, owner: Finance}
+data:
+  - {entity: Order, owner: API, personal: false, retention: 10 years}
+  - {entity: Customer, owner: API, personal: true, retention: Until the account is deleted}
+observability:
+  logs: JSON logs to the platform's log store, 30 days
+  traces: OpenTelemetry from Web to API to Payments
+  metrics: [{name: checkout_latency_p95, why: Checkout is where revenue is lost}]
+  dashboards: [{name: Checkout health, shows: Latency and errors per step, screen: ""}]
+  alerts: [{name: Payment errors, condition: "errors above 2% for 5 minutes", severity: page}]
+security:
+  - {concern: Personal data of customers, control: "Encrypted at rest; access only through the API, with an audit log (RGPD)"}
+  - {concern: Card data, control: Never stored; tokenised by Stripe}
+deployment: {environments: [dev, staging, production], hosting: Managed containers, ci: GitHub Actions}
+decisions:
+  - {title: One deployable app, choice: A modular monolith, alternatives: [Microservices], why: A team of three ships an MVP faster with one deployable}
+risks: [The payment provider's onboarding takes up to 2 weeks]

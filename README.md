@@ -47,10 +47,13 @@ You don't need a sprint goal to begin. `/compasso:start` says where the product 
 ideas, a document, tracker issues or a prototype
    ──► /compasso:discover   the product brief: problem, users, outcomes, what the MVP must prove, risks
    ──► /compasso:backlog    features of at most half a sprint, dependencies, rough hours, the MVP line
+   ──► /compasso:architect  the technical solution: stack, components, integrations, data, observability, decisions
    ──► /compasso:roadmap    features placed into sprints, MVP first; one goal per sprint
    ──► /compasso:plan       the next sprint split into one-day stories
    ──► /compasso:sprint     built, reviewed, merged; at its close the roadmap is refined with real velocity
 ```
+
+At any point, `/compasso:present` builds one self-contained HTML presentation of the solution from these files: the problem, the functional and technical solution, the decisions, the sprints and the next sprint's user stories.
 
 - **A prototype can be the starting point**: a running web app (crawled by following links only, never submitting a form), its source code, or a Figma file. It becomes an inventory of screens, forms and flows; every screen must belong to a feature or be left out on purpose. The prototype is a reference only: the product is rebuilt test-first. Public prototypes only for now.
 - **Only the next sprint gets stories.** Later sprints stay as features and are re-placed at each sprint close.
@@ -68,6 +71,8 @@ Run `/compasso:setup` once in the product repository. It connects the tracker, a
 | `/compasso:start` | Where the product stands (setup, discover, backlog, roadmap, plan, build) and the next step |
 | `/compasso:discover` | Ideas, documents, issues or a prototype into a product brief, with security's view of the data and access involved |
 | `/compasso:backlog` | The brief into features with rough hours, dependencies and the MVP line; checked, reviewed, pushed to the tracker in no sprint |
+| `/compasso:architect` | The technical solution: stack, components (each serving backlog features), integrations, data, observability (from an observability prototype when there is one), environments, decisions with their alternatives; checked, reviewed by security, approved |
+| `/compasso:present` | One self-contained HTML presentation of the functional and technical solution, the decisions, the sprints and the next sprint's stories, regenerated whenever the plan changes |
 | `/compasso:roadmap` | The backlog into sprints by dependency and capacity, MVP first, one goal each; refined at every sprint close |
 | `/compasso:plan` | The planner turns a sprint goal into an epic, features and one-day stories with dependencies and blockers. `plan-check` validates sizes, dependencies and capacity; security reviews the plan; after your approval it is pushed to the tracker |
 | `/compasso:feature <iid\|"idea">` | The feature flow: up to 3 rounds of questions in the conversation, a breakdown into stories, approval, then the Q&A and plan recorded on the tracker |
@@ -185,7 +190,7 @@ Lessons live in the product repo's `docs/learnings/`, one file each, tagged with
 | Path | Committed | What |
 |---|---|---|
 | `.compasso/project.yaml` | yes | The configuration |
-| `.compasso/product/` | yes | The product brief, and the prototype's screen inventory |
+| `.compasso/product/` | yes | The product brief, the prototype's screen inventory, and the architecture |
 | `.compasso/backlog.yaml`, `.compasso/roadmap.yaml` | yes | Features with the MVP line, and their placement into sprints |
 | `.compasso/plan.yaml` | yes | The sprint plan: the source for everything pushed to the tracker. It reaches the default branch through a plan merge request |
 | `.compasso/records/S<n>/` | yes | A decision record per plan, feature and story: findings, decisions, takeaways, constraints and missing points |
@@ -206,7 +211,9 @@ bin/tracker.sh protect --repo .                        # GitHub: the ruleset, Co
 bin/start.sh --repo .                                  # where the product stands, and the next step
 bin/prototype.sh crawl|inventory|check ...             # a prototype's screens, forms and flows
 bin/backlog-check.sh --repo .                          # the backlog: sizes, dependencies, the MVP line, screens covered
+bin/architecture-check.sh --repo .                     # the architecture: complete, every MVP feature served
 bin/roadmap.sh propose|check|next --repo .             # features into sprints, MVP first
+bin/present.sh --repo . --out O [--ui F]               # the solution presentation (HTML)
 bin/test-stack.sh detect|write|defaults ...            # test frameworks per language and area, with defaults
 bin/plan-check.sh --repo .                             # sizes, dependencies, capacity
 bin/status.sh --repo . [--iid N] [--json]              # where the sprint or a story stands (read-only)

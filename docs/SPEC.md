@@ -658,3 +658,25 @@ The sprint flow used to run a batch's stories "in parallel, one orchestrator per
   - the role guard judges a path in a story's worktree as if the worktree were the repository;
   - Verify-command approvals are keyed to the repository, so its worktrees share them;
   - test-framework detection ignores the worktrees.
+
+## 28. Architecture and the solution presentation (2026-10-03)
+
+Asked for by a user starting from three single-file HTML pages: a functional prototype, an observability prototype and a platform presentation. They wanted the analysis, decisions, structure of work and sprints, ending in an HTML presentation of the functional and technical solution with the sprints and user stories. Compasso had no technical design stage and no presentation, so it now has both.
+
+- **`/compasso:architect`**, between backlog and roadmap (`start.sh` stage `architect`).
+  - It writes `.compasso/product/architecture.yaml`: summary, stack (choice and why per layer), components (responsibility, technology, the backlog features each serves, who it talks to, the data it owns), integrations, data (personal or not, retention), observability (logs, traces, metrics, dashboards citing the observability prototype's screens, alerts), security controls, deployment, decisions with the alternatives not chosen, and risks.
+  - `bin/architecture-check.sh` refuses:
+    - an empty section;
+    - an MVP feature that no component serves;
+    - a component talking to one that does not exist, or serving a feature not in the backlog;
+    - observability without metrics or alerts;
+    - personal data without a security control;
+    - a decision or stack choice without why.
+  - Security reviews it, the user approves it, and it reaches the default branch with its record through a merge request. Work the design needs and no feature covers (an observability baseline, environments, sign-in) is added to the backlog as features.
+- **`/compasso:present`** (`bin/present.sh`, `templates/presentation.html`).
+  - **Content.** One self-contained HTML page with no external resources, built from Compasso's own files: the brief's sections, the features on either side of the MVP line, the prototype's screens and flows, the stack and a components diagram, integrations, data, deployment, observability, security, the decisions (architecture decisions and those in the product and plan records), the sprints with the MVP line, the next sprint's stories and blockers with links to the tracker, and the risks.
+  - **Missing pieces.** It builds from whatever exists and says on the page what is missing.
+  - **Language.** The labels can be replaced for another language (`--ui`).
+  - **Safety.** Every value is shown as text, never as markup. The data block writes every `<` as `\u003c`, which the test guide and sprint report now do too, so no text from a document can end it or open a tag.
+- **Single-file HTML prototypes** are read as source code: their screens usually change by script, which a link-only crawl cannot see. Several prototypes share one inventory with unique screen ids, each screen naming its file.
+- **Stories.** As everywhere in Compasso, only the next sprint is split into stories: the presentation shows every sprint with its features, and the stories of the one planned.

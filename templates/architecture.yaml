@@ -1,0 +1,31 @@
+# Compasso solution architecture. Written by /compasso:architect; checked by bin/architecture-check.sh.
+# Short and direct: each entry says what and why, in a line or two.
+summary: ""                     # the solution in 2-4 sentences
+stack:                          # one choice per layer, with the reason
+  - {layer: "", choice: "", why: ""}
+components:                     # the parts that run, and which backlog features each one serves
+  - name: ""
+    responsibility: ""
+    technology: ""
+    features: []                # backlog feature keys (F-1, ...)
+    talks_to: []                # other components, by name
+    data: []                    # data entities it owns, by name
+integrations:                   # systems outside the solution
+  - {name: "", direction: "in|out|both", protocol: "", auth: "", owner: ""}
+data:                           # what is stored
+  - {entity: "", owner: "", personal: false, retention: ""}
+observability:
+  logs: ""                      # what is logged, where, for how long
+  traces: ""                    # how a request is followed across components
+  metrics: [{name: "", why: ""}]
+  dashboards: [{name: "", shows: "", screen: ""}]   # screen: the observability prototype's screen id, when one exists
+  alerts: [{name: "", condition: "", severity: "page|ticket|info"}]
+security:                       # the controls; security's review adds and confirms them
+  - {concern: "", control: ""}
+deployment:
+  environments: []              # e.g. [dev, staging, production]
+  hosting: ""
+  ci: ""
+decisions:                      # the architecture decisions, each with what was not chosen
+  - {title: "", choice: "", alternatives: [], why: ""}
+risks: []

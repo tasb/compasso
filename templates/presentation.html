@@ -1,0 +1,337 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Solution</title>
+<style>
+:root {
+  --bg: #f6f7f9; --surface: #ffffff; --ink: #18202b; --muted: #5b6676; --line: #dde2e8;
+  --accent: #2f5bd3; --accent-soft: #e6ecfb; --mvp: #0f7b55; --mvp-soft: #e2f4ec; --later: #8a5a00; --later-soft: #fbf0dc;
+  --risk: #b3261e; --risk-soft: #fbe5e3; --shadow: 0 1px 2px rgba(16,24,40,.06), 0 1px 3px rgba(16,24,40,.08);
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0f1318; --surface: #171c23; --ink: #e8ecf1; --muted: #9aa5b4; --line: #2a313b;
+  --accent: #7c9cff; --accent-soft: #1c2640; --mvp: #46c08f; --mvp-soft: #12291f; --later: #e2b45a; --later-soft: #2b2312;
+  --risk: #ff8a80; --risk-soft: #331a18; --shadow: none; } }
+:root[data-theme="dark"] {
+  --bg: #0f1318; --surface: #171c23; --ink: #e8ecf1; --muted: #9aa5b4; --line: #2a313b;
+  --accent: #7c9cff; --accent-soft: #1c2640; --mvp: #46c08f; --mvp-soft: #12291f; --later: #e2b45a; --later-soft: #2b2312;
+  --risk: #ff8a80; --risk-soft: #331a18; --shadow: none; }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+nav { position: sticky; top: 0; z-index: 5; background: var(--surface); border-bottom: 1px solid var(--line); }
+nav .in { max-width: 1100px; margin: 0 auto; padding: 10px 16px; display: flex; gap: 6px; overflow-x: auto; align-items: center; }
+nav a { color: var(--muted); text-decoration: none; font-size: 14px; padding: 4px 10px; border-radius: 999px; white-space: nowrap; }
+nav a:hover, nav a:focus { background: var(--accent-soft); color: var(--accent); outline: none; }
+nav button { margin-left: auto; border: 1px solid var(--line); background: var(--surface); color: var(--muted); border-radius: 999px; padding: 4px 10px; font: inherit; font-size: 13px; cursor: pointer; }
+main { max-width: 1100px; margin: 0 auto; padding: 0 16px 64px; }
+section { padding: 40px 0 8px; scroll-margin-top: 56px; }
+h1 { font-size: 40px; line-height: 1.15; margin: 0 0 8px; letter-spacing: -.01em; }
+h2 { font-size: 26px; margin: 0 0 16px; letter-spacing: -.01em; }
+h3 { font-size: 17px; margin: 0 0 6px; }
+p { margin: 0 0 10px; }
+.cover { padding: 72px 0 32px; }
+.cover .meta { color: var(--muted); }
+.kicker { text-transform: uppercase; letter-spacing: .08em; font-size: 12px; color: var(--accent); font-weight: 600; margin-bottom: 6px; }
+.grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px; box-shadow: var(--shadow); }
+.card .sub { color: var(--muted); font-size: 14px; }
+.badge { display: inline-block; font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 999px; margin-right: 6px; }
+.b-mvp { background: var(--mvp-soft); color: var(--mvp); } .b-later { background: var(--later-soft); color: var(--later); }
+.b-acc { background: var(--accent-soft); color: var(--accent); } .b-risk { background: var(--risk-soft); color: var(--risk); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.chip { font-size: 13px; border: 1px solid var(--line); border-radius: 999px; padding: 2px 9px; color: var(--muted); }
+ul { margin: 6px 0 10px; padding-left: 20px; } li { margin: 2px 0; }
+code { background: var(--accent-soft); color: var(--accent); padding: 0 4px; border-radius: 4px; font-size: .92em; }
+.tablewrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; background: var(--bg); }
+tr:last-child td { border-bottom: 0; }
+.missing { color: var(--muted); font-style: italic; border: 1px dashed var(--line); border-radius: 12px; padding: 14px 16px; }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.diagram { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 8px; margin-bottom: 14px; box-shadow: var(--shadow); }
+.diagram svg { width: 100%; height: auto; display: block; }
+.timeline { display: grid; gap: 12px; }
+.sprint { display: grid; grid-template-columns: 110px 1fr; gap: 14px; align-items: start; }
+.sprint .n { font-weight: 700; font-size: 20px; }
+.sprint .n .sub { display: block; font-weight: 400; font-size: 13px; color: var(--muted); }
+.mvpline { border-top: 2px dashed var(--mvp); margin: 4px 0; position: relative; }
+.mvpline span { position: absolute; top: -11px; left: 0; background: var(--bg); color: var(--mvp); font-size: 12px; font-weight: 700; padding: 0 6px; }
+.story { border-top: 1px solid var(--line); padding: 10px 0; }
+.story:first-of-type { border-top: 0; }
+.story .h { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+a.ext { color: var(--accent); text-decoration: none; font-size: 13px; }
+footer { color: var(--muted); font-size: 13px; padding: 24px 0; border-top: 1px solid var(--line); margin-top: 32px; }
+@media (max-width: 720px) { .two { grid-template-columns: 1fr; } .sprint { grid-template-columns: 1fr; } h1 { font-size: 30px; } }
+@media print {
+  nav { display: none; } body { background: #fff; color: #000; }
+  section { break-before: page; padding-top: 0; } section.cover { break-before: auto; }
+  .card, .tablewrap, .diagram { box-shadow: none; break-inside: avoid; }
+}
+</style>
+</head>
+<body>
+<nav><div class="in" id="nav"></div></nav>
+<main id="main"></main>
+<script id="presentation-data" type="application/json">__PRESENTATION_DATA__</script>
+<script>
+(function () {
+  'use strict';
+  var data = JSON.parse(document.getElementById('presentation-data').textContent);
+  // labels; data.ui overrides any of them (for another language)
+  var ui = Object.assign({
+    solution: 'Solution', generated: 'Generated', problem: 'Problem and goals', functional: 'Functional solution',
+    prototype: 'Prototype', technical: 'Technical solution', observability: 'Observability', security: 'Security',
+    decisions: 'Decisions', sprints: 'Sprints', stories: 'User stories', risks: 'Risks', next: 'Next steps',
+    mvp: 'MVP', later: 'After the MVP', hours: 'h', sprint: 'Sprint', goal: 'Goal', capacity: 'capacity',
+    feature: 'Feature', story: 'Story', acceptance: 'Acceptance', estimate: 'Estimate', owner: 'Owner',
+    dependsOn: 'Depends on', blockedBy: 'Blocked by', blockers: 'Blockers', assignee: 'Assignee',
+    stack: 'Stack', layer: 'Layer', choice: 'Choice', why: 'Why', components: 'Components',
+    integrations: 'Integrations', direction: 'Direction', protocol: 'Protocol', auth: 'Authentication',
+    data: 'Data', entity: 'Entity', personal: 'Personal data', retention: 'Retention', deployment: 'Deployment',
+    environments: 'Environments', hosting: 'Hosting', ci: 'CI', metrics: 'Metrics', dashboards: 'Dashboards',
+    alerts: 'Alerts', condition: 'Condition', severity: 'Severity', logs: 'Logs', traces: 'Traces',
+    alternatives: 'Not chosen', screens: 'Screens', flows: 'Flows', forms: 'forms', concern: 'Concern', control: 'Control',
+    openInTracker: 'open', yes: 'yes', no: 'no', talksTo: 'talks to', serves: 'serves', features: 'features',
+    as: 'As', iWant: 'I want', soThat: 'so that',
+    missingBrief: 'No product brief yet: /compasso:discover writes it.',
+    missingArchitecture: 'No technical solution yet: /compasso:architect writes it.',
+    missingRoadmap: 'No sprints yet: /compasso:roadmap places the features into sprints.',
+    missingPlan: 'No sprint is planned into stories yet: /compasso:plan splits the next sprint.',
+    laterSprints: 'Later sprints are planned into stories at each sprint close, with the velocity reached.',
+    nextSteps: 'Merge the plan merge request, then build the sprint with /compasso:sprint; /compasso:status shows where it stands.'
+  }, data.ui || {});
+  document.documentElement.lang = data.lang || 'en';
+  document.title = (data.name || 'Product') + ' · ' + ui.solution;
+
+  function el(tag, attrs, kids) {
+    var e = document.createElement(tag), k;
+    if (attrs) for (k in attrs) if (attrs[k] != null) e.setAttribute(k, attrs[k]);
+    (Array.isArray(kids) ? kids : [kids]).forEach(function (c) {
+      if (c == null || c === false) return;
+      e.appendChild(typeof c === 'string' || typeof c === 'number' ? document.createTextNode(String(c)) : c);
+    });
+    return e;
+  }
+  function inline(text) { // **bold** and `code`, everything else as text
+    var out = el('span'), re = /(\*\*[^*]+\*\*|`[^`]+`)/g, last = 0, m;
+    text = String(text || '');
+    while ((m = re.exec(text))) {
+      if (m.index > last) out.appendChild(document.createTextNode(text.slice(last, m.index)));
+      out.appendChild(m[0][0] === '*' ? el('strong', null, m[0].slice(2, -2)) : el('code', null, m[0].slice(1, -1)));
+      last = m.index + m[0].length;
+    }
+    if (last < text.length) out.appendChild(document.createTextNode(text.slice(last)));
+    return out;
+  }
+  function md(text) { // paragraphs and "- " lists
+    var box = el('div'), list = null, para = [];
+    function flush() { if (para.length) { box.appendChild(el('p', null, inline(para.join(' ')))); para = []; } }
+    String(text || '').split('\n').forEach(function (line) {
+      var t = line.trim();
+      if (/^[-*] /.test(t)) { flush(); if (!list) { list = el('ul'); box.appendChild(list); } list.appendChild(el('li', null, inline(t.slice(2)))); }
+      else if (t === '') { flush(); list = null; }
+      else { list = null; para.push(t); }
+    });
+    flush();
+    return box;
+  }
+  function link(url) { return url ? el('a', { 'class': 'ext', href: url, target: '_blank', rel: 'noopener' }, ui.openInTracker + ' ↗') : null; }
+  function table(heads, rows) {
+    return el('div', { 'class': 'tablewrap' }, el('table', null, [
+      el('thead', null, el('tr', null, heads.map(function (h) { return el('th', null, h); }))),
+      el('tbody', null, rows.map(function (r) { return el('tr', null, r.map(function (c) { return el('td', null, c); })); }))
+    ]));
+  }
+  function list(items) { return items && items.length ? el('ul', null, items.map(function (i) { return el('li', null, inline(i)); })) : null; }
+  function missing(t) { return el('p', { 'class': 'missing' }, t); }
+  var main = document.getElementById('main'), nav = document.getElementById('nav');
+  function section(id, kicker, title, kids) {
+    nav.appendChild(el('a', { href: '#' + id }, title));
+    main.appendChild(el('section', { id: id }, [kicker ? el('div', { 'class': 'kicker' }, kicker) : null, el('h2', null, title)].concat(kids)));
+  }
+  var feats = data.features || [], byKey = {};
+  feats.forEach(function (f) { byKey[f.key] = f; });
+
+  // ---------- cover ----------
+  var mvpCount = feats.filter(function (f) { return f.mvp; }).length;
+  var road = data.roadmap;
+  main.appendChild(el('section', { 'class': 'cover', id: 'top' }, [
+    el('div', { 'class': 'kicker' }, ui.solution),
+    el('h1', null, data.name),
+    data.architecture && data.architecture.summary ? el('p', { style: 'font-size:19px;max-width:760px' }, data.architecture.summary) : null,
+    el('div', { 'class': 'chips' }, [
+      feats.length ? el('span', { 'class': 'badge b-acc' }, feats.length + ' ' + ui.features) : null,
+      mvpCount ? el('span', { 'class': 'badge b-mvp' }, ui.mvp + ': ' + mvpCount) : null,
+      road ? el('span', { 'class': 'badge b-acc' }, road.sprints.length + ' ' + ui.sprints.toLowerCase()) : null
+    ]),
+    el('p', { 'class': 'meta' }, ui.generated + ' ' + data.date)
+  ]));
+
+  // ---------- problem ----------
+  section('problem', null, ui.problem, data.brief && data.brief.sections.length ?
+    [el('div', { 'class': 'grid' }, data.brief.sections.map(function (s) { return el('div', { 'class': 'card' }, [el('h3', null, s.title), md(s.text)]); }))] :
+    [missing(ui.missingBrief)]);
+
+  // ---------- functional ----------
+  function featureCard(f) {
+    return el('div', { 'class': 'card' }, [
+      el('div', null, [el('span', { 'class': 'badge ' + (f.mvp ? 'b-mvp' : 'b-later') }, f.mvp ? ui.mvp : ui.later),
+        el('span', { 'class': 'sub' }, f.key + ' · ' + f.size_h + ui.hours), ' ', link(f.url)]),
+      el('h3', { style: 'margin-top:6px' }, f.title),
+      el('p', { 'class': 'sub' }, f.goal),
+      list(f.scope),
+      (f.sources || []).length ? el('div', { 'class': 'chips' }, f.sources.map(function (s) { return el('span', { 'class': 'chip' }, s); })) : null
+    ]);
+  }
+  section('functional', null, ui.functional, feats.length ? [
+    el('h3', null, ui.mvp), el('div', { 'class': 'grid' }, feats.filter(function (f) { return f.mvp; }).map(featureCard)),
+    feats.some(function (f) { return !f.mvp; }) ? el('h3', { style: 'margin-top:20px' }, ui.later) : null,
+    el('div', { 'class': 'grid' }, feats.filter(function (f) { return !f.mvp; }).map(featureCard))
+  ] : [missing(ui.missingBrief)]);
+
+  // ---------- prototype ----------
+  if (data.prototype) {
+    var p = data.prototype;
+    section('prototype', null, ui.prototype, [
+      el('p', { 'class': 'sub' }, p.where || ''),
+      table([ui.screens, '', ui.flows], p.screens.map(function (s) {
+        return [el('strong', null, s.name), el('span', { 'class': 'sub' }, s.id + (s.forms ? ' · ' + s.forms + ' ' + ui.forms : '')),
+          (p.flows || []).filter(function (fl) { return (fl.steps || []).indexOf(s.id) >= 0; }).map(function (fl) { return fl.name; }).join(', ')];
+      }))
+    ]);
+  }
+
+  // ---------- technical ----------
+  var a = data.architecture;
+  function diagram(components) {
+    var n = components.length, cols = Math.min(n, 4), rows = Math.ceil(n / cols), w = 240, h = 74, gx = 70, gy = 64;
+    var W = cols * w + (cols - 1) * gx + 40, H = rows * h + (rows - 1) * gy + 40, pos = {}, ns = 'http://www.w3.org/2000/svg';
+    function s(tag, at) { var e = document.createElementNS(ns, tag); for (var k in at) e.setAttribute(k, at[k]); return e; }
+    var svg = s('svg', { viewBox: '0 0 ' + W + ' ' + H, role: 'img', 'aria-label': ui.components });
+    var defs = s('defs', {}), mk = s('marker', { id: 'arr', viewBox: '0 0 10 10', refX: 9, refY: 5, markerWidth: 7, markerHeight: 7, orient: 'auto-start-reverse' });
+    mk.appendChild(s('path', { d: 'M0,0 L10,5 L0,10 z', fill: 'var(--muted)' })); defs.appendChild(mk); svg.appendChild(defs);
+    components.forEach(function (c, i) { pos[c.name] = { x: 20 + (i % cols) * (w + gx), y: 20 + Math.floor(i / cols) * (h + gy) }; });
+    components.forEach(function (c) {
+      (c.talks_to || []).forEach(function (t) {
+        var A = pos[c.name], B = pos[t]; if (!B) return;
+        var x1 = A.x + w / 2, y1 = A.y + h / 2, x2 = B.x + w / 2, y2 = B.y + h / 2, dx = x2 - x1, dy = y2 - y1;
+        var k = Math.min(Math.abs(dx) > 0 ? (w / 2) / Math.abs(dx) : 1e9, Math.abs(dy) > 0 ? (h / 2) / Math.abs(dy) : 1e9);
+        svg.appendChild(s('line', { x1: x1 + dx * k, y1: y1 + dy * k, x2: x2 - dx * k, y2: y2 - dy * k, stroke: 'var(--muted)', 'stroke-width': 1.5, 'marker-end': 'url(#arr)' }));
+      });
+    });
+    components.forEach(function (c) {
+      var P = pos[c.name], g = s('g', {});
+      g.appendChild(s('rect', { x: P.x, y: P.y, width: w, height: h, rx: 10, fill: 'var(--accent-soft)', stroke: 'var(--accent)' }));
+      var t1 = s('text', { x: P.x + 14, y: P.y + 30, fill: 'var(--ink)', 'font-weight': 700, 'font-size': 16 }); t1.textContent = c.name;
+      var t2 = s('text', { x: P.x + 14, y: P.y + 52, fill: 'var(--muted)', 'font-size': 13 }); t2.textContent = c.technology || '';
+      g.appendChild(t1); g.appendChild(t2); svg.appendChild(g);
+    });
+    return el('div', { 'class': 'diagram' }, svg);
+  }
+  if (a) {
+    section('technical', null, ui.technical, [
+      a.summary ? el('p', null, a.summary) : null,
+      el('h3', null, ui.stack),
+      table([ui.layer, ui.choice, ui.why], (a.stack || []).map(function (s) { return [el('strong', null, s.layer), s.choice, s.why]; })),
+      el('h3', { style: 'margin-top:20px' }, ui.components),
+      (a.components || []).length ? diagram(a.components) : null,
+      el('div', { 'class': 'grid' }, (a.components || []).map(function (c) {
+        return el('div', { 'class': 'card' }, [el('h3', null, c.name), el('p', { 'class': 'sub' }, c.technology || ''), el('p', null, c.responsibility),
+          (c.features || []).length ? el('div', { 'class': 'chips' }, c.features.map(function (k) { return el('span', { 'class': 'chip', title: (byKey[k] || {}).title || '' }, k + (byKey[k] ? ' · ' + byKey[k].title : '')); })) : null]);
+      })),
+      (a.integrations || []).length ? el('h3', { style: 'margin-top:20px' }, ui.integrations) : null,
+      (a.integrations || []).length ? table(['', ui.direction, ui.protocol, ui.auth, ui.owner], a.integrations.map(function (i) { return [el('strong', null, i.name), i.direction, i.protocol, i.auth, i.owner]; })) : null,
+      (a.data || []).length ? el('h3', { style: 'margin-top:20px' }, ui.data) : null,
+      (a.data || []).length ? table([ui.entity, ui.owner, ui.personal, ui.retention], a.data.map(function (d) { return [el('strong', null, d.entity), d.owner, d.personal ? el('span', { 'class': 'badge b-risk' }, ui.yes) : ui.no, d.retention]; })) : null,
+      a.deployment ? el('h3', { style: 'margin-top:20px' }, ui.deployment) : null,
+      a.deployment ? table([ui.environments, ui.hosting, ui.ci], [[(a.deployment.environments || []).join(' → '), a.deployment.hosting, a.deployment.ci]]) : null
+    ]);
+    var o = a.observability || {};
+    section('observability', null, ui.observability, [
+      el('div', { 'class': 'two' }, [el('div', { 'class': 'card' }, [el('h3', null, ui.logs), el('p', null, o.logs || '')]),
+        el('div', { 'class': 'card' }, [el('h3', null, ui.traces), el('p', null, o.traces || '')])]),
+      el('h3', { style: 'margin-top:20px' }, ui.metrics),
+      table(['', ui.why], (o.metrics || []).map(function (m) { return [el('code', null, m.name), m.why]; })),
+      (o.dashboards || []).length ? el('h3', { style: 'margin-top:20px' }, ui.dashboards) : null,
+      (o.dashboards || []).length ? table(['', '', ui.prototype], o.dashboards.map(function (d) { return [el('strong', null, d.name), d.shows, d.screen || '']; })) : null,
+      el('h3', { style: 'margin-top:20px' }, ui.alerts),
+      table(['', ui.condition, ui.severity], (o.alerts || []).map(function (x) { return [el('strong', null, x.name), x.condition, el('span', { 'class': 'badge ' + (x.severity === 'page' ? 'b-risk' : 'b-acc') }, x.severity)]; }))
+    ]);
+    section('security', null, ui.security, [table([ui.concern, ui.control], (a.security || []).map(function (s) { return [el('strong', null, s.concern), s.control]; }))]);
+  } else {
+    section('technical', null, ui.technical, [missing(ui.missingArchitecture)]);
+  }
+
+  // ---------- decisions ----------
+  var dk = [];
+  if (a && (a.decisions || []).length) {
+    dk.push(el('div', { 'class': 'grid' }, a.decisions.map(function (d) {
+      return el('div', { 'class': 'card' }, [el('h3', null, d.title), el('p', null, [el('strong', null, d.choice)]), el('p', { 'class': 'sub' }, d.why),
+        (d.alternatives || []).length ? el('p', { 'class': 'sub' }, ui.alternatives + ': ' + d.alternatives.join(', ')) : null]);
+    })));
+  }
+  if ((data.decisions || []).length) dk.push(el('div', { 'class': 'card', style: 'margin-top:14px' }, list(data.decisions.map(function (d) { return d.text; }))));
+  if (dk.length) section('decisions', null, ui.decisions, dk);
+
+  // ---------- sprints ----------
+  if (road) {
+    var tl = el('div', { 'class': 'timeline' });
+    road.sprints.forEach(function (sp) {
+      tl.appendChild(el('div', { 'class': 'sprint card' }, [
+        el('div', { 'class': 'n' }, ['S' + sp.number, el('span', { 'class': 'sub' }, sp.hours + ui.hours + ' / ' + road.capacity_h + ui.hours)]),
+        el('div', null, [el('p', null, el('strong', null, sp.goal || '')),
+          el('div', { 'class': 'chips' }, (sp.features || []).map(function (k) { var f = byKey[k] || {}; return el('span', { 'class': 'chip' }, k + ' · ' + (f.title || '') + ' · ' + (f.size_h || '?') + ui.hours); }))])
+      ]));
+      if (sp.number === road.mvp_sprint) tl.appendChild(el('div', { 'class': 'mvpline' }, el('span', null, ui.mvp)));
+    });
+    section('sprints', null, ui.sprints, [tl, el('p', { 'class': 'sub', style: 'margin-top:12px' }, ui.laterSprints)]);
+  } else {
+    section('sprints', null, ui.sprints, [missing(ui.missingRoadmap)]);
+  }
+
+  // ---------- stories ----------
+  var pl = data.plan;
+  if (pl) {
+    var kids = [el('p', null, [el('span', { 'class': 'badge b-acc' }, ui.sprint + ' ' + pl.sprint), (pl.start || '') + (pl.end ? ' – ' + pl.end : '')]), el('p', null, el('strong', null, pl.goal))];
+    pl.features.forEach(function (f) {
+      var card = el('div', { 'class': 'card', style: 'margin-top:14px' }, [el('h3', null, [f.key + ' · ' + f.title + ' ', link(f.url)])]);
+      f.stories.forEach(function (s) {
+        card.appendChild(el('div', { 'class': 'story' }, [
+          el('div', { 'class': 'h' }, [el('strong', null, s.key + ' · ' + s.title), el('span', { 'class': 'badge b-acc' }, s.estimate_h + ui.hours), el('span', { 'class': 'chip' }, ui.owner + ': ' + s.owner), link(s.url)]),
+          s.as ? el('p', { 'class': 'sub' }, ui.as + ' ' + s.as + ', ' + ui.iWant + ' ' + s.want + ', ' + ui.soThat + ' ' + s.so_that + '.') : null,
+          list(s.acceptance),
+          (s.depends_on || []).length || (s.blocked_by || []).length ? el('p', { 'class': 'sub' }, [
+            (s.depends_on || []).length ? ui.dependsOn + ': ' + s.depends_on.join(', ') + '  ' : '',
+            (s.blocked_by || []).length ? ui.blockedBy + ': ' + s.blocked_by.join(', ') : '']) : null
+        ]));
+      });
+      kids.push(card);
+    });
+    if ((pl.blockers || []).length) {
+      kids.push(el('h3', { style: 'margin-top:20px' }, ui.blockers));
+      kids.push(table(['', ui.assignee, ''], pl.blockers.map(function (b) { return [el('strong', null, b.key + ' · ' + b.title), '@' + b.assignee, link(b.url)]; })));
+    }
+    section('stories', null, ui.stories, kids);
+  } else {
+    section('stories', null, ui.stories, [missing(ui.missingPlan)]);
+  }
+
+  // ---------- risks and next ----------
+  var risks = (a && a.risks) || [];
+  if (risks.length) section('risks', null, ui.risks, [el('div', { 'class': 'card' }, list(risks))]);
+  section('next', null, ui.next, [el('p', null, inline(ui.nextSteps))]);
+  main.appendChild(el('footer', null, data.name + ' · ' + ui.generated + ' ' + data.date + ' · Compasso'));
+
+  var t = el('button', { type: 'button', 'aria-label': 'theme' }, '◐');
+  t.addEventListener('click', function () {
+    var r = document.documentElement, dark = r.dataset.theme ? r.dataset.theme === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+    r.dataset.theme = dark ? 'light' : 'dark';
+  });
+  nav.appendChild(t);
+})();
+</script>
+</body>
+</html>
