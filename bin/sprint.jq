@@ -15,7 +15,10 @@ def overlaps($a; $b):
     | ($y | startswith($x)) or ($x | startswith($y))));
 def brief: {iid, title};
 
-($items | map(. + {kind: kind})) as $all
+# $items and $ext come with --slurpfile: a sprint's items and their descriptions can pass the 128 KB
+# Linux allows one argument, so they never travel as arguments
+$items[0] as $items | $ext[0] as $ext
+| ($items | map(. + {kind: kind})) as $all
 | ($all + $ext | map({key: (.iid | tostring), value: .}) | from_entries) as $by
 | def open($i): ($by[$i | tostring].state // "opened") == "opened";
   ($all | map(select(.kind == "story" or .kind == "bug"))

@@ -72,10 +72,13 @@ L="$("$BIN/locale.sh" --repo "$REPO")" || exit 1
 ui="$(jq -c '.ui.presentation' <<<"$L")"   # the project's language; --ui changes any label
 [ -n "$UI" ] && { ui="$(jq -c --argjson base "$ui" '$base + .' "$UI")" || { echo "present: $UI is not valid JSON" >&2; exit 1; }; }
 
-data="$(jq -n --argjson brief "$brief" --argjson back "$back" --argjson arch "$arch" --argjson road "$road" \
-  --argjson plan "$plan" --argjson inv "$inv" --argjson dec "$decisions" --argjson ui "$ui" \
+# every part through a file, never an argument: a large plan passes the 128 KB Linux allows one argument
+f() { printf '%s' "$1"; }
+data="$(jq -n --slurpfile brief <(f "$brief") --slurpfile back <(f "$back") --slurpfile arch <(f "$arch") --slurpfile road <(f "$road") \
+  --slurpfile plan <(f "$plan") --slurpfile inv <(f "$inv") --slurpfile dec <(f "$decisions") --argjson ui "$ui" \
   --arg items "$items" --arg date "$(date +%F)" --arg lang "$("$BIN/locale.sh" --repo "$REPO" | jq -r .lang)" '
-  def link($n): if $items != "" and ($n | type) == "number" then $items + ($n | tostring) else null end;
+  $brief[0] as $brief | $back[0] as $back | $arch[0] as $arch | $road[0] as $road | $plan[0] as $plan | $inv[0] as $inv | $dec[0] as $dec
+  | def link($n): if $items != "" and ($n | type) == "number" then $items + ($n | tostring) else null end;
   {date: $date, lang: (if $lang == "" then "en" else $lang end), ui: $ui,
    name: ($back.product.name // $brief.title // "Product"),
    brief: $brief,
@@ -89,9 +92,9 @@ data="$(jq -n --argjson brief "$brief" --argjson back "$back" --argjson arch "$a
    decisions: $dec}')" || { echo "present: could not assemble the data" >&2; exit 1; }
 [ -n "$DOUT" ] && printf '%s\n' "$data" > "$DOUT"
 
-# every "<" as \u003c: the same JSON, and HTML never sees a tag (no "</script>", no "<!--") in the data block
-json="$(jq -c . <<<"$data" | sed 's/</\\u003c/g')"
-mkdir -p "$(dirname "$OUT")"
-J="$json" awk 'BEGIN { j = ENVIRON["J"] } { i = index($0, "__PRESENTATION_DATA__"); if (i) print substr($0, 1, i - 1) j substr($0, i + 21); else print }' \
-  "$ROOT/templates/presentation.html" > "$OUT" || exit 1
+# the page: data, language and title written by html-inject.sh, through files and checked before it is kept
+tmp="$(mktemp)"; trap 'rm -f "$tmp"' EXIT
+printf '%s' "$data" > "$tmp"
+"$BIN/html-inject.sh" --template "$ROOT/templates/presentation.html" --marker __PRESENTATION_DATA__ --data "$tmp" \
+  --lang "$(jq -r .lang <<<"$data")" --title "$(jq -r '"\(.name) · \(.ui.solution)"' <<<"$data")" --out "$OUT" || exit 1
 echo "present: wrote $OUT"

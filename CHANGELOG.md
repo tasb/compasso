@@ -2,6 +2,16 @@
 
 Versions follow `version` in `.claude-plugin/plugin.json`. Claude Code updates an installed plugin only when this version changes, so every change users should receive ships in a new version.
 
+## 1.2.1 (2026-10-05)
+
+Fixes reported from a real project.
+
+- **Large plans:**
+  - `/compasso:present` left an empty page and still reported success when its data passed 128 KB, the most Linux allows one argument or environment variable.
+  - The same limit stopped `/compasso:sprint` and `/compasso:status` (through `sprint-sync`) on sprints with long descriptions, and could break `plan-check`, `story` and the sprint report.
+  - Large JSON now always travels through files. The three HTML pages are written by `bin/html-inject.sh`, which checks the page before keeping it and never leaves an empty or partial file.
+- **Language and title:** the test guide, the sprint report and the presentation now carry `lang` and `<title>` in the HTML itself, in the project's language, for screen readers, hyphenation, the browser tab and the printed header.
+
 ## 1.2.0 (2026-10-04)
 
 - Setup asks the project's language: English, Portuguese (Portugal) or Portuguese (Brazil). It covers work items on the tracker, the issue templates, comments, merge requests, and the brief, records, test guide, sprint report and presentation. Labels stay in English.

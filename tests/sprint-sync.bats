@@ -135,3 +135,11 @@ field() { sync | jq -c "$1"; }
   [ "$(jq -c .cleaned <<<"$output")" = "[]" ]
   [ "$(grep -c '^PUT' "$FAKE_GL/calls.log" || true)" -eq 0 ]
 }
+
+@test "a sprint whose descriptions add up to over 1 MB is classified like any other" {
+  head -c 1100000 /dev/zero | tr '\0' x > "$BATS_TEST_TMPDIR/big.txt"
+  jq -c --rawfile big "$BATS_TEST_TMPDIR/big.txt" 'map(if .iid == 11 then .description += "\n\n" + $big else . end)' <<<"$items" > "$FAKE_GL/issue-query.json"
+  run sync
+  [ "$status" -eq 0 ]
+  [ "$(jq -c '[.runnable[].iid]' <<<"$output")" = "[11,14]" ]
+}

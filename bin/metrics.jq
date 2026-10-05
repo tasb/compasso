@@ -14,7 +14,9 @@ def kind: .labels as $l
 def est: ((.time_stats.time_estimate // 0) / 3600);
 def first_add($label): [.label_events[]? | select(.action == "add" and .label.name == $label) | .created_at | ts] | min;
 
-($now | ts) as $nowts
+# the large inputs come with --slurpfile (one-element arrays): they can pass the 128 KB Linux allows one argument
+$items[0] as $items | $sync[0] as $sync | $history[0] as $history | $files[0] as $files | $results[0] as $results
+| ($now | ts) as $nowts
 | ($items | map(. + {kind: kind})) as $all
 | ($all | map({key: (.iid | tostring), value: .}) | from_entries) as $by
 | ($all | map(select(.kind == "story" or .kind == "bug"))) as $work

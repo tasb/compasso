@@ -217,3 +217,11 @@ findings() { echo "$1" > "$BATS_TEST_TMPDIR/findings.json"; }
   issue 8 task "t" opened $'## Acceptance\n- [ ] Given x, When y, Then z\n\n## Verify\n- `make test`\n\n**Tests:** unit'
   [ "$(gl story --iid 8 | jq -c '[.story.acceptance, .story.verify]')" = '[["Given x, When y, Then z"],["make test"]]' ]
 }
+
+@test "story: a description over 1 MB is read like any other" {
+  head -c 1100000 /dev/zero | tr '\0' x > "$BATS_TEST_TMPDIR/big.txt"
+  jq --rawfile big "$BATS_TEST_TMPDIR/big.txt" '.description += "\n\n" + $big' "$FAKE_GL/issues/8.json" > "$BATS_TEST_TMPDIR/i.json" && mv "$BATS_TEST_TMPDIR/i.json" "$FAKE_GL/issues/8.json"
+  run gl story --iid 8
+  [ "$status" -eq 0 ]
+  [ "$(jq -r '.story.verify[0]' <<<"$output")" = "npm test -- billing" ]
+}

@@ -207,3 +207,9 @@ json() { pc --json | jq -r "$1"; }
   run pc
   [ "$status" -eq 0 ]
 }
+
+@test "a large plan (over 1 MB) is checked like any other" {
+  yq -i '.features[0].stories[0].acceptance = [("Given " + ("x" * 1100000) + ", When y, Then z")]' "$PLAN"
+  run "$ROOT/bin/plan-check.sh" --repo "$REPO"
+  [ "$status" -eq 0 ]
+}

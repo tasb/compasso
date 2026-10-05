@@ -51,7 +51,7 @@ sprint="$(yq -o=json '.epic' "$PLAN" | jq -c --argjson cap "$(cfg .sprint.capaci
 
 mkdir -p "$(dirname "$OUT")"
 jq -n --argjson sprint "$sprint" --arg today "$TODAY" --arg now "$NOW" \
-  --argjson items "$items" --argjson sync "$sync" --argjson history "$history" --argjson files "$files" \
-  --argjson results "$results" --argjson prices "$prices" --arg currency "$currency" \
+  --slurpfile items <(printf '%s' "$items") --slurpfile sync <(printf '%s' "$sync") --slurpfile history <(printf '%s' "$history") \
+  --slurpfile files <(printf '%s' "$files") --slurpfile results <(printf '%s' "$results") --argjson prices "$prices" --arg currency "$currency" \
   -f "$BIN/metrics.jq" > "$OUT" || { echo "metrics: could not build the report data" >&2; exit 1; }
 echo "metrics: wrote $OUT"

@@ -120,3 +120,13 @@ R() { mkdir -p "$REPO/.compasso/runs/$1"; echo "$REPO/.compasso/runs/$1"; }
   run st --milestone S20 --json
   [ "$(jq -c '[.milestone, (.tracker.runnable | map(.iid))]' <<<"$output")" = '["S20",[11]]' ]
 }
+
+@test "a sprint whose descriptions add up to over 1 MB still gets its status" {
+  head -c 1100000 /dev/zero | tr '\0' x > "$BATS_TEST_TMPDIR/big.txt"
+  jq --rawfile big "$BATS_TEST_TMPDIR/big.txt" '.body += "\n\n" + $big' "$FAKE_GH/issues/11.json" > "$BATS_TEST_TMPDIR/i.json" && mv "$BATS_TEST_TMPDIR/i.json" "$FAKE_GH/issues/11.json"
+  run st --milestone S20
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Build now: #11 Year filter"* ]] || false
+  run st --iid 11
+  [ "$status" -eq 0 ]
+}

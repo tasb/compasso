@@ -38,6 +38,10 @@ Scripts must run on macOS's bash 3.2. In bats, write `[[ ... ]] || false`: bash 
 - Cover both directions: what a gate refuses, and what it still lets through.
 - A tracker change is tested against the fakes, then tried once against a real project before it is called done.
 
+## Large data
+
+Never pass JSON that can grow (a plan, a sprint's items, descriptions, a page's data) as a command-line argument or an environment variable: Linux limits each one to 128 KB, and a large project fails or, worse, produces an empty file. Use `jq --slurpfile name <(printf '%s' "$json")` (then `$name[0]`), stdin, or a file. The tests include plans and descriptions over 1 MB.
+
 ## Languages
 
 A language is `templates/locales/<language>.yaml`, `templates/issue_templates/<language>/` and `templates/brief/<language>.md`. `tests/locale.bats` fails while the new language lacks a text English has, or drops a `{marker}`. Never add text for people to a script: add a key to every locale and use it through `bin/i18n.jq`.

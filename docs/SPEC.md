@@ -701,3 +701,13 @@ Asked for by a Portuguese-speaking user: the work items on the tracker had to fo
 - **Reading.** `parse.jq` accepts each heading and key line in every language Compasso ships (`locale.sh --names`). A work item written by hand in another language still works, and changing the language later breaks nothing. The decisions shown by the presentation are found under the Decisions heading of any language.
 - **Older configs.** `config.sh upgrade` moves an existing `test_guide.language` to `language` instead of replacing it with the default.
 - **Adding a language** is adding its files. Nothing in the code changes.
+
+## 30. Large projects (2026-10-05)
+
+Found by a user. A presentation's data of 224 KB went to awk through an environment variable. Linux allows each argument or environment variable at most 128 KB, so the page came out empty and the script still reported success. A review found the same risk in `plan-check`, `sprint-sync`, `story`, the sprint report's data, and `present.sh`'s own `jq` call.
+
+- **Through files.** Large JSON always travels through files (`jq --slurpfile`, stdin), never as an argument. The tests use plans, sprints and descriptions over 1 MB, which also fail macOS's total limit of about 1 MB. The previous `present.sh` failed them with "Argument list too long".
+- **Pages.** `bin/html-inject.sh` writes the three HTML pages:
+  - the data, read from a file, with every `<` as `\u003c`;
+  - `lang` and an HTML-escaped `<title>` in the markup itself, from the project's language (they were fixed at `en` and an English title, corrected only by script);
+  - a check that the page holds all its data and no placeholder before it replaces the old one. On failure it exits 1 and leaves the previous page as it was.

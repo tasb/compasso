@@ -113,7 +113,7 @@ if [ -n "$IID" ]; then
   tmp="$(mktemp)"; trap 'rm -f "$tmp"' EXIT; printf '%s' "$story" > "$tmp"
   unapproved="$("$BIN/trust.sh" check --repo "$REPO" --story "$tmp" 2>/dev/null)"
   st="$(stage "$IID" "$(jq -c .labels <<<"$story")")"
-  result="$(jq -n --argjson s "$story" --argjson r "$st" --arg u "$unapproved" '{
+  result="$(jq -n --slurpfile s <(printf '%s' "$story") --argjson r "$st" --arg u "$unapproved" '$s[0] as $s | {
     iid: $s.iid, title: $s.title, tracker_state: $s.state, milestone: $s.milestone, feature: $s.feature,
     state: ([$s.labels[] | select(startswith("compasso::")) | sub("compasso::"; "")][0] // "new"),
     owner: ([$s.labels[] | select(startswith("owner::")) | sub("owner::"; "")][0] // null),
@@ -148,7 +148,7 @@ if [ -d "$RUNS" ]; then
   done
 fi
 result="$(jq -n --arg ms "$MS" --argjson plan "$(plan_on_default)" --arg u "$unapproved" --argjson runs "$runs" \
-  --argjson sync "$( [ "$rc" -eq 0 ] && printf '%s' "$sync" || echo null)" --arg err "${sync_err:-}" '{
+  --slurpfile sync <( [ "$rc" -eq 0 ] && printf '%s' "$sync" || echo null) --arg err "${sync_err:-}" '$sync[0] as $sync | {
   milestone: $ms, plan: $plan, unapproved_verify: ($u | split("\n") | map(select(. != ""))), runs: ($runs | sort_by(.iid)),
   tracker: (if $sync then $sync | del(.cleaned) else null end), tracker_error: (if $err == "" then null else $err end)}')"
 if [ "$JSON" -eq 1 ]; then printf '%s\n' "$result"; exit "$rc"; fi

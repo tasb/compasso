@@ -40,9 +40,8 @@ problems="$(jq -r '
 # every "<" as \u003c: the same JSON, and HTML never sees a tag (no "</script>", no "<!--") in the data block
 # the page's labels in the project's language; labels in the data win
 L="$("$ROOT/bin/locale.sh" --repo "$REPO")" || exit 1
-json="$(jq -c --argjson L "$L" '. + {ui: ($L.ui.guide + (.ui // {})), language: (.language // $L.lang)}' "$DATA" | sed 's/</\\u003c/g')"
-mkdir -p "$(dirname "$OUT")"
-# ENVIRON, not awk -v: -v would turn the JSON's \" escapes into bare quotes
-JSON="$json" awk '{ i = index($0, "__GUIDE_DATA__"); if (i) { print substr($0, 1, i - 1) ENVIRON["JSON"] substr($0, i + 14) } else print }' \
-  "$ROOT/templates/test-guide.html" > "$OUT"
+tmp="$(mktemp)"; trap 'rm -f "$tmp"' EXIT
+jq -c --argjson L "$L" '. + {ui: ($L.ui.guide + (.ui // {})), language: (.language // $L.lang)}' "$DATA" > "$tmp" || exit 1
+"$ROOT/bin/html-inject.sh" --template "$ROOT/templates/test-guide.html" --marker __GUIDE_DATA__ --data "$tmp" \
+  --lang "$(jq -r .language "$tmp")" --title "$(jq -r .title "$tmp")" --out "$OUT" || exit 1
 echo "test-guide: wrote $OUT"

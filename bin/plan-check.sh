@@ -25,12 +25,12 @@ done
 plan_json="$(yq -o=json '.' "$PLAN" 2>/dev/null)" || { echo "plan-check: $PLAN is not valid YAML" >&2; exit 1; }
 
 cfg() { "$BIN/config.sh" get --repo "$REPO" "$1"; }
-result="$(jq -n --argjson plan "$plan_json" \
+result="$(jq -n --slurpfile plan <(printf '%s' "$plan_json") \
   --argjson max "$(cfg .limits.story_max_hours)" --argjson target "$(cfg .limits.story_target_hours)" \
   --argjson hpd "$(cfg .sprint.hours_per_day)" --argjson weeks "$(cfg .sprint.weeks)" \
   --argjson cap "$(cfg .sprint.capacity_hours)" \
   --argjson sensitive "$(yq -o=json '.risk.sensitive_paths // []' "$REPO/.compasso/project.yaml")" \
-  '{plan: $plan, cfg: {max: $max, target: $target, hpd: $hpd, weeks: $weeks, cap: $cap, sensitive: $sensitive}}' |
+  '{plan: $plan[0], cfg: {max: $max, target: $target, hpd: $hpd, weeks: $weeks, cap: $cap, sensitive: $sensitive}}' |
   jq -f "$BIN/plan-check.jq")" || { echo "plan-check: could not evaluate $PLAN" >&2; exit 1; }
 
 if [ "$JSON" -eq 1 ]; then

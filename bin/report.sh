@@ -28,8 +28,8 @@ problems="$(jq -r '
 # "</" would end the script element early; ENVIRON keeps awk from reading escapes
 # the page's labels in the project's language; labels in the data win
 L="$("$ROOT/bin/locale.sh" --repo "$REPO")" || exit 1
-json="$(jq -c --argjson L "$L" '. + {ui: ($L.ui.report + (.ui // {})), language: (.language // $L.lang)}' "$DATA" | sed 's/</\\u003c/g')"
-mkdir -p "$(dirname "$OUT")"
-JSON="$json" awk '{ i = index($0, "__REPORT_DATA__"); if (i) { print substr($0, 1, i - 1) ENVIRON["JSON"] substr($0, i + 15) } else print }' \
-  "$ROOT/templates/report.html" > "$OUT"
+tmp="$(mktemp)"; trap 'rm -f "$tmp"' EXIT
+jq -c --argjson L "$L" '. + {ui: ($L.ui.report + (.ui // {})), language: (.language // $L.lang)}' "$DATA" > "$tmp" || exit 1
+"$ROOT/bin/html-inject.sh" --template "$ROOT/templates/report.html" --marker __REPORT_DATA__ --data "$tmp" \
+  --lang "$(jq -r .language "$tmp")" --title "$(jq -r '.sprint.number as $n | .ui.title | gsub("\\{n\\}"; ($n | tostring))' "$tmp")" --out "$OUT" || exit 1
 echo "report: wrote $OUT"

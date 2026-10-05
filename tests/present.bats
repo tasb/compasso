@@ -53,3 +53,12 @@ present() { "$ROOT/bin/present.sh" --repo "$REPO" --out "$OUT" --data-out "$D" "
   run "$ROOT/bin/present.sh" --repo "$REPO"
   [ "$status" -eq 2 ]
 }
+
+@test "a large plan (1.4 MB) builds a complete page, never an empty one" {
+  yq -i '.features[].goal = ("x" * 200000)' "$REPO/.compasso/backlog.yaml"
+  run present
+  [ "$status" -eq 0 ]
+  [ "$(wc -c < "$OUT" | tr -d ' ')" -gt 1200000 ]
+  [ "$(jq '[.features[].goal | length] | add' "$D")" -eq 1200000 ]
+  grep -q '<title>Shop · Solution</title>' "$OUT"
+}

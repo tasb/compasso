@@ -386,8 +386,8 @@ story() {
     dj="$(api "repos/$R/issues?milestone=$ms&labels=type::epic&state=all" --jq '.[0] // empty')"
     if [ -n "$dj" ]; then epic="$(jq -r .number <<<"$dj")"; ecov="$(jq -r '.body // ""' <<<"$dj" | jq -Rs --argjson N "$NAMES" -f "$BIN/parse.jq" | jq .coverage)"; fi
   fi
-  jq -n --argjson issue "$n" --argjson s "$parsed" --arg feature "$feature" --argjson fcov "$fcov" \
-        --arg epic "$epic" --argjson ecov "$ecov" --argjson open "$open" --argjson dflt "$(cfg .coverage.min_changed)" '{
+  jq -n --slurpfile issue <(printf '%s' "$n") --slurpfile s <(printf '%s' "$parsed") --arg feature "$feature" --argjson fcov "$fcov" \
+        --arg epic "$epic" --argjson ecov "$ecov" --argjson open "$open" --argjson dflt "$(cfg .coverage.min_changed)" '$issue[0] as $issue | $s[0] as $s | {
     iid: $issue.iid, id: $issue.id, title: $issue.title, state: $issue.state, type: $issue.issue_type,
     kind: (if ($issue.labels | index("type::bug")) then "bug" else "story" end),
     estimate_h: (($issue.time_stats.time_estimate // 0) / 3600),
@@ -509,13 +509,13 @@ sprint_sync() {
         else deps="$(jq -c ". + [$n]" <<<"$deps")"; fi
       done
     fi
-    d="$(jq -c --argjson p "$(jq -r .description <<<"$d" | jq -Rs --argjson N "$NAMES" -f "$BIN/parse.jq" | jq -c --argjson d "$deps" --argjson b "$blocked" '.depends_on = $d | .blocked_by = $b')" \
-      --arg parent "$p" '. + {parsed: $p, parent: (if $parent == "" then null else ($parent | tonumber) end)}' <<<"$d")"
-    enriched="$(jq -c --argjson d "$d" '. + [$d]' <<<"$enriched")"
+    d="$(jq -c --slurpfile p <(jq -r .description <<<"$d" | jq -Rs --argjson N "$NAMES" -f "$BIN/parse.jq" | jq -c --argjson d "$deps" --argjson b "$blocked" '.depends_on = $d | .blocked_by = $b') \
+      --arg parent "$p" '$p[0] as $p | . + {parsed: $p, parent: (if $parent == "" then null else ($parent | tonumber) end)}' <<<"$d")"
+    enriched="$(jq -c --slurpfile d <(printf '%s' "$d") '. + $d' <<<"$enriched")"   # a file, not an argument: items can be large
   done
   for i in $(jq -r '[.[].iid] as $in | [.[].parsed | (.depends_on + .blocked_by)[]] | unique | map(select(. as $x | $in | index($x) | not)) | .[]' <<<"$enriched"); do
     d="$(issue "$i")" || { echo "github: #$i is referenced in $ms but does not exist" >&2; return 1; }
-    ext="$(jq -c --argjson d "$d" '. + [{iid: $d.number, state: (if $d.state == "open" then "opened" else "closed" end), title: $d.title,
+    ext="$(jq -c --slurpfile d <(printf '%s' "$d") '$d[0] as $d | . + [{iid: $d.number, state: (if $d.state == "open" then "opened" else "closed" end), title: $d.title,
       labels: [$d.labels[].name], assignees: [$d.assignees[]? | {username: .login}]}]' <<<"$ext")"
   done
   for i in $(jq -r '.[] | select(.state == "closed" and .issue_type == "task")
@@ -525,7 +525,7 @@ sprint_sync() {
     cleaned="$(jq -c --argjson i "$i" '. + [$i]' <<<"$cleaned")"
   done
   parallel="$(cfg '.sprint.parallel // 2')"
-  jq -n --arg ms "$ms" --argjson items "$enriched" --argjson ext "$ext" --argjson cleaned "$cleaned" \
+  jq -n --arg ms "$ms" --slurpfile items <(printf '%s' "$enriched") --slurpfile ext <(printf '%s' "$ext") --argjson cleaned "$cleaned" \
         --argjson parallel "$parallel" --arg feature "$PARENT" -f "$BIN/sprint.jq"
 }
 
@@ -538,7 +538,7 @@ sprint_items() { # the sprint's work items with their label history, for the rep
       | {action: (if .event == "labeled" then "add" else "remove" end), label: {name: .label.name}, created_at})')" || ev='[]'
     with="$(jq -c --argjson i "$i" --argjson ev "$ev" '. + [{iid: $i, label_events: $ev}]' <<<"$with")"
   done
-  jq -c --argjson with "$with" 'map(. as $it | . + {label_events: ([$with[] | select(.iid == $it.iid) | .label_events][0] // [])})' <<<"$items"
+  jq -c --slurpfile with <(printf '%s' "$with") '$with[0] as $with | map(. as $it | . + {label_events: ([$with[] | select(.iid == $it.iid) | .label_events][0] // [])})' <<<"$items"
 }
 
 sprint_done() { # hours done in a sprint, or null when the sprint does not exist
