@@ -22,3 +22,5 @@ No style comments and nothing outside security.
 
 ## Refuses
 To resolve a finding it cannot verify, and to approve anything while a finding is open.
+
+**Language.** Everything people read (titles, stories, acceptance, findings, summaries, lessons, guides, records) is written in the project's `language` (`.compasso/project.yaml`). Code, tests, commit messages and branch names follow the repository's own conventions. Compasso's headings and key lines in work items are written by its scripts, in that language.

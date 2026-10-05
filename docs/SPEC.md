@@ -680,3 +680,24 @@ Asked for by a user starting from three single-file HTML pages: a functional pro
   - **Safety.** Every value is shown as text, never as markup. The data block writes every `<` as `\u003c`, which the test guide and sprint report now do too, so no text from a document can end it or open a tag.
 - **Single-file HTML prototypes** are read as source code: their screens usually change by script, which a link-only crawl cannot see. Several prototypes share one inventory with unique screen ids, each screen naming its file.
 - **Stories.** As everywhere in Compasso, only the next sprint is split into stories: the presentation shows every sprint with its features, and the stories of the one planned.
+
+## 29. Language (2026-10-04)
+
+Asked for by a Portuguese-speaking user: the work items on the tracker had to follow the project's language. Decided with the user.
+
+- **Scope.** `language` in `.compasso/project.yaml` (en, pt-PT, pt-BR) covers:
+  - work items on the tracker: headings, key lines, the story sentence, and the text the agents write;
+  - the issue templates;
+  - comments: questions and answers, the plan, review findings, the digest, hardening, test results;
+  - merge requests: the body, risk reasons, the plan merge request;
+  - the files in the repository: brief, decision records, test guide, sprint report and presentation.
+
+  Labels stay in English, because scripts and tracker filters use them, and so do `Closes #<n>` (the closing keyword GitLab and GitHub understand), the `<!-- compasso:… -->` markers and the test types `unit` and `e2e`. Code, tests, commit messages and branch names follow the repository's conventions. Terminal output of the scripts stays English.
+- **Texts.**
+  - Each language is one file, `templates/locales/<language>.yaml`: `md` (the names in work items), `text` (everything else, with `{markers}` for values) and `ui` (the labels of the three HTML pages).
+  - Every language also has `templates/issue_templates/<language>/` and `templates/brief/<language>.md`.
+  - `bin/locale.sh` gives the project's texts over English, and `bin/i18n.jq` (`t`, `tf`, `md`, `lbl`) lets every script use them.
+  - Tests require every language to have every text, with the same markers, and every label the pages use.
+- **Reading.** `parse.jq` accepts each heading and key line in every language Compasso ships (`locale.sh --names`). A work item written by hand in another language still works, and changing the language later breaks nothing. The decisions shown by the presentation are found under the Decisions heading of any language.
+- **Older configs.** `config.sh upgrade` moves an existing `test_guide.language` to `language` instead of replacing it with the default.
+- **Adding a language** is adding its files. Nothing in the code changes.

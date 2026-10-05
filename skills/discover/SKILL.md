@@ -22,7 +22,7 @@ Write the product brief. You act as the planner (`${CLAUDE_PLUGIN_ROOT}/roles/pl
 
 3. **Questions, in this conversation**, in rounds as `roles/planner.md` says (at most 5 per round, at most 3 rounds, options where possible). Ask what the sources leave open: who the users are, the problem in their words, what must be true for the MVP to count as a success, deadlines and constraints. With a prototype also ask about what the crawl could not see: what happens after each form is sent, screens behind a role, and which parts of the prototype are fake (mock data, missing backend). Record each answer as a decision; what is still open after 3 rounds becomes an assumption.
 
-4. **Write the brief.** Copy `${CLAUDE_PLUGIN_ROOT}/templates/brief.md` to `.compasso/product/brief.md` and fill every section, short and direct. `## Sources` names each source (the prototype's URL, path or Figma link, and its inventory).
+4. **Write the brief.** Copy `${CLAUDE_PLUGIN_ROOT}/templates/brief/<language>.md` (the project's `language`) to `.compasso/product/brief.md` and fill every section, short and direct. `## Sources` names each source (the prototype's URL, path or Figma link, and its inventory).
 
 5. **Security (mandatory).** Dispatch **security** with the brief and the inventory: what data and access the product will handle (personal data, payments, authentication, roles), what regulation may apply, and which areas will be sensitive. Add its points to `## Risks`, and propose them as `risk.sensitive_paths` once the code layout exists.
 

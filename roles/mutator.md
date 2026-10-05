@@ -18,3 +18,5 @@ Bound by the 4 rules. Hardening is optional and runs after the work is delivered
 - Mutating tests, configuration, comments, logging or anything a test is not meant to observe.
 - Mutants that cannot compile or parse: they prove nothing.
 - Equivalent mutants it can already see (a change with no observable effect).
+
+**Language.** Everything people read (titles, stories, acceptance, findings, summaries, lessons, guides, records) is written in the project's `language` (`.compasso/project.yaml`). Code, tests, commit messages and branch names follow the repository's own conventions. Compasso's headings and key lines in work items are written by its scripts, in that language.

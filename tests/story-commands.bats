@@ -208,3 +208,12 @@ findings() { echo "$1" > "$BATS_TEST_TMPDIR/findings.json"; }
   [ "$status" -eq 1 ]
   [[ "$output" == *"needs --iid"* ]] || false
 }
+
+@test "story: an item written in another language is read the same, whatever the project's language" {
+  issue 8 task "t" opened $'**Como** cliente **quero** uma lista **para que** veja o histórico.\n\n## Critérios de aceitação\n- [ ] Dado 3 faturas, Quando abro, Então vejo 3\n\n## Verificação\n- `npm test`\n\n**Testes:** unit, e2e\\\n**Cobertura:** 90%\n\n<!-- compasso:key=S-1 -->'
+  run gl story --iid 8
+  [ "$(jq -c '[.story.acceptance, .story.verify, .story.tests, .coverage_min]' <<<"$output")" = '[["Dado 3 faturas, Quando abro, Então vejo 3"],["npm test"],["unit","e2e"],90]' ]
+  cfg_set '.language = "pt-BR"'
+  issue 8 task "t" opened $'## Acceptance\n- [ ] Given x, When y, Then z\n\n## Verify\n- `make test`\n\n**Tests:** unit'
+  [ "$(gl story --iid 8 | jq -c '[.story.acceptance, .story.verify]')" = '[["Given x, When y, Then z"],["make test"]]' ]
+}

@@ -37,31 +37,33 @@ lines="$(git -C "$REPO" diff --numstat "$BASE" -- . ':(exclude).compasso/runs' |
 max="$(cfg .risk.max_changed_lines)"; [ -n "$max" ] || max=200
 reasons=""
 add() { reasons="$reasons$1"$'\n'; }
+LOC="$("$BIN/locale.sh" --repo "$REPO")" || exit 2
+say() { jq -nr -L "$BIN" --argjson L "$LOC" --arg k "$1" --argjson v "$2" 'include "i18n"; tf($k; $v)'; }   # a reason, in the project's language
 
 sensitive="$(cfg '.risk.sensitive_paths[]')"
 while IFS= read -r f; do
   [ -n "$f" ] || continue
-  for g in $sensitive; do case "$f" in $g) add "$f is a sensitive path ($g)"; break ;; esac; done
+  for g in $sensitive; do case "$f" in $g) add "$(say risk_sensitive "$(jq -nc --arg f "$f" --arg g "$g" '{file: $f, glob: $g}')")"; break ;; esac; done
   case "$f" in
     .compasso/project.yaml|.gitlab-ci.yml|.gitlab/*|*/.gitlab-ci.yml|Dockerfile|*/Dockerfile|Makefile|\
     package.json|*/package.json|package-lock.json|*/package-lock.json|yarn.lock|pnpm-lock.yaml|\
     requirements*.txt|pyproject.toml|poetry.lock|go.mod|go.sum|Gemfile|Gemfile.lock|pom.xml|build.gradle*|Cargo.toml|Cargo.lock)
-      add "$f changes the build, the pipeline, the Compasso config or dependencies" ;;
+      add "$(say risk_build "$(jq -nc --arg f "$f" '{file: $f}')")" ;;
   esac
 done <<EOF
 $files
 EOF
-[ "$lines" -le "$max" ] || add "$lines changed lines, over the $max-line limit"
+[ "$lines" -le "$max" ] || add "$(say risk_lines "$(jq -nc --argjson l "$lines" --argjson m "$max" '{lines: $l, max: $m}')")"
 if [ -f "$RUN/findings.json" ]; then
   n="$(jq '[.[] | select(.by == "security" and (.severity == "blocker" or .severity == "major"))] | length' "$RUN/findings.json")"
-  [ "$n" -eq 0 ] || add "security found $n blocker or major issue(s) in this story"
+  [ "$n" -eq 0 ] || add "$(say risk_security "$(jq -nc --argjson n "$n" '{n: $n}')")"
 fi
 if [ -f "$RUN/coverage.json" ]; then
   case "$(jq -r .status "$RUN/coverage.json")" in
-    ok) ;; below) add "changed-line coverage is below its minimum" ;; *) add "changed-line coverage was not measured" ;;
+    ok) ;; below) add "$(say risk_cov_below '{}')" ;; *) add "$(say risk_cov_none '{}')" ;;
   esac
 else
-  add "changed-line coverage was not measured"
+  add "$(say risk_cov_none '{}')"
 fi
 
 level=low; [ -z "$reasons" ] || level=high

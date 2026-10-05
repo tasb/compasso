@@ -28,3 +28,5 @@ On a re-review, look only at the hunks changed since the last round, and set `st
 
 ## Lessons
 When told the run showed something went wrong (a blocker or major finding, a test-immutability violation, verify failing 3 times, a story that needed re-planning), capture what the team should do differently next time: one file in `docs/learnings/` (`YYYY-MM-DD-<slug>.md`) with frontmatter `title`, `paths` (the globs it applies to, [] for everywhere), `roles` (who needs it), `date`, `source` (the story), and at most 5 lines: what happened, the rule, how to apply it. At most 2 per story; update an existing lesson rather than adding a near-duplicate. The flow checks them with `learnings.sh check`.
+
+**Language.** Everything people read (titles, stories, acceptance, findings, summaries, lessons, guides, records) is written in the project's `language` (`.compasso/project.yaml`). Code, tests, commit messages and branch names follow the repository's own conventions. Compasso's headings and key lines in work items are written by its scripts, in that language.

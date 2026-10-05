@@ -50,6 +50,8 @@ HOST="$(cfg .tracker.host)"; [ -n "$HOST" ] || HOST=github.com
 R="$(cfg .tracker.project)"; OWNER="${R%%/*}"
 PROJ="$(cfg .tracker.github.project)"; PROJ="${PROJ:-0}"
 LABELS="$(cat "$BIN/tracker/labels.txt")"
+NAMES="$("$BIN/locale.sh" --names)"                   # work-item names in every language, for reading
+LOC="$("$BIN/locale.sh" --repo "$REPO")" || exit 1    # the project's language, for writing
 STATES="new building in-review verifying done"
 
 api() { gh api --hostname "$HOST" "$@"; }
@@ -206,7 +208,7 @@ upsert_issue() { # number-or-empty title body-file milestone-number-or-empty lab
 PLAN="$REPO/.compasso/plan.yaml"
 pget() { yq -r "$1" "$PLAN"; }
 pset() { K="$2" V="$3" yq -i "$1" "$PLAN"; }
-render() { jq -rn --arg kind "$1" --argjson item "$2" --argjson ctx "$3" '{kind: $kind, item: $item, ctx: $ctx}' | jq -r -f "$BIN/render.jq"; }
+render() { jq -rn --arg kind "$1" --argjson item "$2" --argjson ctx "$3" '{kind: $kind, item: $item, ctx: $ctx}' | jq -r -L "$BIN" --argjson L "$LOC" -f "$BIN/render.jq"; }
 sprint() { echo "S$(pget .epic.sprint.number)"; }
 
 ensure_iteration() { # project-json field-name title start days -> iteration id (added to the field when missing)
@@ -365,7 +367,7 @@ story() {
   need IID
   check >/dev/null || return $?
   n="$(issue_norm "$IID")" || { echo "github: no work item #$IID in $R" >&2; return 1; }
-  parsed="$(jq -r .description <<<"$n" | jq -Rs -f "$BIN/parse.jq")"
+  parsed="$(jq -r .description <<<"$n" | jq -Rs --argjson N "$NAMES" -f "$BIN/parse.jq")"
   # dependencies are GitHub's native "blocked by": blockers (type::blocker) and other work
   deps='[]'; blocked='[]'
   for d in $(blocked_by "$IID" | jq -r '.[]'); do
@@ -378,11 +380,11 @@ story() {
   done
   parsed="$(jq -c --argjson d "$deps" --argjson b "$blocked" '.depends_on = $d | .blocked_by = $b' <<<"$parsed")"
   feature="$(parent_number "$IID")"
-  [ -n "$feature" ] && fcov="$(issue "$feature" | jq -r '.body // ""' | jq -Rs -f "$BIN/parse.jq" | jq .coverage)"
+  [ -n "$feature" ] && fcov="$(issue "$feature" | jq -r '.body // ""' | jq -Rs --argjson N "$NAMES" -f "$BIN/parse.jq" | jq .coverage)"
   ms="$(jq -r '.milestone.id // empty' <<<"$n")"
   if [ -n "$ms" ]; then
     dj="$(api "repos/$R/issues?milestone=$ms&labels=type::epic&state=all" --jq '.[0] // empty')"
-    if [ -n "$dj" ]; then epic="$(jq -r .number <<<"$dj")"; ecov="$(jq -r '.body // ""' <<<"$dj" | jq -Rs -f "$BIN/parse.jq" | jq .coverage)"; fi
+    if [ -n "$dj" ]; then epic="$(jq -r .number <<<"$dj")"; ecov="$(jq -r '.body // ""' <<<"$dj" | jq -Rs --argjson N "$NAMES" -f "$BIN/parse.jq" | jq .coverage)"; fi
   fi
   jq -n --argjson issue "$n" --argjson s "$parsed" --arg feature "$feature" --argjson fcov "$fcov" \
         --arg epic "$epic" --argjson ecov "$ecov" --argjson open "$open" --argjson dflt "$(cfg .coverage.min_changed)" '{
@@ -507,7 +509,7 @@ sprint_sync() {
         else deps="$(jq -c ". + [$n]" <<<"$deps")"; fi
       done
     fi
-    d="$(jq -c --argjson p "$(jq -r .description <<<"$d" | jq -Rs -f "$BIN/parse.jq" | jq -c --argjson d "$deps" --argjson b "$blocked" '.depends_on = $d | .blocked_by = $b')" \
+    d="$(jq -c --argjson p "$(jq -r .description <<<"$d" | jq -Rs --argjson N "$NAMES" -f "$BIN/parse.jq" | jq -c --argjson d "$deps" --argjson b "$blocked" '.depends_on = $d | .blocked_by = $b')" \
       --arg parent "$p" '. + {parsed: $p, parent: (if $parent == "" then null else ($parent | tonumber) end)}' <<<"$d")"
     enriched="$(jq -c --argjson d "$d" '. + [$d]' <<<"$enriched")"
   done
@@ -566,10 +568,10 @@ open_mr_branch() {
 digest() {
   need SINCE
   api -X GET search/issues -f q="repo:$R is:pr is:merged label:compasso::auto-merged merged:>=$SINCE" -f per_page=100 --jq '.items' |
-    jq -r --arg since "$SINCE" '
-      "**Merged without a person** · since \($since)", "",
-      (if length == 0 then "- Nothing" else (sort_by(.pull_request.merged_at)[] | "- #\(.number) \(.title) · merged \(.pull_request.merged_at[0:16] | sub("T"; " "))") end),
-      "", "Each one passed review, the mandatory security review and CI, and was low risk. To undo one, revert its pull request."'
+    jq -r -L "$BIN" --argjson L "$LOC" --arg since "$SINCE" 'include "i18n";
+      tf("digest_title"; {since: $since}), "",
+      (if length == 0 then "- " + t("nothing") else (sort_by(.pull_request.merged_at)[] | "- #\(.number) \(.title) · " + tf("merged_at"; {at: (.pull_request.merged_at[0:16] | sub("T"; " "))})) end),
+      "", t("digest_footer_github")'
 }
 
 # ---------- protect: the repository settings Compasso relies on ----------

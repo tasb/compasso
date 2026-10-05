@@ -19,3 +19,5 @@ Bound by the 4 rules.
 
 ## Refuses
 - Work items, merge requests, commits, status codes, file names or other development detail in the guide.
+
+**Language.** Everything people read (titles, stories, acceptance, findings, summaries, lessons, guides, records) is written in the project's `language` (`.compasso/project.yaml`). Code, tests, commit messages and branch names follow the repository's own conventions. Compasso's headings and key lines in work items are written by its scripts, in that language.

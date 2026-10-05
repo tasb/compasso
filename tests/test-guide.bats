@@ -12,7 +12,8 @@ set_guide() { jq "$1" "$GUIDE" > "$GUIDE.new" && mv "$GUIDE.new" "$GUIDE"; }
 @test "renders one self-contained page with the guide's data intact, quotes included" {
   run render
   [ "$status" -eq 0 ]
-  [ "$(embedded | jq -c .)" = "$(jq -c . "$GUIDE")" ]
+  [ "$(embedded | jq -c 'del(.ui, .language)')" = "$(jq -c 'del(.ui, .language)' "$GUIDE")" ]
+  [ "$(embedded | jq -r .ui.download)" = "Download my results" ]
   [ "$(grep -c '__GUIDE_DATA__' "$OUT")" -eq 0 ]
   [ "$(grep -Ec '<(script|link)[^>]* (src|href)=' "$OUT")" -eq 0 ]
 }

@@ -28,10 +28,10 @@ Move the sprint forward as far as it can go, then say exactly what waits and on 
 5. **Close the sprint** when `sprint_done` is true:
    - Regression: `verify.sh` on the default branch with the e2e command.
    - Security pass over everything the sprint changed: write `git diff <last commit of the default branch before the sprint's start date>..origin/<default branch>` (`git rev-list -1 --before=<start> origin/<default branch>`) to `RUN/sprint.patch` and dispatch **security** with it: security only reads files, it cannot run commands. Every finding becomes a Bug on the epic's feature it touches (or on the epic), severity as found.
-   - The test guide, for business testers: the **shipper** writes `docs/releases/S<n>-test-guide.json` in the language of `test_guide.language`, for people who do not know the code:
+   - The test guide, for business testers: the **shipper** writes `docs/releases/S<n>-test-guide.json` in the project's `language`, for people who do not know the code:
      - one entry per feature a person can try on a screen, with what is new and why it matters in plain words, what to prepare (accounts, data, where: `test_guide.where`), and scenarios turned from the feature's acceptance into steps and an expected result a person can see. No work items, merge requests, commits, status codes or file names. Security fixes become plain scenarios ("try to open another customer's invoice: you are told you have no access").
      - features with nothing to try on a screen go in `verified_automatically`, by name only.
-     - for any language other than English, `ui` holds the page's labels in that language (the keys are in `templates/test-guide.html`).
+     - the page's labels come in the project's language; `ui` changes any of them.
      
    - The sprint report: run `/compasso:report` (`${CLAUDE_PLUGIN_ROOT}/skills/report/SKILL.md`) and copy its data and page to `docs/releases/S<n>-report.json` and `docs/releases/S<n>-report.html`.
      Then `bash ${CLAUDE_PLUGIN_ROOT}/bin/test-guide.sh --data docs/releases/S<n>-test-guide.json --out docs/releases/S<n>-test-guide.html`, open a merge request with the guide, the report and the testers' results folder, and once it is merged post one short comment with the guide's link (and the report's, on the epic) on the epic and on each feature the guide covers.

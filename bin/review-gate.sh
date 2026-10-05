@@ -13,11 +13,13 @@
 # Exit: 0 clear | 1 blocked (open findings listed) | 2 malformed findings
 set -u
 
-F="" FOR=review COMMENT=0
+BIN="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+F="" FOR=review COMMENT=0 REPO="."
 while [ $# -gt 0 ]; do
   case "$1" in
     --findings) F="$2"; shift 2 ;;
     --for) FOR="$2"; shift 2 ;;
+    --repo) REPO="$2"; shift 2 ;;   # for --comment: the project's language
     --comment) COMMENT=1; shift ;;
     *) echo "review-gate: unknown argument '$1'" >&2; exit 2 ;;
   esac
@@ -41,15 +43,16 @@ open="$(jq -r --arg for "$FOR" '
   | .[] | "  - [\(.by)/\(.severity)] \(.summary)" + (if .file then " (\(.file)\(if .line then ":\(.line)" else "" end))" else "" end)' "$F")"
 
 if [ "$COMMENT" -eq 1 ]; then
-  jq -r --arg blocks "$([ -n "$open" ] && echo yes || echo no)" '
-    "**Review** · \(length) findings", "",
-    (if length == 0 then "- No findings" else
+  L="$("$BIN/locale.sh" --repo "$REPO")" || exit 2
+  jq -r -L "$BIN" --argjson L "$L" --arg blocks "$([ -n "$open" ] && echo yes || echo no)" 'include "i18n";
+    tf("review_title"; {n: length}), "",
+    (if length == 0 then "- " + t("no_findings_cap") else
       (sort_by({blocker: 0, major: 1, minor: 2}[.severity]) | .[]
-       | "- [\(.by)/\(.severity)] \(.summary)"
+       | "- [\(t("by_" + .by))/\(t("sev_" + .severity))] \(.summary)"
          + (if .file then " (`\(.file)\(if .line then ":\(.line)" else "" end)`)" else "" end)
-         + (if .fix then " — fix: \(.fix)" else "" end)
-         + (if .status != "open" then " — \(.status)" else "" end)) end),
-    "", "**Blocks:** \($blocks)"' "$F"
+         + (if .fix then " — \(t("fix")): \(.fix)" else "" end)
+         + (if .status != "open" then " — \(t("st_" + .status))" else "" end)) end),
+    "", "**\(t("blocks")):** \(t($blocks))"' "$F"
   [ -z "$open" ]; exit $?
 fi
 

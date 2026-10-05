@@ -57,6 +57,8 @@ api() { glab api --hostname "$HOST" "$@"; }
 # Labels Compasso owns (name|colour|description), shared with the GitHub adapter. Free tier does
 # not make scoped labels exclusive, so state changes remove the previous compasso:: label explicitly.
 LABELS="$(cat "$BIN/tracker/labels.txt")"
+NAMES="$("$BIN/locale.sh" --names)"                   # work-item names in every language, for reading
+LOC="$("$BIN/locale.sh" --repo "$REPO")" || exit 1    # the project's language, for writing
 
 check() {
   local user proj level tier plan
@@ -124,7 +126,7 @@ pset() { K="$2" V="$3" yq -i "$1" "$PLAN"; }   # expression uses strenv(K) and s
 
 render() { # kind item-json ctx-json
   jq -rn --arg kind "$1" --argjson item "$2" --argjson ctx "$3" \
-    '{kind: $kind, item: $item, ctx: $ctx}' | jq -r -f "$BIN/render.jq"
+    '{kind: $kind, item: $item, ctx: $ctx}' | jq -r -L "$BIN" --argjson L "$LOC" -f "$BIN/render.jq"
 }
 
 duration() { # hours (may be fractional) -> GitLab duration, e.g. 4.5 -> 4h30m
@@ -328,16 +330,16 @@ story() {
   check >/dev/null || return $?
   issue="$(api "projects/$PID/issues/$IID")"
   [ -n "$(jq -r '.iid // empty' <<<"$issue" 2>/dev/null)" ] || { echo "gitlab: no work item #$IID in $PROJECT" >&2; return 1; }
-  parsed="$(jq -r '.description // ""' <<<"$issue" | jq -Rs -f "$BIN/parse.jq")"
+  parsed="$(jq -r '.description // ""' <<<"$issue" | jq -Rs --argjson N "$NAMES" -f "$BIN/parse.jq")"
 
   feature="$(parent_iid "$(jq -r .id <<<"$issue")")"
-  [ -n "$feature" ] && fcov="$(api "projects/$PID/issues/$feature" | jq -r '.description // ""' | jq -Rs -f "$BIN/parse.jq" | jq .coverage)"
+  [ -n "$feature" ] && fcov="$(api "projects/$PID/issues/$feature" | jq -r '.description // ""' | jq -Rs --argjson N "$NAMES" -f "$BIN/parse.jq" | jq .coverage)"
   ms="$(jq -r '.milestone.title // empty' <<<"$issue")"
   if [ -n "$ms" ]; then
     dj="$(api "projects/$PID/issues?milestone=$ms&labels=type::epic&state=all" | jq '.[0] // empty')"
     if [ -n "$dj" ]; then
       epic="$(jq -r .iid <<<"$dj")"
-      ecov="$(jq -r '.description // ""' <<<"$dj" | jq -Rs -f "$BIN/parse.jq" | jq .coverage)"
+      ecov="$(jq -r '.description // ""' <<<"$dj" | jq -Rs --argjson N "$NAMES" -f "$BIN/parse.jq" | jq .coverage)"
     fi
   fi
 
@@ -467,7 +469,7 @@ sprint_sync() {
   for i in $(jq -r '.[].iid' <<<"$items"); do
     d="$(jq --argjson i "$i" '.[] | select(.iid == $i)' <<<"$items")"
     id="$(jq -r .id <<<"$d")"
-    d="$(jq --argjson p "$(jq -r '.description // ""' <<<"$d" | jq -Rs -f "$BIN/parse.jq")" \
+    d="$(jq --argjson p "$(jq -r '.description // ""' <<<"$d" | jq -Rs --argjson N "$NAMES" -f "$BIN/parse.jq")" \
             --arg parent "$( [ "$(jq -r .issue_type <<<"$d")" = task ] && parent_iid "$id" )" \
       '. + {parsed: $p, parent: (if $parent == "" then null else ($parent | tonumber) end)}' <<<"$d")"
     enriched="$(jq -c --argjson d "$d" '. + [$d]' <<<"$enriched")"
@@ -509,10 +511,10 @@ digest() { # merge requests merged without a person since a date, for the daily 
   need SINCE
   mrs="$(api --paginate "projects/$PID/merge_requests?state=merged&labels=compasso::auto-merged&updated_after=${SINCE}T00:00:00Z&per_page=100" | jq -s 'add // []')" ||
     { echo "gitlab: cannot read the merged merge requests" >&2; return 1; }
-  jq -r --arg since "$SINCE" '
-    "**Merged without a person** · since \($since)", "",
-    (if length == 0 then "- Nothing" else (sort_by(.merged_at)[] | "- !\(.iid) \(.title) · merged \(.merged_at[0:16] | sub("T"; " "))") end),
-    "", "Each one passed review, the mandatory security review and CI, and was low risk. To undo one, revert its merge request."' <<<"$mrs"
+  jq -r -L "$BIN" --argjson L "$LOC" --arg since "$SINCE" 'include "i18n";
+    tf("digest_title"; {since: $since}), "",
+    (if length == 0 then "- " + t("nothing") else (sort_by(.merged_at)[] | "- !\(.iid) \(.title) · " + tf("merged_at"; {at: (.merged_at[0:16] | sub("T"; " "))})) end),
+    "", t("digest_footer")' <<<"$mrs"
 }
 
 

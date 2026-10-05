@@ -67,8 +67,9 @@ fi
 out="$(git -C "$WT" push -q -u origin "$BRANCH" 2>&1)" || { printf '%s\n' "$out" >&2; echo "plan-pr: push of $BRANCH failed" >&2; exit 1; }
 
 body="$WT/.plan-pr-body.md"
+L="$("$BIN/locale.sh" --repo "$REPO")" || exit 1
 {
-  if [ -n "$INCLUDES" ]; then echo "$TITLE."; else echo "The approved plan for $S and what was found and decided while planning it."; fi
+  if [ -n "$INCLUDES" ]; then echo "$TITLE."; else jq -nr -L "$BIN" --argjson L "$L" --arg s "$S" 'include "i18n"; tf("plan_pr_intro"; {sprint: $s})'; fi
   echo
   while IFS= read -r p; do
     if [ -d "$WT/$p" ]; then (cd "$WT" && find "$p" -type f | sort | sed 's/^/- `/; s/$/`/')
@@ -77,6 +78,6 @@ body="$WT/.plan-pr-body.md"
 $PATHS
 EOF
   echo
-  echo "Merging this keeps these files in the repository, where the next steps read them."
+  jq -nr -L "$BIN" --argjson L "$L" 'include "i18n"; t("plan_pr_outro")'
 } > "$body"
 "$BIN/tracker.sh" open-mr --repo "$REPO" --branch "$BRANCH" --title "$TITLE" --body-file "$body" --target "$default"

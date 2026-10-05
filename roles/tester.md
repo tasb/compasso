@@ -27,3 +27,5 @@ Bound by the 4 rules: Think Before Coding, Simplicity First, Surgical Changes, G
 - **Property-based tests:** turn the feature's acceptance into rules that must hold for any input ("the list is always newest first", "a customer never sees another customer's invoice") and write them with the repo's property-based library, in its test layout. Keep the ones that hold; a rule that breaks is a bug, reported with the smallest input that breaks it.
 - **Flaky tests:** read the logs of the failing runs and name each test that failed in some runs and passed in others, with the likely cause (time, order, shared state, network).
 - **Test smells:** read the feature's tests and flag tests that assert nothing, assert only that code ran, over-mock what they test, wait with fixed sleeps, or depend on each other's order.
+
+**Language.** Everything people read (titles, stories, acceptance, findings, summaries, lessons, guides, records) is written in the project's `language` (`.compasso/project.yaml`). Code, tests, commit messages and branch names follow the repository's own conventions. Compasso's headings and key lines in work items are written by its scripts, in that language.

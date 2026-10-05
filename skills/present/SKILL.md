@@ -7,7 +7,7 @@ Build the solution presentation. Scripts are in `${CLAUDE_PLUGIN_ROOT}/bin`. `RU
 
 1. **What exists.** `bash ${CLAUDE_PLUGIN_ROOT}/bin/start.sh --repo .` The presentation uses whatever exists and says on the page what is missing; for the full picture, the product needs a brief and a backlog (`/compasso:discover`, `/compasso:backlog`), a technical solution (`/compasso:architect`), sprints (`/compasso:roadmap`) and a planned next sprint (`/compasso:plan`). Say which are missing and ask whether to build now or run them first.
 
-2. **Language.** The page's labels are English. When `test_guide.language` in `.compasso/project.yaml` is another language (or the user asks for one), write `RUN/ui.json` with every label of the `Object.assign({...}` block in `${CLAUDE_PLUGIN_ROOT}/templates/presentation.html` translated (keep the keys; translate the values, and keep the command names as they are).
+2. **Language.** The page's labels come in the project's `language` (`templates/locales/`). Only to change a label, or for a language Compasso does not ship, write `RUN/ui.json` with the labels to replace (`{"key": "text"}`; the keys are under `ui.presentation` in `${CLAUDE_PLUGIN_ROOT}/templates/locales/en.yaml`) and pass `--ui RUN/ui.json`.
 
 3. **Build.** `bash ${CLAUDE_PLUGIN_ROOT}/bin/present.sh --repo . --out docs/compasso/presentation.html [--ui RUN/ui.json]`.
 

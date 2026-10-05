@@ -47,6 +47,7 @@ mkdir -p "$REPO/docs/releases/$gid-results" && cp "$RESULTS" "$REPO/docs/release
 LEDGER="$DIR/imported.json"; [ -f "$LEDGER" ] || echo '{}' > "$LEDGER"
 filed='[]'
 
+L="$("$BIN/locale.sh" --repo "$REPO")" || exit 1   # bugs and the summary, in the project's language
 for sc in $(jq -r '.results[] | select(.status == "fail") | .scenario' "$RESULTS"); do
   key="$slug/$sc"
   prev="$(jq -r --arg k "$key" '.[$k] // empty' "$LEDGER")"
@@ -56,15 +57,15 @@ for sc in $(jq -r '.results[] | select(.status == "fail") | .scenario' "$RESULTS
   fi
   info="$(jq -c --arg s "$sc" '.features[] as $f | $f.scenarios[] | select(.id == $s) | {f: $f, s: .}' "$GUIDE")"
   body="$DIR/bug-$slug-$sc.md"
-  jq -rn --argjson x "$info" --slurpfile r "$RESULTS" --arg gid "$gid" --arg slug "$slug" '
+  jq -rn -L "$BIN" --argjson L "$L" --argjson x "$info" --slurpfile r "$RESULTS" --arg gid "$gid" --arg slug "$slug" 'include "i18n";
     $r[0] as $r | ($r.results[] | select(.scenario == $x.s.id)) as $res
-    | "**Found in:** \($gid) test guide · **By:** \($r.tester) (business test, \($r.date))",
-      "", "## Steps", ($x.s.steps | to_entries | map("\(.key + 1). \(.value)") | join("\n")),
-      "", "## Expected", "- \($x.s.expected)",
-      "", "## Actual", "- \($res.comment)",
-      "", "## Evidence", "- Reported by \($r.tester) in the \($gid) test guide, scenario \"\($x.s.title)\"",
+    | "**\(md("found_in")):** " + tf("found_in_value"; {gid: $gid}) + " · **\(md("by")):** " + tf("by_value"; {tester: $r.tester, date: $r.date}),
+      "", "## \(md("steps"))", ($x.s.steps | to_entries | map("\(.key + 1). \(.value)") | join("\n")),
+      "", "## \(md("expected"))", "- \($x.s.expected)",
+      "", "## \(md("actual"))", "- \($res.comment)",
+      "", "## \(md("evidence"))", "- " + tf("evidence_line"; {tester: $r.tester, gid: $gid, scenario: $x.s.title}),
       "", "<!-- compasso:guide=\($gid) scenario=\($x.s.id) tester=\($slug) -->"' > "$body"
-  title="$(jq -r '"\(.f.title): \(.s.title) does not work"' <<<"$info")"
+  title="$(jq -r -L "$BIN" --argjson L "$L" 'include "i18n"; tf("bug_title"; {feature: .f.title, scenario: .s.title})' <<<"$info")"
   iid="$("$BIN/tracker.sh" followup --repo "$REPO" --parent "$(jq -r .f.iid <<<"$info")" \
           --title "$title" --body-file "$body" --labels type::bug,severity::major,owner::agent)" ||
     { echo "test-results: could not file the bug for $sc" >&2; exit 1; }
@@ -73,11 +74,12 @@ for sc in $(jq -r '.results[] | select(.status == "fail") | .scenario' "$RESULTS
 done
 
 summary="$DIR/summary-$slug-$date.md"
-jq -rn --slurpfile r "$RESULTS" --slurpfile g "$GUIDE" --argjson filed "$filed" --arg dw "Doesn't work" --arg ct "Can't test" '
-  $r[0] as $r | ([$g[0].features[].scenarios[] | {key: .id, value: .title}] | from_entries) as $t
+jq -rn -L "$BIN" --argjson L "$L" --slurpfile r "$RESULTS" --slurpfile g "$GUIDE" --argjson filed "$filed" 'include "i18n";
+  t("doesnt_work") as $dw | t("cant_test") as $ct
+  | $r[0] as $r | ([$g[0].features[].scenarios[] | {key: .id, value: .title}] | from_entries) as $t
   | def n($s): [$r.results[] | select(.status == $s)] | length;
-  "**Test results** · \($r.tester) · \($r.date)", "",
-  "- Works: \(n("pass")) · \($dw): \(n("fail")) · \($ct): \(n("blocked")) · Not tested: \(n("not-tested"))",
+  tf("results_title"; {tester: $r.tester, date: $r.date}), "",
+  "- \(t("works")): \(n("pass")) · \($dw): \(n("fail")) · \($ct): \(n("blocked")) · \(t("not_tested")): \(n("not-tested"))",
   ($filed[] | "- \($dw): \($t[.scenario]) → #\(.iid)"),
   ($r.results[] | select(.status == "blocked") | "- \($ct): \($t[.scenario])" + (if (.comment // "") != "" then " — \(.comment)" else "" end))
 ' > "$summary"

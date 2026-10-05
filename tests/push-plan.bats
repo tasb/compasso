@@ -245,3 +245,16 @@ EOF2
   "$ROOT/bin/tracker/gitlab.sh" push-backlog --repo "$REPO" >/dev/null
   [ "$(calls 'POST projects/acme%2Fapp/issues ')" -eq 6 ]
 }
+
+@test "in the project's language: Portuguese headings and key lines, the story sentence too" {
+  cfg_set '.language = "pt-PT"'
+  push >/dev/null
+  d="$FAKE_GL/desc/$(iid_of S-4).md"
+  grep -qx '## Critérios de aceitação' "$d"
+  grep -qx '## Verificação' "$d"
+  grep -q '^\*\*Testes:\*\* unit' "$d"
+  grep -q '^\*\*Bloqueado por:\*\* #' "$d"
+  grep -q '^\*\*Como\*\* a customer \*\*quero\*\* a PDF endpoint \*\*para que\*\* ' "$d"
+  grep -qx '## Âmbito' "$FAKE_GL/desc/$(iid_of F-1).md"
+  grep -q '<!-- compasso:key=S-4 -->' "$d"
+}

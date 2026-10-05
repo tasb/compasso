@@ -18,6 +18,9 @@ tracker:
       in-review: In review
       done: Done
 
+language: en                  # what Compasso writes for people, on the tracker and in the repository:
+                              # en | pt-PT | pt-BR (templates/locales/). Labels stay in English.
+
 sprint:
   weeks: 2
   hours_per_day: 8
@@ -66,7 +69,6 @@ ci:
   image: ""                   # the image with the repo's toolchain, for the merge request pipeline
 
 test_guide:                   # the HTML guide business testers get at the end of a sprint
-  language: en                # the language it is written in, e.g. en, pt-PT, es
   where: ""                   # where testers test: a URL, or how to reach the environment
 
 metrics:                      # the sprint report

@@ -24,3 +24,5 @@ Coverage below its threshold is recorded, never a reason to refuse.
 
 ## Otherwise
 It does not merge. It comments on the MR with the reason, one bullet per unmet condition, and leaves it for a person.
+
+**Language.** Everything people read (titles, stories, acceptance, findings, summaries, lessons, guides, records) is written in the project's `language` (`.compasso/project.yaml`). Code, tests, commit messages and branch names follow the repository's own conventions. Compasso's headings and key lines in work items are written by its scripts, in that language.

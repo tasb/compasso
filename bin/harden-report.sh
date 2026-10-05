@@ -12,11 +12,13 @@
 # Exit: 0 | 2 usage or a malformed result
 set -u
 
-DIR="" SET="code" FEATURE="" DATE="$(date +%Y-%m-%d)"
+BIN="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+DIR="" SET="code" FEATURE="" DATE="$(date +%Y-%m-%d)" REPO="."
 while [ $# -gt 0 ]; do
   case "$1" in
     --results) DIR="$2"; shift 2 ;;
     --set) SET="$2"; shift 2 ;;
+    --repo) REPO="$2"; shift 2 ;;
     --feature) FEATURE="$2"; shift 2 ;;
     --date) DATE="$2"; shift 2 ;;
     *) echo "harden-report: unknown argument '$1'" >&2; exit 2 ;;
@@ -35,15 +37,16 @@ bad="$(jq -r '.[] | . as $r
   | "\(.check // "a result"): does not follow the result format"' <<<"$results")"
 [ -z "$bad" ] || { printf 'harden-report: %s\n' "$bad" >&2; exit 2; }
 
-jq -rn --argjson r "$results" --arg set "$SET" --arg feature "$FEATURE" --arg date "$DATE" '
-  {code: [["mutation", "Mutation testing"], ["property", "Property-based tests"], ["flaky", "Flaky tests"], ["smells", "Test smells"]],
-   live: [["fuzz", "API fuzzing"], ["zap", "Security scan (ZAP)"], ["perf", "Performance"], ["a11y", "Accessibility"]]} as $sets
+L="$("$BIN/locale.sh" --repo "$REPO")" || exit 2
+jq -rn -L "$BIN" --argjson L "$L" --argjson r "$results" --arg set "$SET" --arg feature "$FEATURE" --arg date "$DATE" 'include "i18n";
+  {code: ["mutation", "property", "flaky", "smells"] | map([., t("check_" + .)]),
+   live: ["fuzz", "zap", "perf", "a11y"] | map([., t("check_" + .)])} as $sets
   | (if $set == "all" then $sets.code + $sets.live else $sets[$set] end) as $order
-  | "**Hardening** · \(if $set == "all" then "code and live" else $set end) checks · \($date)", "",
+  | tf("harden_title"; {set: t("set_" + $set), date: $date}), "",
     ($order[] | . as [$c, $t] | ([$r[] | select(.check == $c)][0]) as $x
-     | if $x == null then "- \($t): not run"
-       elif ($x.ran | not) then "- \($x.title): not run — \($x.reason)"
-       else "- \($x.title): " + ([$x.counts[] | "\(.n) \(.label)"] | join(" · ")),
+     | if $x == null then "- \($t): \(t("not_run"))"
+       elif ($x.ran | not) then "- \($t): \(t("not_run")) — \($x.reason)"
+       else "- \($t): " + ([$x.counts[] | "\(.n) \(lbl(.label))"] | join(" · ")),
             ($x.gaps[] | "  - \(.summary)" + (if .story then " → #\(.story)" else "" end))
        end),
     "", "<!-- compasso:harden" + (if $feature != "" then " feature=\($feature)" else "" end) + " set=\($set) -->"'

@@ -108,6 +108,18 @@ Dependencies are part of the plan. Stories are created in dependency order. A st
 
 Both adapters (`bin/tracker/gitlab.sh`, `bin/tracker/github.sh`) have the same commands, and `bin/tracker.sh` picks one from `tracker.provider`.
 
+## Language
+
+Setup asks which language Compasso writes in: English, Portuguese (Portugal) or Portuguese (Brazil). It covers what people read:
+- work items on the tracker: headings and key lines, and the text the agents write;
+- the issue templates;
+- comments and merge requests;
+- the files in the repository: brief, decision records, test guide, sprint report and presentation.
+
+Labels stay in English: scripts and tracker filters use them. Code, tests and commit messages follow the repository's own conventions. Compasso reads work items written in any language it ships, so an item written by hand in English still works in a Portuguese project, and changing the language later breaks nothing.
+
+Each language is one file of texts, `templates/locales/<language>.yaml`, plus its issue templates and brief template.
+
 ## Test frameworks
 
 Compasso uses whatever a project already tests with. For each language and area (unit, API, browser e2e, coverage, property-based) it has a default, used only where the project has nothing yet. The first story that needs one adds it. Setup shows both (`bin/test-stack.sh detect`) and records them as `testing` in `.compasso/project.yaml`.

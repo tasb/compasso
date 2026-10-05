@@ -26,13 +26,15 @@ while [ $# -gt 0 ]; do
   esac
 done
 
+L="$("$BIN/locale.sh" --repo "$REPO")" || exit 1   # the project's language
+
 case "$CMD" in
   qa)
     [ -f "$FILE" ] || { echo "comment: qa needs --file" >&2; exit 1; }
     jq -e '(.items | length) > 0 and .round and .user and .date' "$FILE" >/dev/null ||
       { echo "comment: $FILE needs round, user, date and at least one item" >&2; exit 1; }
-    jq -r '
-      "**Questions and answers** · round \(.round) · answered by @\(.user) in the agent, \(.date)",
+    jq -r -L "$BIN" --argjson L "$L" 'include "i18n";
+      tf("qa_title"; {round: .round, user: .user, date: .date}),
       "",
       (.items | to_entries[] | "\(.key + 1). \(.value.question)\\\n   → \(.value.answer)"),
       "",
@@ -54,21 +56,21 @@ case "$CMD" in
       | .blockers = ((.blockers // []) | map(select(.key as $b | $used | index($b))))' > "$one"
     [ "$(yq '.features | length' "$one")" -eq 1 ] || { echo "comment: no feature $FEATURE in $plan" >&2; exit 1; }
     check="$("$BIN/plan-check.sh" --repo "$REPO" --plan "$one" --json)" || { echo "comment: the plan does not pass plan-check" >&2; exit 1; }
-    jq -rn --argjson p "$(yq -o=json '.' "$plan")" --argjson c "$check" --arg k "$FEATURE" \
-          --arg who "$APPROVER" --arg date "$DATE" --rawfile sec "$SECURITY" '
+    jq -rn -L "$BIN" --argjson L "$L" --argjson p "$(yq -o=json '.' "$plan")" --argjson c "$check" --arg k "$FEATURE" \
+          --arg who "$APPROVER" --arg date "$DATE" --rawfile sec "$SECURITY" 'include "i18n";
       ([$p.features[].stories[] | {key: .key, value: .gitlab}] + [($p.blockers // [])[] | {key: .key, value: .gitlab}] | from_entries) as $iid
       | def ref: if startswith("#") then . elif $iid[.] then "#\($iid[.])" else . end;   # not pushed yet: the plan key
       ($p.features[] | select(.key == $k)) as $f
-      | "**Plan** · \($f.stories | length) \(if ($f.stories | length) == 1 then "story" else "stories" end) · \($c.totals.epic)h · critical path \($c.critical.hours)h",
+      | tf("plan_title"; {n: ($f.stories | length), stories: (if ($f.stories | length) == 1 then t("story_one") else t("story_many") end), hours: $c.totals.epic, critical: $c.critical.hours}),
         "",
-        "| Story | h | Owner | Depends on |",
+        t("plan_head"),
         "|---|---|---|---|",
         ($f.stories[] | "| \(if .gitlab then "#\(.gitlab)" else .key end) \(.title) | \(.estimate_h) | \(.owner) | "
            + ((((.depends_on // []) + (.blocked_by // [])) | map(ref) | join(", ")) as $d | if $d == "" then "—" else $d end) + " |"),
         "",
-        ($sec | sub("\\s+$"; "")) as $s | (if ($s | startswith("- ")) then "**Security:**\n\($s)" else "**Security:** \($s)" end),
+        ($sec | sub("\\s+$"; "")) as $s | (if ($s | startswith("- ")) then "**\(t("security")):**\n\($s)" else "**\(t("security")):** \($s)" end),
         "",
-        "**Approved:** by @\($who) in the agent, \($date)"'
+        "**\(t("approved")):** " + tf("approved_by"; {who: $who, date: $date})'
     ;;
   *) echo "usage: comment.sh qa|plan ..." >&2; exit 1 ;;
 esac

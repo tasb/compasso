@@ -89,7 +89,9 @@ validate() {
   is_int "$v" && [ "$v" -le 100 ] || err "coverage.min_changed must be an integer from 0 to 100"
   [ -z "$(val .coverage.command)" ] || [ -n "$(val .coverage.report)" ] || err "coverage.report is required when coverage.command is set"
 
-  [ -n "$(val .test_guide.language)" ] || err "test_guide.language is required, e.g. en or pt-PT (run: config.sh upgrade)"
+  l="$(val .language)"
+  if [ -z "$l" ]; then err "language is required: one of $(ls "$ROOT/templates/locales" | sed 's/\.yaml$//' | tr '\n' ' ')(run: config.sh upgrade)"
+  elif [ ! -f "$ROOT/templates/locales/$l.yaml" ]; then err "language '$l' has no texts: use one of $(ls "$ROOT/templates/locales" | sed 's/\.yaml$//' | tr '\n' ' ')"; fi
 
   [ "$(yq '[(.metrics.prices // {}) | to_entries | .[] | select((.value | tag) != "!!int" and (.value | tag) != "!!float")] | length' "$CFG")" = 0 ] ||
     err "metrics.prices must map each model to a number (price per million tokens)"
@@ -139,6 +141,8 @@ case "$CMD" in
     ;;
   upgrade)
     need_cfg
+    # a language chosen before `language` existed (test_guide.language) is kept, not replaced by the default
+    yq -i 'select(has("language") | not) |= (.language = (.test_guide.language // "en")) | del(.test_guide.language)' "$CFG" || exit 1
     T="$ROOT/templates/project.yaml" yq -i '. *n load(strenv(T))' "$CFG" || exit 1
     echo "config: $CFG has every current key"
     ;;

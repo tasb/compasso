@@ -1,0 +1,337 @@
+# Compasso's texts in English: the base every other language falls back to.
+# md:   the names in work items on the tracker; Compasso reads them back in every language it ships.
+# text: comments, merge requests and records; {name} marks a value.
+# ui:   labels of the test guide, the sprint report and the presentation.
+name: English
+md:
+  goal: Goal
+  sprint: Sprint
+  capacity: Capacity
+  planned: Planned
+  coverage: Coverage
+  features: Features
+  risks: Risks
+  needed_for: Needed for
+  steps: Steps
+  scope: Scope
+  acceptance: Acceptance
+  decisions: Decisions
+  verify: Verify
+  tests: Tests
+  touches: Touches
+  depends_on: Depends on
+  blocked_by: Blocked by
+  expected: Expected
+  actual: Actual
+  evidence: Evidence
+  found_in: Found in
+  by: By
+  as: As
+  i_want: I want
+  so_that: so that
+text:
+  qa_title: "**Questions and answers** · round {round} · answered by @{user} in the agent, {date}"
+  plan_title: "**Plan** · {n} {stories} · {hours}h · critical path {critical}h"
+  story_one: story
+  story_many: stories
+  plan_head: "| Story | h | Owner | Depends on |"
+  security: Security
+  approved: Approved
+  approved_by: "by @{who} in the agent, {date}"
+  changes: Changes
+  how_to_test: How to test
+  review: Review
+  reviewer: Reviewer
+  coverage: Coverage
+  merge: Merge
+  findings_fixed: "{n} findings fixed"
+  minors_to: "minors → {list}"
+  n_open: "{n} open"
+  no_findings: no findings
+  fixed_verified: fixed, verified by security
+  open: open
+  cov_ok: "{p}% of changed lines (min {min}%)"
+  cov_below: "below min: {p}% of {min}% · uncovered: {list}"
+  not_measured: not measured
+  merge_low: "low risk, may merge without a person ({lines} changed lines in {files} files, nothing sensitive)"
+  merge_person: "a person approves: {reasons}"
+  risk_sensitive: "{file} is a sensitive path ({glob})"
+  risk_build: "{file} changes the build, the pipeline, the Compasso config or dependencies"
+  risk_lines: "{lines} changed lines, over the {max}-line limit"
+  risk_security: "security found {n} blocker or major issue(s) in this story"
+  risk_cov_below: changed-line coverage is below its minimum
+  risk_cov_none: changed-line coverage was not measured
+  review_title: "**Review** · {n} findings"
+  no_findings_cap: No findings
+  fix: fix
+  blocks: Blocks
+  "yes": "yes"
+  "no": "no"
+  by_reviewer: reviewer
+  by_security: security
+  sev_blocker: blocker
+  sev_major: major
+  sev_minor: minor
+  st_fixed: fixed
+  st_followup: follow-up
+  digest_title: "**Merged without a person** · since {since}"
+  nothing: Nothing
+  merged_at: "merged {at}"
+  digest_footer: Each one passed review, the mandatory security review and CI, and was low risk. To undo one, revert its merge request.
+  digest_footer_github: Each one passed review, the mandatory security review and CI, and was low risk. To undo one, revert its pull request.
+  harden_title: "**Hardening** · {set} checks · {date}"
+  set_code: code
+  set_live: live
+  set_all: code and live
+  check_mutation: Mutation testing
+  check_property: Property-based tests
+  check_flaky: Flaky tests
+  check_smells: Test smells
+  check_fuzz: API fuzzing
+  check_zap: Security scan (ZAP)
+  check_perf: Performance
+  check_a11y: Accessibility
+  not_run: not run
+  results_title: "**Test results** · {tester} · {date}"
+  works: Works
+  doesnt_work: Doesn't work
+  cant_test: Can't test
+  not_tested: Not tested
+  bug_title: "{feature}: {scenario} does not work"
+  found_in_value: "{gid} test guide"
+  by_value: "{tester} (business test, {date})"
+  evidence_line: "Reported by {tester} in the {gid} test guide, scenario \"{scenario}\""
+  followup_who: a maintainer
+  followup_want: this finding addressed
+  followup_so: "{summary} no longer applies"
+  followup_given: "Given {where}, When it is reviewed again, Then the finding \"{summary}\" no longer applies"
+  followup_code_from: "the code from #{story}"
+  followup_tests: the repo tests
+  rec_findings: Findings
+  rec_decisions: Decisions
+  rec_takeaways: Takeaways
+  rec_constraints: Constraints
+  rec_missing: Missing points
+  rec_none: None
+  rec_assumed: Assumed
+  rec_approved_by: "Approved by @{who}"
+  rec_run_by: "Run by @{who}"
+  plan_pr_intro: "The approved plan for {sprint} and what was found and decided while planning it."
+  plan_pr_outro: Merging this keeps these files in the repository, where the next steps read them.
+  labels:                       # the counts hardening checks report
+    mutants: mutants
+    caught: caught
+    no observable effect: no observable effect
+    gaps: gaps
+    operations: operations
+    failing: failing
+    pages: pages
+    serious or critical: serious or critical
+    moderate or minor: moderate or minor
+    requests: requests
+    "% failed": "% failed"
+    ms at p95: ms at p95
+    high: high
+    medium: medium
+    low: low
+    informational: informational
+    runs: runs
+    passed: passed
+    flaky tests: flaky tests
+    rules: rules
+    hold: hold
+    broken: broken
+    tests read: tests read
+    smells: smells
+ui:
+  guide:
+    where: Where to test
+    dates: Dates
+    whatsNew: What's new
+    why: Why it matters
+    before: Before you start
+    steps: Steps
+    expected: Expected
+    notIncluded: Not in this sprint
+    knownIssues: Known issues
+    pass: Works
+    fail: Doesn't work
+    blocked: Can't test
+    comment: Comment
+    commentRequired: Please say what happened instead.
+    tested: "{done} of {total} tested"
+    progress: "{done} of {total} scenarios tested"
+    tester: Your name
+    download: Download my results
+    needName: Please enter your name first.
+    missingComment: Add a comment to every scenario that does not work.
+    downloaded: "Saved {file}. Send it to the team."
+    automatic: Checked automatically
+    automaticText: These changes have no screen to try. They were verified by automated tests.
+  report:
+    title: "Sprint {n} report"
+    closed: Closed
+    inProgress: In progress
+    updated: "Updated {date}"
+    hoursDone: Hours done
+    ofPlanned: "of {planned} planned · capacity {capacity}"
+    storiesDone: Stories done
+    xOfY: "{done} of {total}"
+    nBlocked: "{n} blocked"
+    medianCycle: Median cycle time
+    cycleNote: from building to merged
+    medianWait: Median wait for approval
+    waitNote: merge request open until merged
+    securityFindings: Security findings
+    stillOpen: "{n} still open"
+    allResolved: all resolved
+    agentTime: Agent time
+    forEstimated: "for {h} estimated"
+    delivery: Delivery
+    blockers: Blockers
+    blocker: Blocker
+    owner: Owner
+    openFor: Open for
+    state: State
+    day: "{n} day"
+    days: "{n} days"
+    noBlockers: No blockers this sprint.
+    carriedOver: Carried over to the next sprint
+    notDoneYet: Not done yet
+    story: Story
+    estimate: Estimate
+    waitingOn: Waiting on
+    allDone: Everything planned is done.
+    burndown: Burn-down
+    burndownDesc: Planned hours still open, day by day.
+    remaining: Remaining
+    ideal: Ideal
+    sprintStarts: "The sprint starts on {date}."
+    noData: No data yet.
+    left: "{h} left"
+    remainingL: remaining
+    idealL: ideal
+    dayCol: Day
+    velocity: Velocity
+    velocityDesc: Hours done per sprint; this sprint in blue.
+    velocityEmpty: Velocity appears once there is a past sprint to compare with.
+    thisSprint: (this sprint)
+    doneL: done
+    sprint: Sprint
+    flow: Flow and waiting
+    timeTitle: Where each story spent its time
+    timeDesc: Hours building (agent or person) and hours its merge request waited for approval.
+    building: Building
+    waiting: Waiting for approval
+    noStories: No stories started yet.
+    soFar: so far
+    buildingL: building
+    waitingL: waiting for approval
+    merged: Merged
+    "yes": "yes"
+    notYet: not yet
+    quality: Quality
+    reviewRounds: Review rounds
+    avgPerStory: average per story
+    bugsFound: Bugs found
+    bugsNote: "{e2e} by feature tests · {testers} by testers"
+    testGuide: Test guide
+    pctWork: "{p}% work"
+    guideNote: "{pass} work · {fail} don't · {blocked} can't test"
+    noResults: no results yet
+    coverage: Coverage of changed lines
+    findingsTitle: Findings by source and severity
+    foundBy: Found by
+    major: Major
+    minor: Minor
+    total: Total
+    securityReview: Security review
+    codeReview: Code review
+    agentEffort: Agent effort
+    andCost: and cost
+    tokensByRole: Tokens by role
+    allRuns: All agent runs this sprint.
+    noRuns: No agent runs recorded.
+    tokensInRuns: "tokens in {runs} runs"
+    running: running
+    min: "{n} min"
+    role: Role
+    model: Model
+    runs: Runs
+    tokens: Tokens
+    minutes: Minutes
+    estVsAgent: Estimate vs agent time
+    estDesc: Estimates are in working hours for a person; agent time is how long its runs took.
+    noAgentStories: No agent-built stories yet.
+    cost: Cost
+    costNote: "Cost is approximate: tokens × the price per million tokens set for each model. Total {total}."
+    showTable: Show table
+  presentation:
+    solution: Solution
+    generated: Generated
+    problem: Problem and goals
+    functional: Functional solution
+    prototype: Prototype
+    technical: Technical solution
+    observability: Observability
+    security: Security
+    decisions: Decisions
+    sprints: Sprints
+    stories: User stories
+    risks: Risks
+    next: Next steps
+    mvp: MVP
+    later: After the MVP
+    hours: h
+    sprint: Sprint
+    feature: Feature
+    acceptance: Acceptance
+    estimate: Estimate
+    owner: Owner
+    dependsOn: Depends on
+    blockedBy: Blocked by
+    blockers: Blockers
+    assignee: Assignee
+    stack: Stack
+    layer: Layer
+    choice: Choice
+    why: Why
+    components: Components
+    integrations: Integrations
+    direction: Direction
+    protocol: Protocol
+    auth: Authentication
+    data: Data
+    entity: Entity
+    personal: Personal data
+    retention: Retention
+    deployment: Deployment
+    environments: Environments
+    hosting: Hosting
+    ci: CI
+    metrics: Metrics
+    dashboards: Dashboards
+    alerts: Alerts
+    condition: Condition
+    severity: Severity
+    logs: Logs
+    traces: Traces
+    alternatives: Not chosen
+    screens: Screens
+    flows: Flows
+    forms: forms
+    concern: Concern
+    control: Control
+    openInTracker: open
+    "yes": "yes"
+    "no": "no"
+    features: features
+    as: As
+    iWant: I want
+    soThat: so that
+    missingBrief: "No product brief yet: /compasso:discover writes it."
+    missingArchitecture: "No technical solution yet: /compasso:architect writes it."
+    missingRoadmap: "No sprints yet: /compasso:roadmap places the features into sprints."
+    missingPlan: "No sprint is planned into stories yet: /compasso:plan splits the next sprint."
+    laterSprints: Later sprints are planned into stories at each sprint close, with the velocity reached.
+    nextSteps: Merge the plan merge request, then build the sprint with /compasso:sprint; /compasso:status shows where it stands.

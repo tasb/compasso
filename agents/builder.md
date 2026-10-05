@@ -24,3 +24,5 @@ Bound by the 4 rules: Think Before Coding, Simplicity First, Surgical Changes, G
 - Editing, adding or removing any file under `test_paths`. If a test looks wrong, it stops and says why; the tester decides.
 - Changes outside the story: they become a note for a follow-up, not a rider.
 - Marking a security finding fixed: only security verifies its own findings.
+
+**Language.** Everything people read (titles, stories, acceptance, findings, summaries, lessons, guides, records) is written in the project's `language` (`.compasso/project.yaml`). Code, tests, commit messages and branch names follow the repository's own conventions. Compasso's headings and key lines in work items are written by its scripts, in that language.

@@ -11,7 +11,8 @@
 # Data file (JSON): {title, date, by, approved_by?, ref?, links?: [{text, url}],
 #   findings: [{by, text, outcome}], decisions: [{text, by?, date?, assumed?}],
 #   takeaways: [text], constraints: [text], missing: [{text, status}]}
-# All five lists are required and may be empty: an empty section says "None", so a
+# Headings are in the project's language (bin/locale.sh). All five lists are required and may be
+# empty: an empty section says "None" (in that language), so a
 # reader knows it was considered.
 # Exit: 0 | 1 invalid data or missing input | 2 usage
 set -u
@@ -40,18 +41,18 @@ CHECK='def need(k): if has(k) and (.[k] | type) == "array" then empty else "\(k)
     (.decisions[]? | select((.text // "") == "") | "every decision needs text"),
     (.missing[]? | select((.text // "") == "") | "every missing point needs text") ] | unique[]'
 
-RENDER='def none: if length == 0 then "- None" else .[] end;
+RENDER='include "i18n"; def none: if length == 0 then "- " + t("rec_none") else .[] end;
   "# \(.title) · \(.date)",
-  ([ (if .approved_by then "Approved by @\(.approved_by)" else empty end),
-     (if .by then "Run by @\(.by)" else empty end),
+  ([ (if .approved_by then tf("rec_approved_by"; {who: .approved_by}) else empty end),
+     (if .by then tf("rec_run_by"; {who: .by}) else empty end),
      (if .ref then "plan.yaml @ \(.ref)" else empty end),
      (.links // [] | .[] | "[\(.text)](\(.url))") ] | if length > 0 then join(" · ") else empty end),
-  "", "## Findings", (.findings | map("- \(.by): \(.text)" + (if .outcome then " → \(.outcome)" else "" end)) | none),
-  "", "## Decisions", (.decisions | map("- " + (if .assumed then "Assumed: " else "" end) + .text
+  "", "## \(t("rec_findings"))", (.findings | map("- \(.by): \(.text)" + (if .outcome then " → \(.outcome)" else "" end)) | none),
+  "", "## \(t("rec_decisions"))", (.decisions | map("- " + (if .assumed then t("rec_assumed") + ": " else "" end) + .text
       + (if .by or .date then " (" + ([(if .by then "@\(.by)" else empty end), (.date // empty)] | join(", ")) + ")" else "" end)) | none),
-  "", "## Takeaways", (.takeaways | map("- \(.)") | none),
-  "", "## Constraints", (.constraints | map("- \(.)") | none),
-  "", "## Missing points", (.missing | map("- \(.text)" + (if .status then " (\(.status))" else "" end)) | none)'
+  "", "## \(t("rec_takeaways"))", (.takeaways | map("- \(.)") | none),
+  "", "## \(t("rec_constraints"))", (.constraints | map("- \(.)") | none),
+  "", "## \(t("rec_missing"))", (.missing | map("- \(.text)" + (if .status then " (\(.status))" else "" end)) | none)'
 
 write_record() { # data-file out-file
   local problems
@@ -59,7 +60,8 @@ write_record() { # data-file out-file
   jq -e . "$1" >/dev/null 2>&1 || { echo "record: $1 is not valid JSON" >&2; return 1; }
   problems="$(jq -r "$CHECK" "$1")"
   [ -z "$problems" ] || { printf 'record: %s\n' "$problems" >&2; return 1; }
-  mkdir -p "$(dirname "$2")" && jq -r "$RENDER" "$1" > "$2" || return 1
+  local loc; loc="$("$BIN/locale.sh" --repo "$REPO")" || return 1
+  mkdir -p "$(dirname "$2")" && jq -r -L "$BIN" --argjson L "$loc" "$RENDER" "$1" > "$2" || return 1
   echo "record: wrote $2"
 }
 
@@ -88,11 +90,11 @@ case "$CMD" in
     iid="$(jq -r .iid "$RUN/story.json")"
     out="$REPO/$("$0" path --repo "$REPO" --kind story --key "$iid" --sprint "$(jq -r '.milestone // "backlog"' "$RUN/story.json")")"
     # review and security findings, with what happened to each
-    jq -n --slurpfile s "$RUN/story.json" --slurpfile f "$RUN/findings.json" --argjson x "$extra" --arg date "$(date +%F)" '
+    jq -n --argjson L "$("$BIN/locale.sh" --repo "$REPO")" --slurpfile s "$RUN/story.json" --slurpfile f "$RUN/findings.json" --argjson x "$extra" --arg date "$(date +%F)" '
       $s[0] as $s | {
         title: "#\($s.iid) \($s.title)", date: $date, by: ($x.by // null),
         findings: [$f[0][] | {by, text: ("[\(.severity)] \(.summary)" + (if .file then " (`\(.file)\(if .line then ":\(.line)" else "" end)`)" else "" end)),
-          outcome: ({"fixed": "fixed", "open": "open", "followup": "follow-up #\(.followup_iid // "?")"}[.status] // .status)}],
+          outcome: ({"fixed": $L.text.st_fixed, "open": $L.text.open, "followup": "\($L.text.st_followup) #\(.followup_iid // "?")"}[.status] // .status)}],
         decisions: ($x.decisions // []), takeaways: ($x.takeaways // []),
         constraints: ($x.constraints // []), missing: ($x.missing // [])}' > "$RUN/record-data.json" || exit 1
     write_record "$RUN/record-data.json" "$out" || exit 1 ;;

@@ -151,12 +151,18 @@ setup() { setup_repo; }
   "$ROOT/bin/config.sh" validate --repo "$REPO"
 }
 
-@test "the test guide is written in English unless the project says otherwise" {
-  [ "$(yq -r .test_guide.language "$CFG")" = en ]
-  cfg_set '.test_guide.language = ""'
+@test "language: English by default, one of the languages Compasso ships, and an older choice survives the upgrade" {
+  [ "$(yq -r .language "$CFG")" = en ]
+  cfg_set '.language = "pt-PT"'
+  "$ROOT/bin/config.sh" validate --repo "$REPO" >/dev/null
+  cfg_set '.language = "xx"'
   run "$ROOT/bin/config.sh" validate --repo "$REPO"
   [ "$status" -eq 1 ]
-  [[ "$output" == *"test_guide.language is required"* ]] || false
+  [[ "$output" == *"language 'xx' has no texts"* ]] || false
+  cfg_set 'del(.language) | .test_guide.language = "pt-BR"'
+  "$ROOT/bin/config.sh" upgrade --repo "$REPO" >/dev/null
+  [ "$(yq -r .language "$CFG")" = pt-BR ]
+  [ "$(yq -r '.test_guide | has("language")' "$CFG")" = false ]
 }
 
 @test "report prices are optional numbers per model" {

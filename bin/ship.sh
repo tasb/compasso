@@ -26,17 +26,18 @@ done
 [ -s "$RUN/changes.md" ] || { echo "ship: $RUN/changes.md is empty - the builder writes one line per behaviour change" >&2; exit 2; }
 iid="$(jq -r .iid "$RUN/story.json")"; feature="$(jq -r '.feature // empty' "$RUN/story.json")"
 test_cmd="$("$BIN/config.sh" get --repo "$REPO" .commands.test)"
+L="$("$BIN/locale.sh" --repo "$REPO")" || exit 2   # follow-ups in the project's language
 
 # open minors -> backlog stories under the feature (or under the story when it has no feature)
 for id in $(jq -r 'to_entries[] | select(.value.by == "reviewer" and .value.severity == "minor" and .value.status == "open") | .key' "$RUN/findings.json"); do
   f="$(jq -c ".[$id]" "$RUN/findings.json")"
   body="$RUN/followup-$id.md"
-  jq -r --arg cmd "$test_cmd" --argjson story "$iid" '
-    "**As** a maintainer **I want** \(.fix // "this finding addressed") **so that** \(.summary | ascii_downcase | sub("\\.$"; "")) no longer applies.",
-    "", "## Acceptance",
-    "- [ ] Given \(if .file then "`\(.file)\(if .line then ":\(.line)" else "" end)`" else "the code from #\($story)" end), When it is reviewed again, Then the finding \"\(.summary)\" no longer applies",
-    "", "## Verify", "- `\(if $cmd == "" then "the repo tests" else $cmd end)`",
-    "", "**Tests:** unit", "", "<!-- compasso:followup story=\($story) -->"' <<<"$f" > "$body"
+  jq -r -L "$BIN" --argjson L "$L" --arg cmd "$test_cmd" --argjson story "$iid" 'include "i18n";
+    "**\(md("as"))** \(t("followup_who")) **\(md("i_want"))** \(.fix // t("followup_want")) **\(md("so_that"))** " + tf("followup_so"; {summary: (.summary | ascii_downcase | sub("\\.$"; ""))}) + ".",
+    "", "## \(md("acceptance"))",
+    "- [ ] " + tf("followup_given"; {where: (if .file then "`\(.file)\(if .line then ":\(.line)" else "" end)`" else tf("followup_code_from"; {story: $story}) end), summary: .summary}),
+    "", "## \(md("verify"))", "- `\(if $cmd == "" then t("followup_tests") else $cmd end)`",
+    "", "**\(md("tests")):** unit", "", "<!-- compasso:followup story=\($story) -->"' <<<"$f" > "$body"
   title="$(jq -r '.summary | if length > 80 then .[0:77] + "..." else . end' <<<"$f")"
   new="$("$BIN/tracker.sh" followup --repo "$REPO" --parent "${feature:-$iid}" --title "$title" \
           --body-file "$body" --labels owner::either --milestone none)" || { echo "ship: could not file the follow-up for finding $id" >&2; exit 1; }

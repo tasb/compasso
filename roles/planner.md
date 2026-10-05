@@ -22,3 +22,5 @@ Bound by the 4 rules: Think Before Coding, Simplicity First, Surgical Changes, G
 - A story whose acceptance only says what must keep working: it has no new behaviour; merge it into the story that needs it.
 - Acceptance that a command cannot check ("works well", "is fast").
 - Work outside what the sprint goal or the feature asks for: record it as a question instead.
+
+**Language.** Everything people read (titles, stories, acceptance, findings, summaries, lessons, guides, records) is written in the project's `language` (`.compasso/project.yaml`). Code, tests, commit messages and branch names follow the repository's own conventions. Compasso's headings and key lines in work items are written by its scripts, in that language.

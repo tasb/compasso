@@ -12,7 +12,7 @@
 #   .compasso/roadmap.yaml              the sprints
 #   .compasso/plan.yaml                 the next sprint's stories and blockers, with tracker links
 #   .compasso/records/                  decisions from the product and plan records
-# F (JSON) overrides the page's labels: {"key": "text"}; the keys are in templates/presentation.html.
+# The labels are in the project's language (templates/locales/); F (JSON) changes any of them: {"key": "text"}.
 # D writes the assembled data, for checks. Everything is escaped when shown: the page runs no input.
 # Exit: 0 written | 1 nothing to present, or an input is invalid | 2 usage
 set -u
@@ -51,10 +51,13 @@ road="$(y "$C/roadmap.yaml")"; plan="$(y "$C/plan.yaml")"
 inv=null; ip="$(jq -r '.product.prototype.inventory // empty' <<<"$back")"
 [ -n "$ip" ] && [ -f "$REPO/$ip" ] && inv="$(jq -c . "$REPO/$ip")"
 
-# decisions recorded by the product stages and the plans
+# decisions recorded by the product stages and the plans, under their heading in any language
+heads="$(for f in "$ROOT"/templates/locales/*.yaml; do yq -r .text.rec_decisions "$f"; done)"
+nones="$(for f in "$ROOT"/templates/locales/*.yaml; do yq -r .text.rec_none "$f"; done)"
 decisions="$( { for f in "$C"/records/product/*.md "$C"/records/S*/plan.md "$C"/records/S*/F-*.md; do
     [ -f "$f" ] || continue
-    awk -v src="${f#"$C"/records/}" '/^## /{on = ($0 == "## Decisions"); next} on && /^- / && $0 != "- None" {print src "\t" substr($0, 3)}' "$f"
+    HEADS="$heads" NONES="$nones" awk -v src="${f#"$C"/records/}" 'BEGIN { split(ENVIRON["HEADS"], h, "\n"); for (i in h) hd["## " h[i]] = 1; split(ENVIRON["NONES"], n, "\n"); for (i in n) no["- " n[i]] = 1 }
+      /^## / { on = ($0 in hd); next } on && /^- / && !($0 in no) { print src "\t" substr($0, 3) }' "$f"
   done; } | jq -Rs 'split("\n") | map(select(. != "") | split("\t") | {source: .[0], text: .[1]})')"
 
 provider="$("$BIN/config.sh" get --repo "$REPO" .tracker.provider 2>/dev/null)"
@@ -65,11 +68,13 @@ case "$provider" in
   gitlab) items="https://${host:-gitlab.com}/$proj/-/issues/" ;;
   *) items="" ;;
 esac
-ui='{}'; [ -n "$UI" ] && { ui="$(jq -c . "$UI")" || { echo "present: $UI is not valid JSON" >&2; exit 1; }; }
+L="$("$BIN/locale.sh" --repo "$REPO")" || exit 1
+ui="$(jq -c '.ui.presentation' <<<"$L")"   # the project's language; --ui changes any label
+[ -n "$UI" ] && { ui="$(jq -c --argjson base "$ui" '$base + .' "$UI")" || { echo "present: $UI is not valid JSON" >&2; exit 1; }; }
 
 data="$(jq -n --argjson brief "$brief" --argjson back "$back" --argjson arch "$arch" --argjson road "$road" \
   --argjson plan "$plan" --argjson inv "$inv" --argjson dec "$decisions" --argjson ui "$ui" \
-  --arg items "$items" --arg date "$(date +%F)" --arg lang "$("$BIN/config.sh" get --repo "$REPO" .test_guide.language 2>/dev/null)" '
+  --arg items "$items" --arg date "$(date +%F)" --arg lang "$("$BIN/locale.sh" --repo "$REPO" | jq -r .lang)" '
   def link($n): if $items != "" and ($n | type) == "number" then $items + ($n | tostring) else null end;
   {date: $date, lang: (if $lang == "" then "en" else $lang end), ui: $ui,
    name: ($back.product.name // $brief.title // "Product"),

@@ -78,7 +78,12 @@
   var D = JSON.parse(document.getElementById('report-data').textContent);
   var app = document.getElementById('app'), tip = document.getElementById('tip');
   var NS = 'http://www.w3.org/2000/svg';
-  document.title = 'S' + D.sprint.number + ' sprint report';
+  // labels in the project's language (report.sh adds them from templates/locales/); a missing one shows its key
+  var ui = D.ui || {};
+  function u(k) { return ui[k] || k; }
+  function fmt(k, v) { return u(k).replace(/\{(\w+)\}/g, function (_, n) { return v[n]; }); }
+  document.documentElement.lang = D.language || 'en';
+  document.title = fmt('title', { n: D.sprint.number });
 
   function el(tag, attrs, text, parent) {
     var n = document.createElement(tag);
@@ -95,7 +100,7 @@
     return n;
   }
   function h(n) { return (Math.round(n * 10) / 10).toString() + 'h'; }
-  function dur(minutes) { return minutes < 60 ? Math.round(minutes) + ' min' : h(minutes / 60); }
+  function dur(minutes) { return minutes < 60 ? fmt('min', { n: Math.round(minutes) }) : h(minutes / 60); }
   function compact(n) { return n >= 1e6 ? (n / 1e6).toFixed(1) + 'M' : n >= 1e3 ? Math.round(n / 1e3) + 'K' : String(n); }
   function median(a) { if (!a.length) return null; var s = a.slice().sort(function (x, y) { return x - y; }), m = s.length >> 1;
     return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; }
@@ -135,7 +140,7 @@
     return f;
   }
   function table(parent, head, rows, numeric) {
-    var d = el('details', {}, null, parent); el('summary', {}, 'Show table', d);
+    var d = el('details', {}, null, parent); el('summary', {}, u('showTable'), d);
     var t = el('table', {}, null, d), tr = el('tr', {}, null, el('thead', {}, null, t));
     head.forEach(function (c, i) { el('th', { 'class': numeric[i] ? 'n' : '' }, c, tr); });
     var tb = el('tbody', {}, null, t);
@@ -159,46 +164,46 @@
 
   // ---------- header and headline tiles ----------
   var s = D.sprint, dv = D.delivery, fl = D.flow, q = D.quality, ag = D.agents;
-  el('h1', {}, 'Sprint ' + s.number + ' report', app);
+  el('h1', {}, fmt('title', { n: s.number }), app);
   el('p', { 'class': 'sub' }, s.goal, app);
-  el('div', { 'class': 'meta' }, s.start + ' – ' + s.end + ' · ' + (s.status === 'closed' ? 'Closed' : 'In progress') + ' · Updated ' + s.generated, app);
+  el('div', { 'class': 'meta' }, s.start + ' – ' + s.end + ' · ' + (s.status === 'closed' ? u('closed') : u('inProgress')) + ' · ' + fmt('updated', { date: s.generated }), app);
 
   var tiles = el('div', { 'class': 'tiles' }, null, app);
-  tile(tiles, 'Hours done', h(dv.done_h), 'of ' + h(dv.planned_h) + ' planned · capacity ' + h(s.capacity_h), 100 * dv.done_h / (dv.planned_h || 1));
-  tile(tiles, 'Stories done', dv.stories_done + ' of ' + dv.stories_total, dv.stories_blocked ? dv.stories_blocked + ' blocked' : null);
+  tile(tiles, u('hoursDone'), h(dv.done_h), fmt('ofPlanned', { planned: h(dv.planned_h), capacity: h(s.capacity_h) }), 100 * dv.done_h / (dv.planned_h || 1));
+  tile(tiles, u('storiesDone'), fmt('xOfY', { done: dv.stories_done, total: dv.stories_total }), dv.stories_blocked ? fmt('nBlocked', { n: dv.stories_blocked }) : null);
   var cyc = median(fl.stories.filter(function (x) { return x.merged; }).map(function (x) { return x.building_h + x.waiting_h; }));
-  tile(tiles, 'Median cycle time', cyc == null ? '—' : h(cyc), 'from building to merged');
+  tile(tiles, u('medianCycle'), cyc == null ? '—' : h(cyc), u('cycleNote'));
   var wait = median(fl.stories.filter(function (x) { return x.merged; }).map(function (x) { return x.waiting_h; }));
-  tile(tiles, 'Median wait for approval', wait == null ? '—' : h(wait), 'merge request open until merged');
+  tile(tiles, u('medianWait'), wait == null ? '—' : h(wait), u('waitNote'));
   var sec = q.findings.security, secTotal = sec.blocker + sec.major + sec.minor;
-  tile(tiles, 'Security findings', String(secTotal), q.security_open ? q.security_open + ' still open' : 'all resolved');
+  tile(tiles, u('securityFindings'), String(secTotal), q.security_open ? fmt('stillOpen', { n: q.security_open }) : u('allResolved'));
   var est = ag.stories.reduce(function (a, x) { return a + (x.estimate_h || 0); }, 0);
   var mins = ag.stories.reduce(function (a, x) { return a + (x.agent_minutes || 0); }, 0);
-  tile(tiles, 'Agent time', mins ? dur(mins) : '—', est ? 'for ' + h(est) + ' estimated' : null);
+  tile(tiles, u('agentTime'), mins ? dur(mins) : '—', est ? fmt('forEstimated', { h: h(est) }) : null);
 
   // ---------- delivery ----------
-  el('h2', {}, 'Delivery', app);
+  el('h2', {}, u('delivery'), app);
   var g1 = el('div', { 'class': 'grid2' }, null, app);
   burndown(g1); velocity(g1);
   var g1b = el('div', { 'class': 'grid2', style: 'margin-top:16px' }, null, app);
-  var bc = el('div', { 'class': 'card' }, null, g1b); el('div', { style: 'font-weight:600' }, 'Blockers', bc);
-  if (dv.blockers.length) plainTable(bc, ['Blocker', 'Owner', 'Open for', 'State'],
-    dv.blockers.map(function (b) { return [b.title, b.owner || '—', b.open_days + (b.open_days === 1 ? ' day' : ' days'), b.state]; }), [0, 0, 1, 0]);
-  else el('p', { 'class': 'empty' }, 'No blockers this sprint.', bc);
-  var cc = el('div', { 'class': 'card' }, null, g1b); el('div', { style: 'font-weight:600' }, s.status === 'closed' ? 'Carried over to the next sprint' : 'Not done yet', cc);
-  if (dv.open.length) plainTable(cc, ['Story', 'Estimate', 'Waiting on'],
+  var bc = el('div', { 'class': 'card' }, null, g1b); el('div', { style: 'font-weight:600' }, u('blockers'), bc);
+  if (dv.blockers.length) plainTable(bc, [u('blocker'), u('owner'), u('openFor'), u('state')],
+    dv.blockers.map(function (b) { return [b.title, b.owner || '—', fmt(b.open_days === 1 ? 'day' : 'days', { n: b.open_days }), b.state]; }), [0, 0, 1, 0]);
+  else el('p', { 'class': 'empty' }, u('noBlockers'), bc);
+  var cc = el('div', { 'class': 'card' }, null, g1b); el('div', { style: 'font-weight:600' }, s.status === 'closed' ? u('carriedOver') : u('notDoneYet'), cc);
+  if (dv.open.length) plainTable(cc, [u('story'), u('estimate'), u('waitingOn')],
     dv.open.map(function (o) { return [o.title, h(o.estimate_h), o.waiting_on || '—']; }), [0, 1, 0]);
-  else el('p', { 'class': 'empty' }, 'Everything planned is done.', cc);
+  else el('p', { 'class': 'empty' }, u('allDone'), cc);
 
   function burndown(parent) {
-    var f = figure(parent, 'Burn-down', 'Planned hours still open, day by day.',
-      [{ label: 'Remaining', color: 'var(--s1)', line: true }, { label: 'Ideal', color: 'var(--deemph)', line: true }]);
-    var pts = dv.burndown; if (!pts.length) { f.removeChild(f.querySelector('.legend')); el('p', { 'class': 'empty' }, s.generated < s.start ? 'The sprint starts on ' + s.start + '.' : 'No data yet.', f); return; }
+    var f = figure(parent, u('burndown'), u('burndownDesc'),
+      [{ label: u('remaining'), color: 'var(--s1)', line: true }, { label: u('ideal'), color: 'var(--deemph)', line: true }]);
+    var pts = dv.burndown; if (!pts.length) { f.removeChild(f.querySelector('.legend')); el('p', { 'class': 'empty' }, s.generated < s.start ? fmt('sprintStarts', { date: s.start }) : u('noData'), f); return; }
     var days = []; for (var d = new Date(s.start + 'T00:00:00Z'); d <= new Date(s.end + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + 1)) days.push(d.toISOString().slice(0, 10));
     var W = 460, H = 220, L = 34, R = 12, T = 10, B = 26, max = niceMax(dv.planned_h);
     var x = function (i) { return L + (W - L - R) * (days.length > 1 ? i / (days.length - 1) : 0); };
     var y = function (v) { return T + (H - T - B) * (1 - v / max); };
-    var svg = sv('svg', { viewBox: '0 0 ' + W + ' ' + H, role: 'img', 'aria-label': 'Burn-down chart' }, f);
+    var svg = sv('svg', { viewBox: '0 0 ' + W + ' ' + H, role: 'img', 'aria-label': u('burndown') }, f);
     [0, .5, 1].forEach(function (t) { var v = max * t;
       sv('line', { x1: L, x2: W - R, y1: y(v), y2: y(v), stroke: 'var(--grid)' }, svg);
       sv('text', { x: L - 6, y: y(v) + 4, 'text-anchor': 'end' }, svg, String(Math.round(v))); });
@@ -210,7 +215,7 @@
       stroke: 'var(--s1)', 'stroke-width': 2, 'stroke-linejoin': 'round', 'stroke-linecap': 'round' }, svg);
     var last = pts[pts.length - 1], li = idx[idx.length - 1];
     sv('circle', { cx: x(li), cy: y(last.remaining_h), r: 4, fill: 'var(--s1)', stroke: 'var(--surface)', 'stroke-width': 2 }, svg);
-    sv('text', { 'class': 'label', x: x(li) + 8, y: y(last.remaining_h) - 6 }, svg, h(last.remaining_h) + ' left');
+    sv('text', { 'class': 'label', x: x(li) + 8, y: y(last.remaining_h) - 6 }, svg, fmt('left', { h: h(last.remaining_h) }));
     // crosshair: snap to the nearest day
     var cross = sv('line', { y1: T, y2: H - B, stroke: 'var(--axis)', visibility: 'hidden' }, svg);
     var hit = sv('rect', { x: L, y: T, width: W - L - R, height: H - T - B, 'class': 'hit' }, svg);
@@ -220,21 +225,21 @@
       cross.setAttribute('x1', x(i)); cross.setAttribute('x2', x(i)); cross.setAttribute('visibility', 'visible');
       var p = pts.filter(function (q) { return q.date === days[i]; })[0];
       var ideal = dv.planned_h * (1 - (days.length > 1 ? i / (days.length - 1) : 1));
-      var rows = [{ value: h(ideal), label: 'ideal', color: 'var(--deemph)' }];
-      if (p) rows.unshift({ value: h(p.remaining_h), label: 'remaining', color: 'var(--s1)' });
+      var rows = [{ value: h(ideal), label: u('idealL'), color: 'var(--deemph)' }];
+      if (p) rows.unshift({ value: h(p.remaining_h), label: u('remainingL'), color: 'var(--s1)' });
       showTip(e, days[i], rows);
     });
     hit.addEventListener('pointerleave', function () { cross.setAttribute('visibility', 'hidden'); hideTip(); });
-    table(f, ['Day', 'Remaining'], pts.map(function (p) { return [p.date, h(p.remaining_h)]; }), [0, 1]);
+    table(f, [u('dayCol'), u('remaining')], pts.map(function (p) { return [p.date, h(p.remaining_h)]; }), [0, 1]);
   }
 
   function velocity(parent) {
-    var f = figure(parent, 'Velocity', 'Hours done per sprint; this sprint in blue.', null);
-    var v = dv.velocity; if (v.length < 2) { el('p', { 'class': 'empty' }, 'Velocity appears once there is a past sprint to compare with.', f); return; }
+    var f = figure(parent, u('velocity'), u('velocityDesc'), null);
+    var v = dv.velocity; if (v.length < 2) { el('p', { 'class': 'empty' }, u('velocityEmpty'), f); return; }
     var W = 460, H = 220, L = 34, R = 12, T = 16, B = 26, max = niceMax(Math.max.apply(null, v.map(function (a) { return a.done_h; })));
     var band = (W - L - R) / v.length, bw = Math.min(24, band * .6);
     var y = function (val) { return T + (H - T - B) * (1 - val / max); };
-    var svg = sv('svg', { viewBox: '0 0 ' + W + ' ' + H, role: 'img', 'aria-label': 'Velocity chart' }, f);
+    var svg = sv('svg', { viewBox: '0 0 ' + W + ' ' + H, role: 'img', 'aria-label': u('velocity') }, f);
     [0, .5, 1].forEach(function (t) { var val = max * t;
       sv('line', { x1: L, x2: W - R, y1: y(val), y2: y(val), stroke: 'var(--grid)' }, svg);
       sv('text', { x: L - 6, y: y(val) + 4, 'text-anchor': 'end' }, svg, String(Math.round(val))); });
@@ -247,22 +252,22 @@
       sv('path', { d: path, fill: current ? 'var(--s1)' : 'var(--deemph)', 'class': 'mark' }, svg);
       sv('text', { 'class': 'label', x: cx, y: top - 5, 'text-anchor': 'middle' }, svg, h(a.done_h));
       sv('text', { x: cx, y: H - 8, 'text-anchor': 'middle' }, svg, a.sprint);
-      hover(hitR, a.sprint + (current ? ' (this sprint)' : ''), [{ value: h(a.done_h), label: 'done', color: current ? 'var(--s1)' : 'var(--deemph)' }]);
+      hover(hitR, a.sprint + (current ? ' ' + u('thisSprint') : ''), [{ value: h(a.done_h), label: u('doneL'), color: current ? 'var(--s1)' : 'var(--deemph)' }]);
     });
     sv('line', { x1: L, x2: W - R, y1: y(0), y2: y(0), stroke: 'var(--axis)' }, svg);
-    table(f, ['Sprint', 'Hours done'], v.map(function (a) { return [a.sprint, h(a.done_h)]; }), [0, 1]);
+    table(f, [u('sprint'), u('hoursDone')], v.map(function (a) { return [a.sprint, h(a.done_h)]; }), [0, 1]);
   }
 
   // ---------- flow ----------
-  el('h2', {}, 'Flow and waiting', app);
+  el('h2', {}, u('flow'), app);
   (function () {
-    var f = figure(app, 'Where each story spent its time', 'Hours building (agent or person) and hours its merge request waited for approval.',
-      [{ label: 'Building', color: 'var(--s1)' }, { label: 'Waiting for approval', color: 'var(--s2)' }]);
-    var st = fl.stories; if (!st.length) { el('p', { 'class': 'empty' }, 'No stories started yet.', f); return; }
+    var f = figure(app, u('timeTitle'), u('timeDesc'),
+      [{ label: u('building'), color: 'var(--s1)' }, { label: u('waiting'), color: 'var(--s2)' }]);
+    var st = fl.stories; if (!st.length) { el('p', { 'class': 'empty' }, u('noStories'), f); return; }
     var W = 1000, rowH = 28, L = 260, R = 60, T = 4, H = T + st.length * rowH + 22;
     var max = niceMax(Math.max.apply(null, st.map(function (a) { return a.building_h + a.waiting_h; })));
     var x = function (v) { return L + (W - L - R) * v / max; };
-    var svg = sv('svg', { viewBox: '0 0 ' + W + ' ' + H, role: 'img', 'aria-label': 'Time per story' }, f);
+    var svg = sv('svg', { viewBox: '0 0 ' + W + ' ' + H, role: 'img', 'aria-label': u('timeTitle') }, f);
     [0, .5, 1].forEach(function (t) { var v = max * t;
       sv('line', { x1: x(v), x2: x(v), y1: T, y2: H - 18, stroke: 'var(--grid)' }, svg);
       sv('text', { x: x(v), y: H - 4, 'text-anchor': 'middle' }, svg, h(v)); });
@@ -273,58 +278,58 @@
       var b = x(a.building_h) - x(0), w = x(a.building_h + a.waiting_h) - x(a.building_h);
       if (b > 0) sv('rect', { x: x(0), y: cy - bh / 2, width: Math.max(0, b - (w > 0 ? 2 : 0)), height: bh, rx: w > 0 ? 0 : 3, fill: 'var(--s1)' }, svg);
       if (w > 0) sv('rect', { x: x(a.building_h), y: cy - bh / 2, width: w, height: bh, rx: 3, fill: 'var(--s2)' }, svg);
-      sv('text', { 'class': 'label', x: x(a.building_h + a.waiting_h) + 6, y: cy + 4 }, svg, h(a.building_h + a.waiting_h) + (a.merged ? '' : ' so far'));
-      hover(hitR, a.title, [{ value: h(a.building_h), label: 'building', color: 'var(--s1)' }, { value: h(a.waiting_h), label: 'waiting for approval', color: 'var(--s2)' }]);
+      sv('text', { 'class': 'label', x: x(a.building_h + a.waiting_h) + 6, y: cy + 4 }, svg, h(a.building_h + a.waiting_h) + (a.merged ? '' : ' ' + u('soFar')));
+      hover(hitR, a.title, [{ value: h(a.building_h), label: u('buildingL'), color: 'var(--s1)' }, { value: h(a.waiting_h), label: u('waitingL'), color: 'var(--s2)' }]);
     });
-    table(f, ['Story', 'Building', 'Waiting for approval', 'Merged'],
-      st.map(function (a) { return [a.title, h(a.building_h), h(a.waiting_h), a.merged ? 'yes' : 'not yet']; }), [0, 1, 1, 0]);
+    table(f, [u('story'), u('building'), u('waiting'), u('merged')],
+      st.map(function (a) { return [a.title, h(a.building_h), h(a.waiting_h), a.merged ? u('yes') : u('notYet')]; }), [0, 1, 1, 0]);
   })();
 
   // ---------- quality ----------
-  el('h2', {}, 'Quality', app);
+  el('h2', {}, u('quality'), app);
   var qt = el('div', { 'class': 'tiles', style: 'margin-top:0' }, null, app);
-  tile(qt, 'Review rounds', q.review_rounds_avg == null ? '—' : String(q.review_rounds_avg), 'average per story');
-  tile(qt, 'Bugs found', String(q.bugs.feature_e2e + q.bugs.testers), q.bugs.feature_e2e + ' by feature tests · ' + q.bugs.testers + ' by testers');
+  tile(qt, u('reviewRounds'), q.review_rounds_avg == null ? '—' : String(q.review_rounds_avg), u('avgPerStory'));
+  tile(qt, u('bugsFound'), String(q.bugs.feature_e2e + q.bugs.testers), fmt('bugsNote', { e2e: q.bugs.feature_e2e, testers: q.bugs.testers }));
   var tg = q.test_guide;
-  tile(qt, 'Test guide', tg ? Math.round(100 * tg.pass / Math.max(1, tg.pass + tg.fail)) + '% work' : '—',
-    tg ? tg.pass + ' work · ' + tg.fail + " don't · " + tg.blocked + " can't test" : 'no results yet');
-  tile(qt, 'Coverage of changed lines', q.coverage_avg == null ? '—' : q.coverage_avg + '%', 'average per story');
+  tile(qt, u('testGuide'), tg ? fmt('pctWork', { p: Math.round(100 * tg.pass / Math.max(1, tg.pass + tg.fail)) }) : '—',
+    tg ? fmt('guideNote', { pass: tg.pass, fail: tg.fail, blocked: tg.blocked }) : u('noResults'));
+  tile(qt, u('coverage'), q.coverage_avg == null ? '—' : q.coverage_avg + '%', u('avgPerStory'));
   var qc = el('div', { 'class': 'card', style: 'margin-top:16px' }, null, app);
-  el('div', { style: 'font-weight:600' }, 'Findings by source and severity', qc);
-  plainTable(qc, ['Found by', 'Blocker', 'Major', 'Minor', 'Total'], ['reviewer', 'security'].map(function (k) {
-    var f = q.findings[k]; return [k === 'security' ? 'Security review' : 'Code review', f.blocker, f.major, f.minor, f.blocker + f.major + f.minor].map(String);
+  el('div', { style: 'font-weight:600' }, u('findingsTitle'), qc);
+  plainTable(qc, [u('foundBy'), u('blocker'), u('major'), u('minor'), u('total')], ['reviewer', 'security'].map(function (k) {
+    var f = q.findings[k]; return [k === 'security' ? u('securityReview') : u('codeReview'), f.blocker, f.major, f.minor, f.blocker + f.major + f.minor].map(String);
   }), [0, 1, 1, 1, 1]);
 
   // ---------- agents ----------
-  el('h2', {}, 'Agent effort' + (ag.cost ? ' and cost' : ''), app);
+  el('h2', {}, u('agentEffort') + (ag.cost ? ' ' + u('andCost') : ''), app);
   var g3 = el('div', { 'class': 'grid2' }, null, app);
   (function () {
-    var f = figure(g3, 'Tokens by role', 'All agent runs this sprint.', null);
+    var f = figure(g3, u('tokensByRole'), u('allRuns'), null);
     var r = ag.by_role.slice().sort(function (a, b) { return b.tokens - a.tokens; });
-    if (!r.length) { el('p', { 'class': 'empty' }, 'No agent runs recorded.', f); return; }
+    if (!r.length) { el('p', { 'class': 'empty' }, u('noRuns'), f); return; }
     var W = 460, rowH = 28, L = 90, R = 60, H = r.length * rowH + 6, max = niceMax(r[0].tokens);
     var x = function (v) { return L + (W - L - R) * v / max; };
-    var svg = sv('svg', { viewBox: '0 0 ' + W + ' ' + H, role: 'img', 'aria-label': 'Tokens by role' }, f);
+    var svg = sv('svg', { viewBox: '0 0 ' + W + ' ' + H, role: 'img', 'aria-label': u('tokensByRole') }, f);
     r.forEach(function (a, i) {
       var cy = i * rowH + rowH / 2 + 3, bh = 14, w = Math.max(2, x(a.tokens) - x(0));
       sv('text', { 'class': 'label', x: L - 10, y: cy + 4, 'text-anchor': 'end' }, svg, a.role);
       var hitR = sv('rect', { x: 0, y: cy - rowH / 2, width: W, height: rowH, 'class': 'hit' }, svg);
       sv('rect', { x: x(0), y: cy - bh / 2, width: w, height: bh, rx: 3, fill: 'var(--s1)' }, svg);
       sv('text', { 'class': 'label', x: x(0) + w + 6, y: cy + 4 }, svg, compact(a.tokens));
-      hover(hitR, a.role + ' · ' + a.model, [{ value: compact(a.tokens), label: 'tokens in ' + a.runs + ' runs', color: 'var(--s1)' },
-        { value: Math.round(a.minutes) + ' min', label: 'running', color: 'var(--s1)' }]);
+      hover(hitR, a.role + ' · ' + a.model, [{ value: compact(a.tokens), label: fmt('tokensInRuns', { runs: a.runs }), color: 'var(--s1)' },
+        { value: fmt('min', { n: Math.round(a.minutes) }), label: u('running'), color: 'var(--s1)' }]);
     });
-    table(f, ['Role', 'Model', 'Runs', 'Tokens', 'Minutes'], r.map(function (a) { return [a.role, a.model, String(a.runs), compact(a.tokens), String(Math.round(a.minutes))]; }), [0, 0, 1, 1, 1]);
+    table(f, [u('role'), u('model'), u('runs'), u('tokens'), u('minutes')], r.map(function (a) { return [a.role, a.model, String(a.runs), compact(a.tokens), String(Math.round(a.minutes))]; }), [0, 0, 1, 1, 1]);
   })();
   (function () {
     var c = el('div', { 'class': 'card' }, null, g3);
-    el('div', { style: 'font-weight:600' }, 'Estimate vs agent time', c);
-    el('p', { 'class': 'desc', style: 'color:var(--ink-2);font-size:.85rem;margin:0 0 4px' }, 'Estimates are in working hours for a person; agent time is how long its runs took.', c);
-    if (!ag.stories.length) { el('p', { 'class': 'empty' }, 'No agent-built stories yet.', c); return; }
-    plainTable(c, ['Story', 'Estimate', 'Agent time', 'Tokens'].concat(ag.cost ? ['Cost'] : []),
+    el('div', { style: 'font-weight:600' }, u('estVsAgent'), c);
+    el('p', { 'class': 'desc', style: 'color:var(--ink-2);font-size:.85rem;margin:0 0 4px' }, u('estDesc'), c);
+    if (!ag.stories.length) { el('p', { 'class': 'empty' }, u('noAgentStories'), c); return; }
+    plainTable(c, [u('story'), u('estimate'), u('agentTime'), u('tokens')].concat(ag.cost ? [u('cost')] : []),
       ag.stories.map(function (a) { return [a.title, h(a.estimate_h), dur(a.agent_minutes), compact(a.tokens)]
         .concat(ag.cost ? [a.cost == null ? '—' : ag.cost.currency + ' ' + a.cost.toFixed(2)] : []); }), [0, 1, 1, 1, 1]);
-    if (ag.cost) el('p', { 'class': 'meta' }, 'Cost is approximate: tokens × the price per million tokens set for each model. Total ' + ag.cost.currency + ' ' + ag.cost.total.toFixed(2) + '.', c);
+    if (ag.cost) el('p', { 'class': 'meta' }, fmt('costNote', { total: ag.cost.currency + ' ' + ag.cost.total.toFixed(2) }), c);
   })();
 })();
 </script>

@@ -2,6 +2,13 @@
 
 Versions follow `version` in `.claude-plugin/plugin.json`. Claude Code updates an installed plugin only when this version changes, so every change users should receive ships in a new version.
 
+## 1.2.0 (2026-10-04)
+
+- Setup asks the project's language: English, Portuguese (Portugal) or Portuguese (Brazil). It covers work items on the tracker, the issue templates, comments, merge requests, and the brief, records, test guide, sprint report and presentation. Labels stay in English.
+- Compasso reads work items in every language it ships, so items written in another language, or before a change of language, keep working.
+- Each language is one file of texts plus its issue templates and brief; adding a language changes no code.
+- `test_guide.language` becomes `language`; `config.sh upgrade` keeps an existing choice.
+
 ## 1.1.0 (2026-10-03)
 
 - `/compasso:architect` designs the technical solution between the backlog and the roadmap: stack, components serving the backlog's features, integrations, data, observability (from an observability prototype), security, environments, decisions with their alternatives, and risks. It is checked by `bin/architecture-check.sh`, reviewed by security, and approved.

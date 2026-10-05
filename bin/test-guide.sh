@@ -12,11 +12,12 @@
 set -u
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-DATA="" OUT=""
+DATA="" OUT="" REPO="."
 while [ $# -gt 0 ]; do
   case "$1" in
     --data) DATA="$2"; shift 2 ;;
     --out) OUT="$2"; shift 2 ;;
+    --repo) REPO="$2"; shift 2 ;;   # the project's language for the page's labels
     *) echo "test-guide: unknown argument '$1'" >&2; exit 1 ;;
   esac
 done
@@ -37,7 +38,9 @@ problems="$(jq -r '
 [ -z "$problems" ] || { printf 'test-guide: %s\n' "$problems" >&2; exit 1; }
 
 # every "<" as \u003c: the same JSON, and HTML never sees a tag (no "</script>", no "<!--") in the data block
-json="$(jq -c . "$DATA" | sed 's/</\\u003c/g')"
+# the page's labels in the project's language; labels in the data win
+L="$("$ROOT/bin/locale.sh" --repo "$REPO")" || exit 1
+json="$(jq -c --argjson L "$L" '. + {ui: ($L.ui.guide + (.ui // {})), language: (.language // $L.lang)}' "$DATA" | sed 's/</\\u003c/g')"
 mkdir -p "$(dirname "$OUT")"
 # ENVIRON, not awk -v: -v would turn the JSON's \" escapes into bare quotes
 JSON="$json" awk '{ i = index($0, "__GUIDE_DATA__"); if (i) { print substr($0, 1, i - 1) ENVIRON["JSON"] substr($0, i + 14) } else print }' \

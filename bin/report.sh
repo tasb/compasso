@@ -8,11 +8,12 @@
 set -u
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-DATA="" OUT=""
+DATA="" OUT="" REPO="."
 while [ $# -gt 0 ]; do
   case "$1" in
     --data) DATA="$2"; shift 2 ;;
     --out) OUT="$2"; shift 2 ;;
+    --repo) REPO="$2"; shift 2 ;;   # the project's language for the page's labels
     *) echo "report: unknown argument '$1'" >&2; exit 1 ;;
   esac
 done
@@ -25,7 +26,9 @@ problems="$(jq -r '
 [ -z "$problems" ] || { printf 'report: %s\n' "$problems" >&2; exit 1; }
 
 # "</" would end the script element early; ENVIRON keeps awk from reading escapes
-json="$(jq -c . "$DATA" | sed 's/</\\u003c/g')"
+# the page's labels in the project's language; labels in the data win
+L="$("$ROOT/bin/locale.sh" --repo "$REPO")" || exit 1
+json="$(jq -c --argjson L "$L" '. + {ui: ($L.ui.report + (.ui // {})), language: (.language // $L.lang)}' "$DATA" | sed 's/</\\u003c/g')"
 mkdir -p "$(dirname "$OUT")"
 JSON="$json" awk '{ i = index($0, "__REPORT_DATA__"); if (i) { print substr($0, 1, i - 1) ENVIRON["JSON"] substr($0, i + 15) } else print }' \
   "$ROOT/templates/report.html" > "$OUT"

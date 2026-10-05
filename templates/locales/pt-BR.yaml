@@ -1,0 +1,334 @@
+# Os textos do Compasso em português do Brasil. O que faltar vem do inglês (en.yaml).
+name: Português (Brasil)
+md:
+  goal: Objetivo
+  sprint: Sprint
+  capacity: Capacidade
+  planned: Planejado
+  coverage: Cobertura
+  features: Funcionalidades
+  risks: Riscos
+  needed_for: Necessário para
+  steps: Passos
+  scope: Escopo
+  acceptance: Critérios de aceitação
+  decisions: Decisões
+  verify: Verificação
+  tests: Testes
+  touches: Caminhos
+  depends_on: Depende de
+  blocked_by: Bloqueado por
+  expected: Resultado esperado
+  actual: Resultado obtido
+  evidence: Evidência
+  found_in: Encontrado em
+  by: Por
+  as: Como
+  i_want: quero
+  so_that: para que
+text:
+  qa_title: "**Perguntas e respostas** · rodada {round} · respondido por @{user} no agente, {date}"
+  plan_title: "**Plano** · {n} {stories} · {hours}h · caminho crítico {critical}h"
+  story_one: story
+  story_many: stories
+  plan_head: "| Story | h | Responsável | Depende de |"
+  security: Segurança
+  approved: Aprovado
+  approved_by: "por @{who} no agente, {date}"
+  changes: Alterações
+  how_to_test: Como testar
+  review: Revisão
+  reviewer: Revisor
+  coverage: Cobertura
+  merge: Merge
+  findings_fixed: "{n} findings corrigidas"
+  minors_to: "menores → {list}"
+  n_open: "{n} em aberto"
+  no_findings: sem findings
+  fixed_verified: corrigida, verificada pela segurança
+  open: em aberto
+  cov_ok: "{p}% das linhas alteradas (mín. {min}%)"
+  cov_below: "abaixo do mínimo: {p}% de {min}% · por cobrir: {list}"
+  not_measured: não medida
+  merge_low: "risco baixo, pode ser integrado sem uma pessoa ({lines} linhas alteradas em {files} arquivos, nada sensível)"
+  merge_person: "uma pessoa aprova: {reasons}"
+  risk_sensitive: "{file} é um caminho sensível ({glob})"
+  risk_build: "{file} altera o build, a pipeline, a configuração do Compasso ou as dependências"
+  risk_lines: "{lines} linhas alteradas, acima do limite de {max}"
+  risk_security: "a segurança encontrou {n} problema(s) bloqueante(s) ou grave(s) nesta story"
+  risk_cov_below: a cobertura das linhas alteradas está abaixo do mínimo
+  risk_cov_none: a cobertura das linhas alteradas não foi medida
+  review_title: "**Revisão** · {n} findings"
+  no_findings_cap: Sem findings
+  fix: correção
+  blocks: Bloqueia
+  "yes": sim
+  "no": não
+  by_reviewer: revisor
+  by_security: segurança
+  sev_blocker: bloqueante
+  sev_major: grave
+  sev_minor: menor
+  st_fixed: corrigida
+  st_followup: seguimento
+  digest_title: "**Integrado sem uma pessoa** · desde {since}"
+  nothing: Nada
+  merged_at: "integrado {at}"
+  digest_footer: Cada um passou a revisão, a revisão de segurança obrigatória e a CI, e era de risco baixo. Para desfazer um, reverta o merge request.
+  digest_footer_github: Cada um passou pela revisão, pela revisão de segurança obrigatória e pela CI, e era de risco baixo. Para desfazer um, reverta o pull request.
+  harden_title: "**Robustez** · verificações {set} · {date}"
+  set_code: de código
+  set_live: em ambiente
+  set_all: de código e em ambiente
+  check_mutation: Testes de mutação
+  check_property: Testes baseados em propriedades
+  check_flaky: Testes instáveis
+  check_smells: Más práticas nos testes
+  check_fuzz: Fuzzing da API
+  check_zap: Análise de segurança (ZAP)
+  check_perf: Desempenho
+  check_a11y: Acessibilidade
+  not_run: não executado
+  results_title: "**Resultados dos testes** · {tester} · {date}"
+  works: Funciona
+  doesnt_work: Não funciona
+  cant_test: Não foi possível testar
+  not_tested: Não testado
+  bug_title: "{feature}: {scenario} não funciona"
+  found_in_value: "guia de testes {gid}"
+  by_value: "{tester} (teste de negócio, {date})"
+  evidence_line: "Reportado por {tester} no guia de testes {gid}, cenário \"{scenario}\""
+  followup_who: quem mantém o código
+  followup_want: esta finding resolvida
+  followup_so: "{summary} deixe de se aplicar"
+  followup_given: "Dado {where}, Quando for revisto de novo, Então a finding \"{summary}\" deixa de se aplicar"
+  followup_code_from: "o código de #{story}"
+  followup_tests: os testes do repositório
+  rec_findings: Constatações
+  rec_decisions: Decisões
+  rec_takeaways: Aprendizados
+  rec_constraints: Restrições
+  rec_missing: Pontos em aberto
+  rec_none: Nenhum
+  rec_assumed: Assumido
+  rec_approved_by: "Aprovado por @{who}"
+  rec_run_by: "Executado por @{who}"
+  plan_pr_intro: "O plano aprovado para {sprint} e o que foi encontrado e decidido ao planejá-lo."
+  plan_pr_outro: Integrar este merge request mantém estes arquivos no repositório, onde os passos seguintes os leem.
+  labels:
+    mutants: mutantes
+    caught: detectados
+    no observable effect: sem efeito observável
+    gaps: lacunas
+    operations: operações
+    failing: com falha
+    pages: páginas
+    serious or critical: graves ou críticas
+    moderate or minor: moderadas ou menores
+    requests: requisições
+    "% failed": "% falhados"
+    ms at p95: ms no p95
+    high: alta
+    medium: média
+    low: baixa
+    informational: informativa
+    runs: execuções
+    passed: passaram
+    flaky tests: testes instáveis
+    rules: regras
+    hold: são cumpridas
+    broken: quebradas
+    tests read: testes lidos
+    smells: más práticas
+ui:
+  guide:
+    where: Onde testar
+    dates: Datas
+    whatsNew: O que há de novo
+    why: Porque é importante
+    before: Antes de começar
+    steps: Passos
+    expected: Resultado esperado
+    notIncluded: Não incluído neste sprint
+    knownIssues: Problemas conhecidos
+    pass: Funciona
+    fail: Não funciona
+    blocked: Não foi possível testar
+    comment: Comentário
+    commentRequired: Diga o que aconteceu no lugar.
+    tested: "{done} de {total} testados"
+    progress: "{done} de {total} cenários testados"
+    tester: Seu nome
+    download: Baixar os meus resultados
+    needName: Primeiro informe seu nome.
+    missingComment: Adicione um comentário a cada cenário que não funciona.
+    downloaded: "Salvo em {file}. Envie para a equipe."
+    automatic: Verificado automaticamente
+    automaticText: Estas alterações não têm tela para experimentar. Foram verificadas por testes automáticos.
+  report:
+    title: "Relatório do sprint {n}"
+    closed: Fechado
+    inProgress: Em andamento
+    updated: "Atualizado em {date}"
+    hoursDone: Horas feitas
+    ofPlanned: "de {planned} planejadas · capacidade {capacity}"
+    storiesDone: Stories feitas
+    xOfY: "{done} de {total}"
+    nBlocked: "{n} bloqueadas"
+    medianCycle: Tempo de ciclo (mediana)
+    cycleNote: do desenvolvimento à integração
+    medianWait: Espera por aprovação (mediana)
+    waitNote: merge request aberto até ser integrado
+    securityFindings: Findings de segurança
+    stillOpen: "{n} ainda em aberto"
+    allResolved: todas resolvidas
+    agentTime: Tempo dos agentes
+    forEstimated: "para {h} estimadas"
+    delivery: Entrega
+    blockers: Bloqueios
+    blocker: Bloqueio
+    owner: Responsável
+    openFor: Aberto há
+    state: Estado
+    day: "{n} dia"
+    days: "{n} dias"
+    noBlockers: Sem bloqueios neste sprint.
+    carriedOver: Passa para o próximo sprint
+    notDoneYet: Ainda não feito
+    story: Story
+    estimate: Estimativa
+    waitingOn: Aguardando de
+    allDone: Tudo o que foi planejado está feito.
+    burndown: Burn-down
+    burndownDesc: Horas planejadas ainda em aberto, dia a dia.
+    remaining: Em falta
+    ideal: Ideal
+    sprintStarts: "O sprint começa em {date}."
+    noData: Ainda sem dados.
+    left: "faltam {h}"
+    remainingL: em falta
+    idealL: ideal
+    dayCol: Dia
+    velocity: Velocidade
+    velocityDesc: Horas feitas por sprint; este sprint em azul.
+    velocityEmpty: A velocidade aparece quando houver um sprint anterior para comparar.
+    thisSprint: (este sprint)
+    doneL: feitas
+    sprint: Sprint
+    flow: Fluxo e esperas
+    timeTitle: Onde cada story passou o seu tempo
+    timeDesc: Horas em desenvolvimento (agente ou pessoa) e horas que o merge request esperou por aprovação.
+    building: Em desenvolvimento
+    waiting: Aguardando de aprovação
+    noStories: Ainda nenhuma story começou.
+    soFar: até agora
+    buildingL: em desenvolvimento
+    waitingL: aguardando de aprovação
+    merged: Integrada
+    "yes": sim
+    notYet: ainda não
+    quality: Qualidade
+    reviewRounds: Rodadas de revisão
+    avgPerStory: média por story
+    bugsFound: Bugs encontrados
+    bugsNote: "{e2e} pelos testes das funcionalidades · {testers} pelos testadores"
+    testGuide: Guia de testes
+    pctWork: "{p}% funcionam"
+    guideNote: "{pass} funcionam · {fail} não · {blocked} não testáveis"
+    noResults: ainda sem resultados
+    coverage: Cobertura das linhas alteradas
+    findingsTitle: Findings por origem e gravidade
+    foundBy: Encontradas por
+    major: Grave
+    minor: Menor
+    total: Total
+    securityReview: Revisão de segurança
+    codeReview: Revisão de código
+    agentEffort: Esforço dos agentes
+    andCost: e custo
+    tokensByRole: Tokens por papel
+    allRuns: Todas as execuções de agentes neste sprint.
+    noRuns: Nenhuma execução de agente registada.
+    tokensInRuns: "tokens em {runs} execuções"
+    running: em execução
+    min: "{n} min"
+    role: Papel
+    model: Modelo
+    runs: Execuções
+    tokens: Tokens
+    minutes: Minutos
+    estVsAgent: Estimativa vs. tempo dos agentes
+    estDesc: As estimativas são horas de trabalho de uma pessoa; o tempo dos agentes é quanto demoraram as suas execuções.
+    noAgentStories: Ainda nenhuma story feita por agentes.
+    cost: Custo
+    costNote: "O custo é aproximado: tokens × o preço por milhão de tokens definido para cada modelo. Total {total}."
+    showTable: Mostrar tabela
+  presentation:
+    solution: Solução
+    generated: Gerado em
+    problem: Problema e objetivos
+    functional: Solução funcional
+    prototype: Protótipo
+    technical: Solução técnica
+    observability: Observabilidade
+    security: Segurança
+    decisions: Decisões
+    sprints: Sprints
+    stories: User stories
+    risks: Riscos
+    next: Próximos passos
+    mvp: MVP
+    later: Depois do MVP
+    hours: h
+    sprint: Sprint
+    feature: Funcionalidade
+    acceptance: Critérios de aceitação
+    estimate: Estimativa
+    owner: Responsável
+    dependsOn: Depende de
+    blockedBy: Bloqueado por
+    blockers: Bloqueios
+    assignee: Atribuído a
+    stack: Stack
+    layer: Camada
+    choice: Escolha
+    why: Porquê
+    components: Componentes
+    integrations: Integrações
+    direction: Sentido
+    protocol: Protocolo
+    auth: Autenticação
+    data: Dados
+    entity: Entidade
+    personal: Dados pessoais
+    retention: Retenção
+    deployment: Implantação
+    environments: Ambientes
+    hosting: Hospedagem
+    ci: CI
+    metrics: Métricas
+    dashboards: Dashboards
+    alerts: Alertas
+    condition: Condição
+    severity: Gravidade
+    logs: Logs
+    traces: Traces
+    alternatives: Não escolhido
+    screens: Telas
+    flows: Fluxos
+    forms: formulários
+    concern: Preocupação
+    control: Controle
+    openInTracker: abrir
+    "yes": sim
+    "no": não
+    features: funcionalidades
+    as: Como
+    iWant: quero
+    soThat: para que
+    missingBrief: "Ainda não há brief do produto: o /compasso:discover escreve-o."
+    missingArchitecture: "Ainda não há solução técnica: o /compasso:architect escreve-a."
+    missingRoadmap: "Ainda não há sprints: o /compasso:roadmap distribui as funcionalidades por sprints."
+    missingPlan: "Ainda nenhum sprint está planejado em stories: o /compasso:plan parte o próximo sprint."
+    laterSprints: Os sprints seguintes são planejados em stories no fecho de cada sprint, com a velocidade alcançada.
+    nextSteps: Integre o merge request do plano e desenvolva o sprint com /compasso:sprint; o /compasso:status mostra em que ponto está.

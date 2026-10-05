@@ -140,7 +140,7 @@ get() { jq -c "$1" "$OUT"; }
   OUT="$BATS_TEST_TMPDIR/r.html"
   run "$ROOT/bin/report.sh" --data "$ROOT/tests/fixtures/report.json" --out "$OUT"
   [ "$status" -eq 0 ]
-  [ "$(awk -F'type="application/json">' '/id="report-data"/{print $2}' "$OUT" | sed 's#</script>$##' | jq -c .)" = "$(jq -c . "$ROOT/tests/fixtures/report.json")" ]
+  [ "$(awk -F'type="application/json">' '/id="report-data"/{print $2}' "$OUT" | sed 's#</script>$##' | jq -c 'del(.ui, .language)')" = "$(jq -c 'del(.ui, .language)' "$ROOT/tests/fixtures/report.json")" ]
   [ "$(grep -Ec '<(script|link)[^>]* (src|href)=' "$OUT")" -eq 0 ]
   [ "$(grep -Ec 'innerHTML|outerHTML|insertAdjacentHTML|document\.write' "$OUT")" -eq 0 ]
   awk '/<script>$/{f=1;next} /<\/script>/{f=0} f' "$OUT" > "$BATS_TEST_TMPDIR/r.js"
