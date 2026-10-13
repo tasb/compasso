@@ -30,7 +30,8 @@ result="$(jq -n --slurpfile plan <(printf '%s' "$plan_json") \
   --argjson hpd "$(cfg .sprint.hours_per_day)" --argjson weeks "$(cfg .sprint.weeks)" \
   --argjson cap "$(cfg .sprint.capacity_hours)" \
   --argjson sensitive "$(yq -o=json '.risk.sensitive_paths // []' "$REPO/.compasso/project.yaml")" \
-  '{plan: $plan[0], cfg: {max: $max, target: $target, hpd: $hpd, weeks: $weeks, cap: $cap, sensitive: $sensitive}}' |
+  --argjson team "$( [ "$(cfg .team.enabled)" = true ] && echo true || echo false )" \
+  '{plan: $plan[0], cfg: {max: $max, target: $target, hpd: $hpd, weeks: $weeks, cap: $cap, sensitive: $sensitive, team: $team}}' |
   jq -f "$BIN/plan-check.jq")" || { echo "plan-check: could not evaluate $PLAN" >&2; exit 1; }
 
 if [ "$JSON" -eq 1 ]; then

@@ -87,7 +87,7 @@ data="$(jq -n --slurpfile brief <(f "$brief") --slurpfile back <(f "$back") --sl
    architecture: $arch,
    roadmap: $road,
    plan: (if $plan then {sprint: $plan.epic.sprint.number, goal: $plan.epic.goal, start: $plan.epic.sprint.start, end: $plan.epic.sprint.end,
-     features: [$plan.features[] | {key, title, url: link(.gitlab), stories: [(.stories // [])[] | {key, title, as, want, so_that, acceptance, estimate_h, owner, depends_on, blocked_by, tests, url: link(.gitlab)}]}],
+     features: [$plan.features[] | {key, title, url: link(.gitlab), stories: [.dev as $fd | (.stories // [])[] | {key, title, as, want, so_that, acceptance, estimate_h, owner: (.dev // $fd // .owner), depends_on, blocked_by, tests, url: link(.gitlab)}]}],
      blockers: [($plan.blockers // [])[] | {key, title, assignee, url: link(.gitlab)}]} else null end),
    decisions: $dec}')" || { echo "present: could not assemble the data" >&2; exit 1; }
 [ -n "$DOUT" ] && printf '%s\n' "$data" > "$DOUT"

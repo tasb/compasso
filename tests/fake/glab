@@ -40,13 +40,18 @@ case "$method $path" in
   "GET users?username="*) echo '[{"id":77}]' ;;
   "GET projects/"*"/members/all/77") echo '{"id":77}' ;;
   "GET projects/"*"/members/all/"*) echo '{"message":"404 Not found"}'; exit 1 ;;
-  "GET projects/"*"/labels?"*) echo '[]' ;;
-  "POST projects/"*"/labels") echo '{}' ;;
+  "GET projects/"*"/labels?"*) touch "$D/labels.txt"; jq -R . "$D/labels.txt" | jq -s 'map({name: .})' ;;
+  "POST projects/"*"/labels") echo "${f_name:-}" >> "$D/labels.txt"; echo '{}' ;;
   "GET namespaces/9") printf '{"plan":"%s"}\n' "${FAKE_GL_PLAN:-free}" ;;
   "POST projects/"*"/issues")
     i="$(next_iid)"; printf '%s\n' "${desc:-}" > "$D/desc/$i.md"; echo "${f_labels:-}" > "$D/labels/$i"; issue_json "$i" ;;
-  "PUT projects/"*"/issues/"*)
-    i="${path##*/}"; [ -n "${desc+x}" ] && printf '%s\n' "$desc" > "$D/desc/$i.md"; issue_json "$i" ;;
+  "PUT projects/"*"/issues/"*)   # labels/<iid> follows add_labels and remove_labels
+    i="${path##*/}"; [ -n "${desc+x}" ] && printf '%s\n' "$desc" > "$D/desc/$i.md"
+    if [ -n "${f_add_labels:-}${f_remove_labels:-}" ]; then
+      { cat "$D/labels/$i" 2>/dev/null | tr ',' '\n'; printf '%s' "${f_add_labels:-}" | tr ',' '\n'; echo; } | grep -v '^$' | awk '!seen[$0]++' |
+        grep -vxF "$(printf '%s' "${f_remove_labels:-}" | tr ',' '\n')" | paste -sd, - > "$D/tmp"; mv "$D/tmp" "$D/labels/$i"
+    fi
+    issue_json "$i" ;;
   "POST projects/"*"/time_estimate?"*) echo '{}' ;;
   "GET projects/"*"/related_merge_requests") i="${path%/related_merge_requests}"; i="${i##*/}"; cat "$D/related/$i.json" 2>/dev/null || echo '[]' ;;
   "GET projects/"*"/closed_by") i="${path%/closed_by}"; i="${i##*/}"; cat "$D/closed_by/$i.json" 2>/dev/null || echo '[]' ;;
@@ -61,6 +66,17 @@ case "$method $path" in
   "POST projects/"*"/merge_requests") echo '{"iid":31,"web_url":"https://gitlab.example/mr/31"}' ;;
   "PUT projects/"*"/merge_requests/"*"/merge") echo '{"state":"opened"}' ;;
   "PUT projects/"*"/merge_requests/"*) echo "{\"iid\":${path##*/},\"web_url\":\"https://gitlab.example/mr/${path##*/}\"}" ;;
+  "POST projects/"*"/issues/"*"/notes")   # notes/<iid>.json; $FAKE_GL_AUTHOR is the author's id (77 is a member)
+    i="${path%/notes}"; i="${i##*/}"; mkdir -p "$D/notes"
+    id="$(cat "$D/next_note" 2>/dev/null || echo 900)"; echo $((id + 1)) > "$D/next_note"
+    [ -f "$D/notes/$i.json" ] || echo '[]' > "$D/notes/$i.json"
+    jq --argjson id "$id" --arg b "${f_body:-}" --argjson a "${FAKE_GL_AUTHOR:-77}" \
+      '. + [{id: $id, body: $b, system: false, author: {id: $a, username: "user\($a)"}, created_at: "2026-10-06T09:00:00Z"}]' "$D/notes/$i.json" > "$D/tmp" && mv "$D/tmp" "$D/notes/$i.json"
+    echo "{\"id\":$id}" ;;
+  "GET projects/"*"/issues/"*"/notes"*) i="${path%/notes*}"; i="${i##*/}"; cat "$D/notes/$i.json" 2>/dev/null || echo '[]' ;;
+  "DELETE projects/"*"/issues/"*"/notes/"*)
+    i="${path%/notes/*}"; i="${i##*/}"
+    jq --argjson id "${path##*/}" 'map(select(.id != $id))' "$D/notes/$i.json" > "$D/tmp" && mv "$D/tmp" "$D/notes/$i.json"; echo '{}' ;;
   "POST projects/"*"/notes") echo '{"id":900}' ;;
   "GET projects/"*"/links") echo '[]' ;;
   "GET projects/"*"/issues/"*) cat "$D/issues/${path##*/}.json" 2>/dev/null || { echo '{"message":"404"}'; exit 1; } ;;

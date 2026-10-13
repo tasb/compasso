@@ -16,6 +16,7 @@
 #   github.sh check | ensure-labels | push-plan | story | set-state | open-mr | followup | merge
 #             | mr-info | comment | sprint-sync | merge-commit | digest | open-mr-branch
 #             | sprint-items | sprint-done | protect --repo R [options as in gitlab.sh]
+#             | labels | label-create | label | comments | comment-delete   (bin/team.sh's primitives, as in gitlab.sh)
 #
 # Exit: 0 ok | 1 config/usage/tracker failure | 2 not logged in | 3 repository not found or no access
 #       4 cannot push to the repository
@@ -23,7 +24,7 @@ set -u
 
 BIN="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CMD="${1:-}"; shift || true
-REPO="." IID="" STATE="" BRANCH="" BODY="" TITLE="" PARENT="" MR="" LABELS_ARG="owner::either" MILESTONE="" RISK="" TARGET="" SINCE="" READ_ONLY=0
+REPO="." IID="" STATE="" BRANCH="" BODY="" TITLE="" PARENT="" MR="" LABELS_ARG="owner::either" MILESTONE="" RISK="" TARGET="" SINCE="" READ_ONLY=0 NAME="" ADD="" REMOVE="" ID=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --repo) REPO="$2"; shift 2 ;;
@@ -40,6 +41,10 @@ while [ $# -gt 0 ]; do
     --target) TARGET="$2"; shift 2 ;;
     --since) SINCE="$2"; shift 2 ;;
     --read-only) READ_ONLY=1; shift ;;
+    --name) NAME="$2"; shift 2 ;;
+    --add) ADD="$2"; shift 2 ;;
+    --remove) REMOVE="$2"; shift 2 ;;
+    --id) ID="$2"; shift 2 ;;
     *) echo "github: unknown argument '$1'" >&2; exit 1 ;;
   esac
 done
@@ -53,6 +58,12 @@ LABELS="$(cat "$BIN/tracker/labels.txt")"
 NAMES="$("$BIN/locale.sh" --names)"                   # work-item names in every language, for reading
 LOC="$("$BIN/locale.sh" --repo "$REPO")" || exit 1    # the project's language, for writing
 STATES="new building in-review verifying done"
+
+# a team project assigns work by dev::<name> labels and uses no owner:: labels (bin/persona.sh, bin/team.sh)
+TEAM=false; [ "$(cfg .team.enabled)" = true ] && TEAM=true
+ME=""; [ "$TEAM" = true ] && ME="$("$BIN/persona.sh" show --repo "$REPO" --json | jq -r '.name // ""')"
+[ "$TEAM" = true ] && LABELS_ARG="$(printf '%s' "$LABELS_ARG" | tr ',' '\n' | grep -v '^owner::' | paste -sd, -)"
+DEV_COLOR="#0e8a16"
 
 api() { gh api --hostname "$HOST" "$@"; }
 gql() { gh api graphql --hostname "$HOST" "$@"; }
@@ -236,10 +247,16 @@ to_project() { # number [estimate-hours] [status-state]: add to the Project, set
 }
 
 push_plan() {
-  local ms n i f s b key num was title body ctx labels owner feats epic nums='{}' d stale
+  local ms n i f s b key num was title body ctx labels owner feats epic nums='{}' d stale devs dev
   "$BIN/plan-check.sh" --repo "$REPO" >/dev/null || { echo "github: the plan does not pass plan-check - run: bin/plan-check.sh --repo $REPO" >&2; return 1; }
   check >/dev/null || return $?
   ensure_labels >/dev/null || return $?
+  devs="$(team_devs)" || return 1
+  for dev in $(yq -o=json . "$PLAN" | jq -r '[.features[] | .dev, ((.stories // [])[].dev)] | map(select(. != null)) | unique | .[]'); do
+    [ "$TEAM" = true ] || break
+    printf '%s\n' "$devs" | grep -qxF "dev::$dev" ||
+      { echo "github: $dev is not in the team - the tech lead adds a developer with bin/team.sh add" >&2; return 1; }
+  done
   ms="$(milestone_number "$(sprint)" "$(pget .epic.sprint.end)")" || return 1
   pset '.epic.gitlab.milestone = (strenv(V) | tonumber)' "" "$ms"
   PJ="$(project)"; ITER="" F_ITER="$(cfg .tracker.github.fields.iteration)" F_EST="$(cfg .tracker.github.fields.estimate)" F_STATUS="$(cfg .tracker.github.fields.status)"
@@ -271,6 +288,11 @@ push_plan() {
     pset '(.features[] | select(.key == strenv(K)) | .gitlab) = (strenv(V) | tonumber)' "$key" "$num"
     nums="$(jq -c --arg k "$key" --argjson v "$num" '.[$k] = $v' <<<"$nums")"
     attach "$num" "$epic" || { echo "github: could not make feature $key a sub-issue of the epic" >&2; return 1; }
+    if [ "$TEAM" = true ]; then   # a feature's developer covers its stories and its verification
+      dev="$(jq -r '.dev // ""' <<<"$f")"
+      [ -z "$dev" ] || labels_set "$num" "dev::$dev" || return 1
+      for stale in $devs; do [ "$stale" = "dev::$dev" ] || label_remove "$num" "$stale"; done
+    fi
     to_project "$num" || return 1
     echo "github: feature $key -> #$num"
     i=$((i + 1))
@@ -297,7 +319,9 @@ push_plan() {
     owner="$(jq -r .owner <<<"$s")"
     ctx="$(jq -nc --argjson iids "$nums" '{tier: "github", iids: $iids}')"
     render story "$s" "$ctx" > "$body"
-    labels="owner::$owner"; [ "$(jq '.blocked_by // [] | length' <<<"$s")" -gt 0 ] && labels="$labels blocked"
+    labels="owner::$owner"
+    if [ "$TEAM" = true ]; then dev="$(jq -r '.dev // ""' <<<"$s")"; labels="${dev:+dev::$dev}"; fi
+    [ "$(jq '.blocked_by // [] | length' <<<"$s")" -gt 0 ] && labels="$labels blocked"
     was="$(jq -r '.gitlab // ""' <<<"$s")"
     # shellcheck disable=SC2086
     num="$(upsert_issue "$was" "$(jq -r .title <<<"$s")" "$body" "$ms" $labels)" || return 1
@@ -307,7 +331,7 @@ push_plan() {
     attach "$num" "$(jq -r --arg k "$(jq -r .feature <<<"$s")" '.[$k]' <<<"$nums")" ||
       { echo "github: could not attach story $key to its feature" >&2; return 1; }
     if [ -n "$was" ]; then
-      for stale in owner::agent owner::human owner::either blocked; do
+      for stale in owner::agent owner::human owner::either blocked $devs; do
         case " $labels " in *" $stale "*) ;; *) label_remove "$num" "$stale" ;; esac
       done
     fi
@@ -363,7 +387,7 @@ push_backlog() {
 
 # ---------- story ----------
 story() {
-  local n parsed feature="" fcov=null epic="" ecov=null deps blocked open='[]' d dj kind ms
+  local n parsed feature="" fcov=null fdev="" epic="" ecov=null deps blocked open='[]' d dj kind ms
   need IID
   check >/dev/null || return $?
   n="$(issue_norm "$IID")" || { echo "github: no work item #$IID in $R" >&2; return 1; }
@@ -380,15 +404,20 @@ story() {
   done
   parsed="$(jq -c --argjson d "$deps" --argjson b "$blocked" '.depends_on = $d | .blocked_by = $b' <<<"$parsed")"
   feature="$(parent_number "$IID")"
-  [ -n "$feature" ] && fcov="$(issue "$feature" | jq -r '.body // ""' | jq -Rs --argjson N "$NAMES" -f "$BIN/parse.jq" | jq .coverage)"
+  if [ -n "$feature" ]; then
+    dj="$(issue "$feature")"
+    fcov="$(jq -r '.body // ""' <<<"$dj" | jq -Rs --argjson N "$NAMES" -f "$BIN/parse.jq" | jq .coverage)"
+    fdev="$(jq -r '[.labels[].name | select(startswith("dev::")) | sub("dev::"; "")][0] // ""' <<<"$dj")"
+  fi
   ms="$(jq -r '.milestone.id // empty' <<<"$n")"
   if [ -n "$ms" ]; then
     dj="$(api "repos/$R/issues?milestone=$ms&labels=type::epic&state=all" --jq '.[0] // empty')"
     if [ -n "$dj" ]; then epic="$(jq -r .number <<<"$dj")"; ecov="$(jq -r '.body // ""' <<<"$dj" | jq -Rs --argjson N "$NAMES" -f "$BIN/parse.jq" | jq .coverage)"; fi
   fi
   jq -n --slurpfile issue <(printf '%s' "$n") --slurpfile s <(printf '%s' "$parsed") --arg feature "$feature" --argjson fcov "$fcov" \
-        --arg epic "$epic" --argjson ecov "$ecov" --argjson open "$open" --argjson dflt "$(cfg .coverage.min_changed)" '$issue[0] as $issue | $s[0] as $s | {
+        --arg epic "$epic" --argjson ecov "$ecov" --argjson open "$open" --argjson dflt "$(cfg .coverage.min_changed)" --arg fdev "$fdev" '$issue[0] as $issue | $s[0] as $s | {
     iid: $issue.iid, id: $issue.id, title: $issue.title, state: $issue.state, type: $issue.issue_type,
+    dev: ([$issue.labels[] | select(startswith("dev::")) | sub("dev::"; "")][0] // (if $fdev == "" then null else $fdev end)),
     kind: (if ($issue.labels | index("type::bug")) then "bug" else "story" end),
     estimate_h: (($issue.time_stats.time_estimate // 0) / 3600),
     labels: $issue.labels, milestone: ($issue.milestone.title // null),
@@ -526,7 +555,7 @@ sprint_sync() {
   done
   parallel="$(cfg '.sprint.parallel // 2')"
   jq -n --arg ms "$ms" --slurpfile items <(printf '%s' "$enriched") --slurpfile ext <(printf '%s' "$ext") --argjson cleaned "$cleaned" \
-        --argjson parallel "$parallel" --arg feature "$PARENT" -f "$BIN/sprint.jq"
+        --argjson parallel "$parallel" --arg feature "$PARENT" --argjson team "$TEAM" --arg me "$ME" -f "$BIN/sprint.jq"
 }
 
 sprint_items() { # the sprint's work items with their label history, for the report
@@ -604,7 +633,42 @@ protect() {
   echo "github: $R protected - pull requests only; required: $(jq -r 'map(.context) | join(", ")' <<<"$checks")$( [ "$codeql" = true ] && echo "; CodeQL high or higher blocks"); auto-merge on"
 }
 
+# ---------- the primitives bin/team.sh builds assignment, claims and messages on ----------
+team_devs() { # the team's dev:: labels, one per line; nothing outside a team project
+  [ "$TEAM" = true ] || return 0
+  api --paginate "repos/$R/labels?per_page=100" --jq '.[].name' | grep '^dev::' || true
+}
+labels_cmd() { api --paginate "repos/$R/labels?per_page=100" --jq '.[].name' | jq -R . | jq -s -c .; }
+label_create() {
+  need NAME
+  api -X POST "repos/$R/labels" -f name="$NAME" -f color="${DEV_COLOR#\#}" -f description="$TITLE" >/dev/null ||
+    { echo "github: could not create label $NAME" >&2; return 1; }
+  echo "github: label $NAME created"
+}
+label_cmd() { # --add and --remove take comma-separated labels
+  local l
+  need IID
+  # shellcheck disable=SC2046
+  [ -z "$ADD" ] || labels_set "$IID" $(printf '%s' "$ADD" | tr ',' ' ') || { echo "github: could not label #$IID" >&2; return 1; }
+  for l in $(printf '%s' "$REMOVE" | tr ',' ' '); do label_remove "$IID" "$l"; done
+  echo "github: #$IID labels updated"
+}
+comments() { # oldest first; member: the tracker says a project member wrote it
+  need IID
+  api --paginate "repos/$R/issues/$IID/comments?per_page=100" | jq -s -c 'add // [] | map({id, body: (.body // ""), author: .user.login, at: .created_at,
+    member: (.author_association | IN("OWNER", "MEMBER", "COLLABORATOR"))}) | sort_by(.id)'
+}
+comment_delete() {
+  need ID
+  api -X DELETE "repos/$R/issues/comments/$ID" >/dev/null || { echo "github: could not delete comment $ID" >&2; return 1; }
+}
+
 case "$CMD" in
+  labels) labels_cmd ;;
+  label-create) label_create ;;
+  label) label_cmd ;;
+  comments) comments ;;
+  comment-delete) comment_delete ;;
   check) check ;;
   ensure-labels) ensure_labels ;;
   push-plan) push_plan ;;

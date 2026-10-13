@@ -2,6 +2,19 @@
 
 Versions follow `version` in `.claude-plugin/plugin.json`. Claude Code updates an installed plugin only when this version changes, so every change users should receive ships in a new version.
 
+## 2.0.0 (2026-10-13)
+
+Personas: several agents on one project. Claude Code only for now. Projects that do not turn a team on work as before.
+
+- **Personas.** Setup asks what the agent is: `default` (everything, as before), `tech-lead` (scope and assignment; never builds) or `developer` (builds what is assigned to it; always an agent, with a name). The persona is kept per checkout, outside the repository. Every command and every tracker write checks it first.
+- **Teams.** `team.enabled: true` makes a project a team project. A developer's setup prints a JSON block; pasted into the tech lead's agent, it creates the label `dev::<name>`.
+- **Assignment by label.** In a team project every story names its developer (`dev: <name>` in the plan, on the story or its feature), `owner::` labels are not used, and work for a person is a blocker. Bugs are filed with no developer and wait for the tech lead.
+- **One agent per story.** An agent claims a story with a comment before building it; the earliest claim wins. This applies without a team too, so two sessions no longer build the same story.
+- **Messages.** The tech lead and developers talk through comments on the story, at most 250 characters. A developer's question raises the new `needs::lead` label; the answer lowers it.
+- **The poll.** New `/compasso:work`: each agent reads the tracker every `team.poll_minutes` (default 60) and skips the read while it works. The tech lead's agent proposes answers and assignments; a person decides.
+- **Upgrading.** Run `/compasso:setup` once: it adds the `team` keys to `.compasso/project.yaml` and the `needs::lead` label. Until then the configuration does not validate.
+- New scripts `bin/persona.sh` and `bin/team.sh`; guide: `docs/guides/team.md`.
+
 ## 1.2.1 (2026-10-05)
 
 Fixes reported from a real project.

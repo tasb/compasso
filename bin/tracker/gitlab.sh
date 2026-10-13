@@ -17,6 +17,12 @@
 #   gitlab.sh open-mr-branch --repo R --iid N                     the branch of the open MR that closes #N (to stack a story on)
 #   gitlab.sh sprint-items  --repo R --milestone S20              the sprint's work items with their label history (the report)
 #   gitlab.sh sprint-done   --repo R --milestone S19              hours done in a sprint, or null
+# The primitives bin/team.sh builds assignment, claims and messages on (never run through tracker.sh):
+#   gitlab.sh labels        --repo R                              every label name -> JSON
+#   gitlab.sh label-create  --repo R --name L [--title DESC]      create one label
+#   gitlab.sh label         --repo R --iid N [--add a,b] [--remove c,d]
+#   gitlab.sh comments      --repo R --iid N                      [{id, body, author, at, member}], oldest first
+#   gitlab.sh comment-delete --repo R --iid N --id ID
 #
 # Exit: 0 ok | 1 config/usage | 2 not logged in | 3 project not found or no access
 #       4 role below Developer | 5 tier cannot be detected (set tracker.tier)
@@ -24,7 +30,7 @@ set -u
 
 BIN="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CMD="${1:-}"; shift || true
-REPO="." IID="" STATE="" BRANCH="" BODY="" TITLE="" PARENT="" MR="" LABELS_ARG="owner::either" MILESTONE="" RISK="" TARGET="" SINCE="" READ_ONLY=0
+REPO="." IID="" STATE="" BRANCH="" BODY="" TITLE="" PARENT="" MR="" LABELS_ARG="owner::either" MILESTONE="" RISK="" TARGET="" SINCE="" READ_ONLY=0 NAME="" ADD="" REMOVE="" ID=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --repo) REPO="$2"; shift 2 ;;
@@ -41,6 +47,10 @@ while [ $# -gt 0 ]; do
     --target) TARGET="$2"; shift 2 ;;
     --since) SINCE="$2"; shift 2 ;;
     --read-only) READ_ONLY=1; shift ;;
+    --name) NAME="$2"; shift 2 ;;
+    --add) ADD="$2"; shift 2 ;;
+    --remove) REMOVE="$2"; shift 2 ;;
+    --id) ID="$2"; shift 2 ;;
     *) echo "gitlab: unknown argument '$1'" >&2; exit 1 ;;
   esac
 done
@@ -59,6 +69,12 @@ api() { glab api --hostname "$HOST" "$@"; }
 LABELS="$(cat "$BIN/tracker/labels.txt")"
 NAMES="$("$BIN/locale.sh" --names)"                   # work-item names in every language, for reading
 LOC="$("$BIN/locale.sh" --repo "$REPO")" || exit 1    # the project's language, for writing
+
+# a team project assigns work by dev::<name> labels and uses no owner:: labels (bin/persona.sh, bin/team.sh)
+TEAM=false; [ "$(cfg .team.enabled)" = true ] && TEAM=true
+ME=""; [ "$TEAM" = true ] && ME="$("$BIN/persona.sh" show --repo "$REPO" --json | jq -r '.name // ""')"
+[ "$TEAM" = true ] && LABELS_ARG="$(printf '%s' "$LABELS_ARG" | tr ',' '\n' | grep -v '^owner::' | paste -sd, -)"
+DEV_COLOR="#0e8a16"
 
 check() {
   local user proj level tier plan
@@ -177,7 +193,7 @@ upsert_issue() { # iid-or-empty title description milestone type assignee-id-or-
 
 push_plan() {
   local info tier ms n i f b s key iid id fid title desc labels ctx res owner feats uid needed
-  local iids='{}' stale was parent
+  local iids='{}' stale was parent devs dev
   "$BIN/plan-check.sh" --repo "$REPO" >/dev/null || {
     echo "gitlab: the plan does not pass plan-check - run: bin/plan-check.sh --repo $REPO" >&2; return 1; }
   info="$(check)" || return $?
@@ -186,6 +202,12 @@ push_plan() {
   # yet: every tier is pushed the Free way until they can be tested on Premium.
   # tier="$(printf '%s' "$info" | jq -r .tier)"
   tier=free
+  devs="$(team_devs)" || return 1
+  for dev in $(yq -o=json . "$PLAN" | jq -r '[.features[] | .dev, ((.stories // [])[].dev)] | map(select(. != null)) | unique | .[]'); do
+    [ "$TEAM" = true ] || break
+    printf '%s\n' "$devs" | grep -qxF "dev::$dev" ||
+      { echo "gitlab: $dev is not in the team - the tech lead adds a developer with bin/team.sh add" >&2; return 1; }
+  done
   ms="$(milestone)" || return 1
 
   # features
@@ -199,6 +221,12 @@ push_plan() {
     iid="${res% *}"; id="${res#* }"
     pset '(.features[] | select(.key == strenv(K)) | .gitlab) = (strenv(V) | tonumber)' "$key" "$iid"
     iids="$(jq -c --arg k "$key" --argjson v "$iid" --argjson id "$id" '.[$k] = $v | .["id:" + $k] = $id' <<<"$iids")"
+    if [ "$TEAM" = true ]; then   # a feature's developer covers its stories and its verification
+      dev="$(jq -r '.dev // ""' <<<"$f")"
+      stale="$(printf '%s\n' "$devs" | grep -vx "dev::$dev" | paste -sd, -)"
+      api -X PUT "projects/$PID/issues/$iid" ${dev:+-f "add_labels=dev::$dev"} ${stale:+-f "remove_labels=$stale"} >/dev/null ||
+        { echo "gitlab: could not set the developer of feature $key" >&2; return 1; }
+    fi
     echo "gitlab: feature $key -> #$iid"
     i=$((i + 1))
   done
@@ -227,9 +255,10 @@ push_plan() {
     ctx="$(jq -nc --arg tier "$tier" --argjson iids "$iids" '{tier: $tier, iids: $iids}')"
     desc="$(render story "$s" "$ctx")"
     labels="owner::$owner"
-    [ "$(jq '.blocked_by // [] | length' <<<"$s")" -gt 0 ] && labels="$labels,blocked"
+    if [ "$TEAM" = true ]; then dev="$(jq -r '.dev // ""' <<<"$s")"; labels="${dev:+dev::$dev}"; fi
+    [ "$(jq '.blocked_by // [] | length' <<<"$s")" -gt 0 ] && labels="${labels:+$labels,}blocked"
     iid="$(jq -r '.gitlab // ""' <<<"$s")"
-    res="$(upsert_issue "$iid" "$title" "$desc" "$ms" task "" $labels)"
+    res="$(upsert_issue "$iid" "$title" "$desc" "$ms" task "" "$labels")"
     [ -n "$res" ] || { echo "gitlab: could not write story $key" >&2; return 1; }
     was="$iid"; iid="${res% *}"
     pset '(.features[].stories[] | select(.key == strenv(K)) | .gitlab) = (strenv(V) | tonumber)' "$key" "$iid"
@@ -246,8 +275,8 @@ push_plan() {
     fi
     if [ -n "$was" ]; then
       # an owner change must drop the previous owner label; Free does not do it for scoped labels
-      stale="$(printf 'owner::agent\nowner::human\nowner::either\nblocked\n' | grep -vx "owner::$owner")"
-      case ",$labels," in *,blocked,*) stale="$(printf '%s\n' "$stale" | grep -vx blocked)" ;; esac
+      # the same goes for a developer change in a team project
+      stale="$(printf 'owner::agent\nowner::human\nowner::either\nblocked\n%s\n' "$devs" | grep -v '^$' | grep -vxF "$(printf '%s' "$labels" | tr ',' '\n')")"
       api -X PUT "projects/$PID/issues/$iid" -f remove_labels="$(printf '%s\n' "$stale" | paste -sd, -)" >/dev/null ||
         { echo "gitlab: could not update the labels of story $key" >&2; return 1; }
     fi
@@ -325,7 +354,7 @@ parent_iid() { # work item id -> parent iid, or empty
 }
 
 story() {
-  local issue parsed feature="" fcov="null" epic="" ecov="null" ms open='[]' d dj kind
+  local issue parsed feature="" fcov="null" fdev="" epic="" ecov="null" ms open='[]' d dj kind
   need IID
   check >/dev/null || return $?
   issue="$(api "projects/$PID/issues/$IID")"
@@ -333,7 +362,11 @@ story() {
   parsed="$(jq -r '.description // ""' <<<"$issue" | jq -Rs --argjson N "$NAMES" -f "$BIN/parse.jq")"
 
   feature="$(parent_iid "$(jq -r .id <<<"$issue")")"
-  [ -n "$feature" ] && fcov="$(api "projects/$PID/issues/$feature" | jq -r '.description // ""' | jq -Rs --argjson N "$NAMES" -f "$BIN/parse.jq" | jq .coverage)"
+  if [ -n "$feature" ]; then
+    dj="$(api "projects/$PID/issues/$feature")"
+    fcov="$(jq -r '.description // ""' <<<"$dj" | jq -Rs --argjson N "$NAMES" -f "$BIN/parse.jq" | jq .coverage)"
+    fdev="$(jq -r '[.labels[]? | select(startswith("dev::")) | sub("dev::"; "")][0] // ""' <<<"$dj")"
+  fi
   ms="$(jq -r '.milestone.title // empty' <<<"$issue")"
   if [ -n "$ms" ]; then
     dj="$(api "projects/$PID/issues?milestone=$ms&labels=type::epic&state=all" | jq '.[0] // empty')"
@@ -351,8 +384,9 @@ story() {
   done
 
   jq -n --slurpfile issue <(printf '%s' "$issue") --slurpfile s <(printf '%s' "$parsed") --arg feature "$feature" --argjson fcov "$fcov" \
-        --arg epic "$epic" --argjson ecov "$ecov" --argjson open "$open" --argjson dflt "$(cfg .coverage.min_changed)" '$issue[0] as $issue | $s[0] as $s | {
+        --arg epic "$epic" --argjson ecov "$ecov" --argjson open "$open" --argjson dflt "$(cfg .coverage.min_changed)" --arg fdev "$fdev" '$issue[0] as $issue | $s[0] as $s | {
     iid: $issue.iid, id: $issue.id, title: $issue.title, state: $issue.state, type: $issue.issue_type,
+    dev: ([$issue.labels[] | select(startswith("dev::")) | sub("dev::"; "")][0] // (if $fdev == "" then null else $fdev end)),
     kind: (if ($issue.labels | index("type::bug")) then "bug" else "story" end),
     estimate_h: (($issue.time_stats.time_estimate // 0) / 3600),
     labels: $issue.labels, milestone: ($issue.milestone.title // null),
@@ -492,7 +526,7 @@ sprint_sync() {
 
   parallel="$(cfg '.sprint.parallel // 2')"
   jq -n --arg ms "$ms" --slurpfile items <(printf '%s' "$enriched") --slurpfile ext <(printf '%s' "$ext") --argjson cleaned "$cleaned" \
-        --argjson parallel "$parallel" --arg feature "$PARENT" -f "$BIN/sprint.jq"
+        --argjson parallel "$parallel" --arg feature "$PARENT" --argjson team "$TEAM" --arg me "$ME" -f "$BIN/sprint.jq"
 }
 
 
@@ -548,7 +582,46 @@ sprint_done() { # hours of work done in a sprint, or null when the sprint does n
 }
 
 
+# ---------- the primitives bin/team.sh builds assignment, claims and messages on ----------
+team_devs() { # the team's dev:: labels, one per line; nothing outside a team project
+  [ "$TEAM" = true ] || return 0
+  api --paginate "projects/$PID/labels?per_page=100" | jq -s -r 'add // [] | .[].name | select(startswith("dev::"))'
+}
+labels_cmd() { api --paginate "projects/$PID/labels?per_page=100" | jq -s -c 'add // [] | map(.name)'; }
+label_create() {
+  need NAME
+  api -X POST "projects/$PID/labels" -f name="$NAME" -f color="$DEV_COLOR" -f description="$TITLE" >/dev/null ||
+    { echo "gitlab: could not create label $NAME" >&2; return 1; }
+  echo "gitlab: label $NAME created"
+}
+label_cmd() { # --add and --remove take comma-separated labels
+  need IID
+  api -X PUT "projects/$PID/issues/$IID" ${ADD:+-f "add_labels=$ADD"} ${REMOVE:+-f "remove_labels=$REMOVE"} >/dev/null ||
+    { echo "gitlab: could not label #$IID" >&2; return 1; }
+  echo "gitlab: #$IID labels updated"
+}
+comments() { # oldest first; member: the tracker says a project member wrote it
+  local notes members='{}' a
+  need IID
+  notes="$(api --paginate "projects/$PID/issues/$IID/notes?sort=asc&per_page=100" | jq -s -c 'add // [] | map(select(.system | not))')" ||
+    { echo "gitlab: cannot read the comments of #$IID" >&2; return 1; }
+  for a in $(jq -r '[.[].author.id] | unique | .[]' <<<"$notes"); do
+    if api "projects/$PID/members/all/$a" >/dev/null 2>&1; then members="$(jq -c --arg a "$a" '.[$a] = true' <<<"$members")"; fi
+  done
+  jq -c --argjson m "$members" 'map({id, body: (.body // ""), author: .author.username, at: .created_at,
+    member: ($m[.author.id | tostring] // false)}) | sort_by(.id)' <<<"$notes"
+}
+comment_delete() {
+  need IID ID
+  api -X DELETE "projects/$PID/issues/$IID/notes/$ID" >/dev/null || { echo "gitlab: could not delete comment $ID" >&2; return 1; }
+}
+
 case "$CMD" in
+  labels) labels_cmd ;;
+  label-create) label_create ;;
+  label) label_cmd ;;
+  comments) comments ;;
+  comment-delete) comment_delete ;;
   check) check ;;
   ensure-labels) ensure_labels ;;
   push-plan) push_plan ;;

@@ -213,3 +213,45 @@ json() { pc --json | jq -r "$1"; }
   run "$ROOT/bin/plan-check.sh" --repo "$REPO"
   [ "$status" -eq 0 ]
 }
+
+# ---------- team projects: every story names a developer ----------
+
+team_plan() { cfg_set '.team.enabled = true'; plan_set 'del(.features[].stories[].owner)'; }
+
+@test "team: a story with no developer, on it or on its feature, is refused" {
+  team_plan
+  run pc
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"S-1: dev is required"* ]] || false
+  [[ "$output" != *"owner must be"* ]] || false
+}
+
+@test "team: a feature's developer covers its stories; a story's own name is checked too" {
+  team_plan
+  plan_set '.features[0].dev = "ana" | .features[1].stories[0].dev = "rui"'
+  run pc
+  [ "$status" -eq 0 ]
+  plan_set '.features[0].stories[1].dev = "Rui Silva"'
+  run pc
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"S-2: dev 'Rui Silva' is not a developer's name"* ]] || false
+}
+
+@test "team: only a story waiting for a blocker may have no developer yet" {
+  team_plan
+  plan_set '.features[0].dev = "ana"'
+  run pc
+  [ "$status" -eq 0 ]
+  plan_set '.features[1].stories[0].blocked_by = [] | del(.blockers)'
+  run pc
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"S-4: dev is required"* ]] || false
+}
+
+@test "without a team the owner rule stands and dev is not asked for" {
+  plan_set 'del(.features[0].stories[0].owner)'
+  run pc
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"S-1: owner must be agent, human or either"* ]] || false
+  [[ "$output" != *"dev is required"* ]] || false
+}

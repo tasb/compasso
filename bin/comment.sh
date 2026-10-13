@@ -65,7 +65,7 @@ case "$CMD" in
         "",
         t("plan_head"),
         "|---|---|---|---|",
-        ($f.stories[] | "| \(if .gitlab then "#\(.gitlab)" else .key end) \(.title) | \(.estimate_h) | \(.owner) | "
+        ($f.stories[] | "| \(if .gitlab then "#\(.gitlab)" else .key end) \(.title) | \(.estimate_h) | \(.dev // $f.dev // .owner // "—") | "
            + ((((.depends_on // []) + (.blocked_by // [])) | map(ref) | join(", ")) as $d | if $d == "" then "—" else $d end) + " |"),
         "",
         ($sec | sub("\\s+$"; "")) as $s | (if ($s | startswith("- ")) then "**\(t("security")):**\n\($s)" else "**\(t("security")):** \($s)" end),

@@ -36,7 +36,8 @@ features:
         tests: [unit]    # unit, or unit and e2e
         touches: []      # path globs the story changes
         depends_on: []   # story keys in this plan, or "#iid" for existing items
-        owner: agent     # agent | human | either
+        owner: agent     # agent | human | either. In a team project use dev: <name> instead,
+                         # here or once on the feature: every story names its developer
         estimate_h: 4
         blocked_by: []   # blocker keys (B-1) this story waits for
         gitlab: null

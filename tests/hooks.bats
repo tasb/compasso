@@ -217,3 +217,29 @@ dispatch() { jq -cn --arg c "$REPO" --arg t "$1" --arg p "$2" '{hook_event_name:
   [ "$(decision "$(write_as compasso:tester "$REPO/$W/src/cart.js")")" = deny ]
   [ "$(decision "$(write_as compasso:builder "$REPO/$W/.compasso/project.yaml")")" = deny ]
 }
+
+# ---------- the working marker (a team's poll is skipped while a checkout works) ----------
+
+@test "working marker: every tool call keeps it fresh; none is created when the checkout is idle" {
+  hook pre-tool "$(bash_cmd "ls")" >/dev/null
+  [ ! -e "$REPO/.compasso/runs/.working" ]
+  mkdir -p "$REPO/.compasso/runs"; echo 11 > "$REPO/.compasso/runs/.working"
+  touch -t 202601010000 "$REPO/.compasso/runs/.working"
+  hook pre-tool "$(bash_cmd "ls")" >/dev/null
+  [ -n "$(find "$REPO/.compasso/runs/.working" -mmin -5)" ]
+  [ "$(cat "$REPO/.compasso/runs/.working")" = 11 ]
+}
+
+@test "working marker: a tool call in a story's worktree keeps the repository's marker fresh" {
+  git -C "$REPO" add -A && git -C "$REPO" commit -q -m config
+  git -C "$REPO" worktree add -q .compasso/worktrees/11 -b story/11
+  mkdir -p "$REPO/.compasso/runs"; echo 11 > "$REPO/.compasso/runs/.working"
+  touch -t 202601010000 "$REPO/.compasso/runs/.working"
+  REPO="$REPO/.compasso/worktrees/11" hook pre-tool "$(REPO="$REPO/.compasso/worktrees/11" bash_cmd "ls")" >/dev/null
+  [ -n "$(find "$REPO/.compasso/runs/.working" -mmin -5)" ]
+}
+
+@test "working marker: no agent may write it" {
+  [ "$(decision "$(write_as compasso:tester "$REPO/.compasso/runs/.working")")" = deny ]
+  [ "$(decision "$(write_as compasso:tester "$REPO/.compasso/runs/11/notes.md")")" = allow ]
+}

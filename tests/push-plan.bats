@@ -258,3 +258,41 @@ EOF2
   grep -qx '## Âmbito' "$FAKE_GL/desc/$(iid_of F-1).md"
   grep -q '<!-- compasso:key=S-4 -->' "$d"
 }
+
+# ---------- team projects: dev:: labels in place of owner:: ----------
+
+team_plan() {
+  cfg_set '.team.enabled = true'
+  "$ROOT/bin/persona.sh" set --repo "$REPO" --persona tech-lead >/dev/null
+  yq -i 'del(.features[].stories[].owner) | .features[0].dev = "ana" | .features[0].stories[2].dev = "rui"' "$PLAN"
+  mkdir -p "$FAKE_GL"; printf 'dev::ana\ndev::rui\n' > "$FAKE_GL/labels.txt"
+}
+
+@test "team: stories carry their developer's label and no owner label; a feature carries its own" {
+  team_plan
+  run push
+  [ "$status" -eq 0 ]
+  [ "$(calls 'issue_type=task labels=owner::')" -eq 0 ]
+  [ "$(calls 'issue_type=task')" -eq 5 ]
+  [ "$(cat "$FAKE_GL/labels/$(iid_of S-3)")" = "dev::rui" ]
+  [ "$(cat "$FAKE_GL/labels/$(iid_of S-1)")" = "" ]
+  [ "$(cat "$FAKE_GL/labels/$(iid_of S-4)")" = "blocked" ]
+  [ "$(cat "$FAKE_GL/labels/$(iid_of F-1)")" = "type::feature,dev::ana" ]
+}
+
+@test "team: moving a story to another developer drops the previous label" {
+  team_plan
+  push >/dev/null
+  yq -i '.features[0].stories[2].dev = "ana"' "$PLAN"
+  push >/dev/null
+  [ "$(cat "$FAKE_GL/labels/$(iid_of S-3)")" = "dev::ana" ]
+}
+
+@test "team: a plan naming a developer who is not in the team is not pushed" {
+  team_plan
+  yq -i '.features[0].stories[0].dev = "zed"' "$PLAN"
+  run push
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"zed is not in the team"* ]] || false
+  [ "$(calls 'POST projects/acme%2Fapp/issues')" -eq 0 ]
+}

@@ -20,7 +20,7 @@
 #   tee, sed -i, cp, mv, rm, touch, mkdir), for Compasso's agents only:
 #   paths in a story's worktree (.compasso/worktrees/<iid>/) are judged as if that worktree were the repository
 #   every role: never outside the repository, never .compasso/project.yaml, .compasso/runs/.agents.json,
-#     a budget ledger, .claude/, .codex/ or .git/
+#     the working marker, a budget ledger, .claude/, .codex/ or .git/
 #   builder: anywhere else except test_paths | tester: test_paths, manifests and test configs, the run
 #   folder | reviewer: docs/learnings/ | shipper: docs/releases/ and the run folder | mutator: the run
 #   folder | security, approver, anything else: nothing
@@ -108,7 +108,7 @@ role_guard() {
     [ -n "$rel" ] || { verdict "the $role may only write inside the repository, not $p"; return 0; }
     # a story's worktree (the sprint builds stories side by side) is judged as the repository itself
     case "$rel" in .compasso/worktrees/*/*) rel="${rel#.compasso/worktrees/*/}" ;; esac
-    if matches "$rel" '.compasso/project.yaml' '.compasso/runs/.agents.json' '.compasso/runs/*/budget.jsonl' '.claude/*' '.codex/*' '.git/*'; then
+    if matches "$rel" '.compasso/project.yaml' '.compasso/runs/.agents.json' '.compasso/runs/.working' '.compasso/runs/*/budget.jsonl' '.claude/*' '.codex/*' '.git/*'; then
       verdict "no agent may change $rel: it holds Compasso's settings, budget or git state"; return 0
     fi
     # shellcheck disable=SC2086
@@ -254,6 +254,10 @@ record() { # run role model tokens ms
 
 case "$EVENT" in
   pre-tool)
+    # a team's poll is skipped while this checkout works: every tool call keeps the marker fresh (bin/team.sh)
+    # the marker is the repository's: an agent in a story's worktree keeps it fresh too
+    wm="$ROOT"; case "$ROOT" in */.compasso/worktrees/*) wm="${ROOT%/.compasso/worktrees/*}" ;; esac
+    [ -f "$wm/.compasso/runs/.working" ] && touch "$wm/.compasso/runs/.working" 2>/dev/null
     err="$(mktemp)"
     out="$( { role_guard && budget_guard && command_guard; } 2>"$err")"; rc=$?
     msg="$(tail -3 "$err")"; rm -f "$err"

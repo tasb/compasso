@@ -76,6 +76,7 @@ text:
   st_followup: follow-up
   digest_title: "**Merged without a person** · since {since}"
   nothing: Nothing
+  claimed: "{name} is building this."
   merged_at: "merged {at}"
   digest_footer: Each one passed review, the mandatory security review and CI, and was low risk. To undo one, revert its merge request.
   digest_footer_github: Each one passed review, the mandatory security review and CI, and was low risk. To undo one, revert its pull request.

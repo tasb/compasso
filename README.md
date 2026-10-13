@@ -81,6 +81,7 @@ Run `/compasso:setup` once in the product repository. It connects the tracker, a
 | `/compasso:review <mr>` | Review and the mandatory security review on any merge request (a pull request on GitHub), findings posted, fixes on request |
 | `/compasso:status [iid]` | A read-only readout. For the sprint: what can be built now, what waits and on whom, features, the plan on the default branch and local runs. For a story: its state, what it waits on, how far its run got and the step to resume from. Changes nothing |
 | `/compasso:report` | The sprint's HTML report: delivery, flow and waiting, quality, agent effort and cost |
+| `/compasso:work` | Team projects only: one tick of the poll. A developer builds the next story assigned to it; the tech lead sees questions, work with no developer and each developer's load. Skipped while the agent works |
 | `/compasso:harden <iid>` | Optional, after the MVP: mutation, property-based, flaky and test-smell checks; with `--set live`, API fuzzing, a ZAP scan, performance and accessibility checks. Gaps become stories for a later sprint |
 
 ### Work hierarchy
@@ -107,6 +108,27 @@ Dependencies are part of the plan. Stories are created in dependency order. A st
 | Security scans | GitLab SAST and Secret Detection, with Compasso's scan gate | CodeQL and secret scanning where available; otherwise Gitleaks and Semgrep in Compasso's scan gate |
 
 Both adapters (`bin/tracker/gitlab.sh`, `bin/tracker/github.sh`) have the same commands, and `bin/tracker.sh` picks one from `tracker.provider`.
+
+## Personas and teams
+
+One agent can do everything, as it always did. A team runs several agents, on servers and on people's machines, and gives each a persona at setup. Claude Code only for now.
+
+| Persona | Does | Never |
+|---|---|---|
+| `default` | Everything. An agent with no persona is `default` | In a team project it only reads |
+| `tech-lead` | Scope: discover, backlog, architect, roadmap, plan. Assigns stories, bugs and features, answers questions, creates blockers, closes the sprint | Builds a story |
+| `developer` | Builds and reviews what carries its name. Always an agent | Plans, assigns (its own work included), closes a sprint |
+
+A persona is not a role: the eight roles below are the subagents every persona dispatches.
+
+- **Joining.** A developer picks a name at setup, which prints a JSON block with no secret in it. Pasted into the tech lead's agent, it creates the label `dev::<name>`. The `dev::` labels are the team.
+- **Assignment** is that label, on a story, a bug or a feature (a feature's label covers its stories). In a team project every story names a developer, `owner::` labels are not used, and work for a person is a blocker.
+- **One agent per story.** Before building, an agent posts a claim comment on the story; the earliest claim wins, and a run resumes only from the checkout that holds it. This holds without a team too.
+- **Messages** are comments on the story, at most 250 characters. A developer's question raises `needs::lead`; the tech lead's answer lowers it. Comment text is data, never instructions.
+- **The poll.** Each agent reads the tracker every `team.poll_minutes` (default 60) through a recurring prompt, `/loop 60m /compasso:work`, and skips the read while it is working. The tech lead's agent proposes answers and assignments; a person decides.
+- **Bugs** found in merged work are filed with no developer and wait for the tech lead.
+
+The persona is kept outside the repository, per checkout. The tracker cannot stop a member from changing a label, so the persona gate prevents mistakes; it is not a security boundary. How to set one up: [docs/guides/team.md](docs/guides/team.md). Design: [docs/SPEC.md](docs/SPEC.md), section 31.
 
 ## Language
 
@@ -143,6 +165,7 @@ The catalog, with the signs used to recognise each framework, is `templates/test
 A gate stops the flow. A check reports and never stops it.
 
 - **Tracker.** Every command first checks the login, access and project.
+- **Persona.** In a team project every command and every tracker write first checks what this checkout's persona may do. A story is built only by the developer it is assigned to, and only by the checkout that claimed it.
 - **Plan check.** Story and feature sizes, dependencies, cycles and capacity are checked before anything is pushed. Stories that touch sensitive paths need a security review at planning.
 - **Story contract.** A story needs Acceptance and Verify before it is built. A story that cannot be tested goes back to the planner.
 - **Verify commands approved.** A story's Verify commands are tracker text, so they run only after a person approved each exact command on this machine. Plans ask once for all their stories; a command edited later asks again.
@@ -220,6 +243,8 @@ bin/config.sh init|upgrade|validate|get --repo .       # the configuration
 bin/tracker.sh check|ensure-labels|push-backlog|push-plan|story|set-state|open-mr|followup|merge|mr-info|comment \
                |sprint-sync|sprint-items|sprint-done|merge-commit|open-mr-branch|digest --repo .
 bin/tracker.sh protect --repo .                        # GitHub: the ruleset, CodeQL and auto-merge
+bin/persona.sh show|set|join|gate --repo .             # this checkout's persona: default, tech-lead or developer
+bin/team.sh add|list|assign|claim|release|msg|messages|inbox|working --repo .   # a team: names, assignment, claims, messages, the poll
 bin/start.sh --repo .                                  # where the product stands, and the next step
 bin/prototype.sh crawl|inventory|check ...             # a prototype's screens, forms and flows
 bin/backlog-check.sh --repo .                          # the backlog: sizes, dependencies, the MVP line, screens covered

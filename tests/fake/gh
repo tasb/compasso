@@ -92,7 +92,17 @@ case "$method $path" in
   "POST repos/"*"/dependencies/blocked_by")
     n="${path%/dependencies/blocked_by}"; n="${n##*/}"; echo $(( f_issue_id - 1000 )) >> "$D/blocked/$n"; echo '{}' | out ;;
   "GET repos/"*"/issues/"*"/events"*) n="${path%/events*}"; n="${n##*/}"; { cat "$D/events/$n.json" 2>/dev/null || echo '[]'; } | out ;;
-  "POST repos/"*"/issues/"*"/comments") echo '{"id":900}' | out ;;
+  "POST repos/"*"/issues/"*"/comments")   # comments/<n>.json; $FAKE_GH_ASSOC is the author's association (default MEMBER)
+    n="${path%/comments}"; n="${n##*/}"; mkdir -p "$D/comments"
+    id="$(cat "$D/next_comment" 2>/dev/null || echo 900)"; echo $((id + 1)) > "$D/next_comment"
+    [ -f "$D/comments/$n.json" ] || echo '[]' > "$D/comments/$n.json"
+    jq --argjson id "$id" --arg b "${body:-}" --arg u "${FAKE_GH_USER:-dev}" --arg a "${FAKE_GH_ASSOC:-MEMBER}" \
+      '. + [{id: $id, body: $b, user: {login: $u}, author_association: $a, created_at: "2026-10-06T09:00:00Z"}]' "$D/comments/$n.json" > "$D/tmp" && mv "$D/tmp" "$D/comments/$n.json"
+    echo "{\"id\":$id}" | out ;;
+  "GET repos/"*"/issues/"*"/comments"*) n="${path%/comments*}"; n="${n##*/}"; { cat "$D/comments/$n.json" 2>/dev/null || echo '[]'; } | out ;;
+  "DELETE repos/"*"/issues/comments/"*)
+    for f in "$D"/comments/*.json; do [ -e "$f" ] || continue
+      jq --argjson id "${path##*/}" 'map(select(.id != $id))' "$f" > "$D/tmp" && mv "$D/tmp" "$f"; done ;;
   "GET repos/"*"/issues?"*)
     m="$(printf '%s' "$path" | sed -n 's/.*milestone=\([^&]*\).*/\1/p')"; lb="$(printf '%s' "$path" | sed -n 's/.*labels=\([^&]*\).*/\1/p')"
     cat "$D"/issues/*.json 2>/dev/null | jq -s --arg m "$m" --arg lb "$lb" 'map(select((.milestone.number | tostring) == $m)

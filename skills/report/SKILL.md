@@ -5,6 +5,8 @@ description: Compasso report - build the sprint's HTML report (delivery, flow an
 
 Build the current sprint's report. Scripts are in `${CLAUDE_PLUGIN_ROOT}/bin`.
 
+**Persona.** `bash ${CLAUDE_PLUGIN_ROOT}/bin/persona.sh gate --repo . --skill report` first. On a non-zero exit, show its message and stop: this checkout's persona may not run this command.
+
 1. **Tracker gate.** `bash ${CLAUDE_PLUGIN_ROOT}/bin/tracker.sh check --repo .` Stop on a non-zero exit. `git fetch` and read the default branch, where merged stories' metrics files are.
 
 2. **Collect.** `bash ${CLAUDE_PLUGIN_ROOT}/bin/metrics.sh collect --repo . --out .compasso/runs/report/S<n>.json`.

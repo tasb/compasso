@@ -73,6 +73,7 @@ text:
   st_followup: seguimento
   digest_title: "**Integrado sem uma pessoa** · desde {since}"
   nothing: Nada
+  claimed: "{name} está construindo isto."
   merged_at: "integrado {at}"
   digest_footer: Cada um passou a revisão, a revisão de segurança obrigatória e a CI, e era de risco baixo. Para desfazer um, reverta o merge request.
   digest_footer_github: Cada um passou pela revisão, pela revisão de segurança obrigatória e pela CI, e era de risco baixo. Para desfazer um, reverta o pull request.

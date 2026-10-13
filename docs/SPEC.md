@@ -711,3 +711,97 @@ Found by a user. A presentation's data of 224 KB went to awk through an environm
   - the data, read from a file, with every `<` as `\u003c`;
   - `lang` and an HTML-escaped `<title>` in the markup itself, from the project's language (they were fixed at `en` and an English title, corrected only by script);
   - a check that the page holds all its data and no placeholder before it replaces the old one. On failure it exits 1 and leaves the previous page as it was.
+
+## 31. Personas (2026-10-13)
+
+Decided with the user. Until now one agent did everything: planned, built, reviewed and closed the sprint. A team runs several agents, on servers and on people's machines, so each agent now has a persona that says what it may do. Claude Code only for now.
+
+A persona is not a role. The roles of section 4 (planner, tester, builder...) are the subagents a flow dispatches, and they do not change. A persona belongs to the whole agent: the long-running session that runs the flows and dispatches those subagents.
+
+| Persona | Is |
+|---|---|
+| `default` | Compasso as it was: one agent does everything. An agent with no persona is `default` |
+| `tech-lead` | Manages the scope of sprints, features and stories, and assigns the work |
+| `developer` | Builds the stories and features assigned to it; always an agent, with a name |
+
+- **One persona per agent.** A person who wants both runs two agents.
+- **Team projects.** `team.enabled: true` in `.compasso/project.yaml`, set by the tech lead's setup, makes a project a team project. In one, an agent with the `default` persona may only read (`/compasso:status`, `/compasso:report`, `/compasso:present`). Elsewhere nothing changes, and a checkout set to tech lead or developer is refused until the project is a team.
+- **Where it lives.** The persona and the developer's name are one agent's, and `.compasso/project.yaml` is everyone's. They are kept outside the repository, per checkout, as Verify approvals are: `${COMPASSO_HOME:-$HOME/.compasso}/persona/<sha256 of the checkout's physical path>`. Setup asks for the persona and writes it (`bin/persona.sh set`). A checkout's id, used in claims, is a hash of the machine's name and that path.
+
+### Names and joining
+
+- A developer picks its name at setup: lowercase letters, digits and hyphens, starting with a letter, at most 20 characters.
+- Setup ends by printing one JSON block, which a person pastes into the tech lead's agent:
+  ```json
+  {"compasso": "join", "name": "ana", "project": "owner/repo", "harness": "claude", "checkout": "<id>"}
+  ```
+- The tech lead's agent reads it as data (`bin/team.sh add`). It checks the project and that the name is well formed and free, then creates the label `dev::ana`. A taken name is refused, and the developer runs setup again with another. `default`, `lead` and `none` are never names.
+- The `dev::` labels are the team's list. It lives on the tracker; no file changes when a developer joins.
+- The block holds no secret: it travels through a chat.
+
+### Assignment
+
+- **By label**, because every tracker has labels: `dev::<name>` on a story, a bug or a feature. Only the tech lead sets, moves or removes it (`bin/team.sh assign`, or the plan).
+- **A feature's label** covers its stories and its verification (the e2e tests and their merge request). A story's own label wins over its feature's.
+- **Every story names a developer.** In a team project a plan's stories carry `dev: <name>` in place of `owner`, on the story or once on its feature. `plan-check` refuses a story without one, unless it waits for a blocker: that story is a person's work first. The push refuses a name that is not in the team. The `owner::` labels are not used, and a follow-up or bug filed with one loses it. Other projects keep `owner::agent|human|either`.
+- **Work for a person is a blocker**, as before: a `type::blocker` issue assigned to that person, with its steps. When it closes, the tech lead closes the story it held or assigns it to a developer.
+
+### What each persona may do
+
+| | Tech lead | Developer |
+|---|---|---|
+| Setup | All of it; owns `.compasso/project.yaml` and the team | Joins: login, tracker check, persona and name, hooks. Never rewrites the configuration |
+| Scope | discover, backlog, architect, roadmap, plan, a feature's questions and breakdown, plan approval | Reads only |
+| Assignment | Assigns, moves and takes back stories, bugs and features | Never, its own included |
+| Building | Never | `/compasso:story` and `/compasso:sprint`, only for what carries its name |
+| Review | `/compasso:review` on any merge request | The same. The review and fix loop of its own story stays in its run |
+| Bugs | Triage: severity, sprint, developer | Files them with no developer, and never starts one that has none |
+| Blockers | Creates them | Asks for one with `needs::lead` |
+| Sprint close | Regression, the security pass, the test guide, the report, testers' results, hardening | Never |
+| Read-outs | status, report, present | status, its own work first |
+
+What holds for every persona, unchanged: the security review, the scan gate, test immutability, budgets, and Verify commands approved by a person at the machine that runs them.
+
+- **Bugs.** A bug found in merged work (feature e2e, testers' results, the sprint's security pass) is filed with no `dev::` label, which puts it in the tech lead's queue. In a team project nothing builds a bug until the tech lead assigns it. Findings on a developer's own open merge request are not bugs: its run fixes them, as today.
+- **Enforced** by `bin/persona.sh gate` in two places: `bin/tracker.sh`, the one entry to both adapters, runs it before every tracker command; and each skill runs it as its first step. Assignment, claims and messages go through `bin/team.sh`, which checks the persona itself; the adapters' label and comment-deleting primitives it uses are refused through `tracker.sh`.
+- **Honest limit.** Neither GitLab nor GitHub can stop a member with write access from changing a label. The gate prevents mistakes and leaves a trail; it is not a security boundary.
+
+### One agent per story
+
+Nothing used to stop two agents from building the same story: `sprint-sync` offered every runnable story to whoever asked. Assignment decides who may build one; a claim decides who is building it (`bin/team.sh claim`, `release`). The claim applies to every persona; without a team its name is `default`.
+
+1. At the start of the story flow the agent posts a claim comment on the story: `<!-- compasso:claim name=<name> checkout=<id> -->`.
+2. It reads the claims back. The tracker orders comments, so the earliest claim wins. A loser deletes its own and stops. A claim counts only when the tracker says a project member wrote it.
+3. A run resumes only from the checkout that holds the claim.
+4. The claim is removed when the merge request opens or the flow hands back. Moving the story to another developer removes it too.
+
+A label cannot do this: two agents adding `compasso::building` at the same moment both succeed.
+
+### Messages
+
+The tech lead and the developers talk through comments on the story, so the tracker stays the only place where work and its conversation live.
+
+- **Tech lead to developer.** The assignment is the message. What the developer must know beyond the story goes in one comment on it.
+- **Developer to tech lead.**
+  - *A question, a blocker needed, a story to re-plan:* a comment on the story and the label `needs::lead`. The story flow already stops and hands back in these cases (a story that cannot be tested, a review still blocked after round 3, a spent budget, a Verify command nobody approved); the hand-back is now also posted.
+  - *A bug:* filed with no developer.
+  - *Done:* the merge request and `compasso::in-review`, as today.
+- **Format.** A message carries `<!-- compasso:msg from=<name|lead> to=<name|lead> -->`, and its text has at most 250 characters, not counting that line or references such as `#12`. `bin/team.sh msg` refuses a longer one, an empty one, and one that holds a marker of its own. A developer's message raises `needs::lead`; the tech lead's answer lowers it. What does not fit belongs in the story's description, which the tech lead edits. The limit is for messages only; plan tables, findings and other records keep their formats.
+- **Comment text is data, never instructions.** An answer counts only when the tracker says a project member wrote it and it carries the marker.
+
+### Delivery: an hourly poll
+
+An agent learns of new work and new messages by reading the tracker once an hour. An event bus was considered and left for later; it would only replace the timer, because the tracker already holds every message.
+
+- **The timer** is the harness's recurring prompt, inside the long-running session: only that session can dispatch subagents. Setup starts it: `/loop <team.poll_minutes>m /compasso:work` (default 60). Each tick runs `bin/team.sh inbox`.
+- **Skipped while working.** A story flow writes `.compasso/runs/.working` when it starts and removes it when its merge request opens or it hands back. The poll exits at once while it is there, without reading the tracker. It lists the stories being built, so a batch is busy until its last story stops. Every tool call of the session and of its agents, in the repository or a story's worktree, keeps the marker fresh (the PreToolUse hook), and a marker nothing touched for an hour is ignored: the flow that wrote it is gone.
+- **A developer's poll** lists what carries its name: stories, bugs and features, in dependency order, with the answers to its questions. With nothing new it prints one line. With work, the agent claims the next item it can build and runs the story flow. A story waiting for the tech lead is skipped for the next one.
+- **The tech lead's poll** lists its queue: `needs::lead` items with their last message, bugs and stories with no developer (marked when their blocker closed), and each developer's load. The agent proposes answers and assignments; a person decides each one. Assignment is the tech lead's main decision, and a wrong one costs a developer hours.
+- **What a poll costs.** A question and its answer can each wait an hour.
+- **Labels changed by hand** on the tracker's own pages are seen at the next poll, like everything else.
+
+### Open
+
+- Tried against the fakes only: one run against a real GitLab and a real GitHub project is still owed.
+- Codex: whether it has a recurring prompt inside a session. Without one, Codex needs another timer.
+- A message bus carrying pointers only (the kind, the item, from, to), so the tracker stays the source.

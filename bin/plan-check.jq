@@ -1,4 +1,4 @@
-# Input: {plan: <plan.yaml as JSON>, cfg: {max, target, hpd, weeks, cap, sensitive}}
+# Input: {plan: <plan.yaml as JSON>, cfg: {max, target, hpd, weeks, cap, sensitive, team}}
 # Output: {errors, notes, totals, waves, critical, overlaps}
 
 def blank: . == null or . == "" or . == [];
@@ -9,7 +9,7 @@ def hours: (.estimate_h | numbers) // 0;
 .plan as $p | .cfg as $c
 | ($p.features // []) as $features
 | ($p.blockers // []) as $blockers
-| [$features[] as $f | ($f.stories // [])[] | . + {feature: $f.key}] as $stories
+| [$features[] as $f | ($f.stories // [])[] | . + {feature: $f.key, feature_dev: $f.dev}] as $stories
 | ($stories | map({key: .key, value: .}) | from_entries) as $by
 | ($stories | map({key: .key, value: [(.depends_on // [])[] | select(ext_ref | not)]}) | from_entries) as $deps
 | (($c.weeks * 5 * $c.hpd) / 2) as $feature_max
@@ -57,7 +57,16 @@ def hours: (.estimate_h | numbers) // 0;
          elif $s.estimate_h > $c.max
            then "\($s.key): \($s.estimate_h)h exceeds the \($c.max)h story limit - split it"
          else empty end),
-        (if ($s.owner // "") | IN("agent", "human", "either") | not
+        (if $c.team then
+           # a team project names a developer for every story, on it or on its feature;
+           # only a story waiting for a blocker (work for a person) may have none yet
+           (($s.dev // $s.feature_dev) as $d
+            | if $d == null then
+                (if (($s.blocked_by // []) | length) == 0
+                 then "\($s.key): dev is required - name the developer who builds it, here or on its feature" else empty end)
+              elif ($d | type) != "string" or ($d | test("^[a-z][a-z0-9-]{0,19}$") | not)
+                then "\($s.key): dev '\($d)' is not a developer's name" else empty end)
+         elif ($s.owner // "") | IN("agent", "human", "either") | not
            then "\($s.key): owner must be agent, human or either" else empty end),
         (if ($s.tests // []) | index("unit") | not then "\($s.key): tests must include unit" else empty end),
         # a story on a sensitive path needs security's abuse cases in its acceptance before it is built

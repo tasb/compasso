@@ -5,6 +5,8 @@ description: Compasso roadmap - place the backlog's features into sprints by dep
 
 Place the backlog into sprints. Only the next sprint is split into stories (by `/compasso:plan`); later sprints stay as features and are refined at each sprint close. Scripts are in `${CLAUDE_PLUGIN_ROOT}/bin`. `RUN` is `.compasso/runs/roadmap`.
 
+**Persona.** `bash ${CLAUDE_PLUGIN_ROOT}/bin/persona.sh gate --repo . --skill roadmap` first. On a non-zero exit, show its message and stop: this checkout's persona may not run this command.
+
 1. **Tracker gate.** `bash ${CLAUDE_PLUGIN_ROOT}/bin/tracker.sh check --repo .` Stop on a non-zero exit.
 
 2. **Capacity.** The default is `sprint.capacity_hours`. When sprints have closed, measure velocity instead: `tracker.sh sprint-done --repo . --milestone S<n>` for the last three closed sprints (null means none), and propose their average. The user chooses.

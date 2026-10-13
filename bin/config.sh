@@ -106,6 +106,10 @@ validate() {
   v="$(val .risk.max_changed_lines)"
   [ -z "$v" ] || { is_int "$v" && [ "$v" -ge 1 ]; } || err "risk.max_changed_lines must be a positive number"
 
+  case "$(yq -r '.team.enabled' "$CFG")" in true|false) ;; *) err "team.enabled must be true or false (run: config.sh upgrade)" ;; esac
+  v="$(val .team.poll_minutes)"
+  is_int "$v" && [ "$v" -ge 1 ] && [ "$v" -le 1440 ] || err "team.poll_minutes must be an integer from 1 to 1440 (run: config.sh upgrade)"
+
   [ "$(yq -r '.harnesses | length' "$CFG")" -ge 1 ] 2>/dev/null || err "harnesses must list claude and/or codex"
   for h in $(yq -r '.harnesses[]?' "$CFG"); do
     case "$h" in claude|codex) : ;; *) err "harnesses: unknown '$h'"; continue ;; esac

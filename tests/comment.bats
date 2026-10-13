@@ -86,3 +86,13 @@ EOF2
   run plan_comment F-2
   [[ "$output" == *"| S-4 PDF endpoint | 8 | agent | #12, B-1 |"* ]] || false
 }
+
+@test "plan: in a team project the row names the developer, the story's or its feature's" {
+  cfg_set '.team.enabled = true'
+  yq -i 'del(.features[].stories[].owner) | .features[0].dev = "ana" | .features[0].stories[2].dev = "rui"' "$REPO/.compasso/plan.yaml"
+  echo "no findings" > "$BATS_TEST_TMPDIR/sec.md"
+  run "$ROOT/bin/comment.sh" plan --repo "$REPO" --feature F-1 --approver ana --security-file "$BATS_TEST_TMPDIR/sec.md"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Invoice list API | 4 | ana |"* ]] || false
+  [[ "$output" == *"Year filter | 4 | rui |"* ]] || false
+}

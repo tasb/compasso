@@ -5,7 +5,14 @@ description: Compasso sprint flow - build everything that can be built in the cu
 
 Move the sprint forward as far as it can go, then say exactly what waits and on whom. Re-running continues where it stopped. Scripts are in `${CLAUDE_PLUGIN_ROOT}/bin`, roles in `${CLAUDE_PLUGIN_ROOT}/roles`. `RUN` is `.compasso/runs/sprint-S<n>`.
 
+**Persona.** `bash ${CLAUDE_PLUGIN_ROOT}/bin/persona.sh gate --repo . --skill sprint` first. On a non-zero exit, show its message and stop: this checkout's persona may not run this command.
+
 **Agents, strictly orchestrated.** Each role runs as the `compasso:<role>` subagent (on Codex, the `compasso-<role>` agent), given the model set for it in `.compasso/project.yaml` for this harness. Only this flow dispatches agents; none can start another. Every dispatch and continuation uses the flow run's budget. On Claude Code, Compasso's hooks claim it for you: always name the run folder (`RUN`) in the agent's prompt, or the dispatch is denied. On Codex, claim it yourself right before spawning: `bash ${CLAUDE_PLUGIN_ROOT}/bin/budget.sh claim --repo . --run RUN --role <role>`; the hook refuses a spawn without a fresh claim. When the budget refuses (exit 3, or a denied dispatch), do not dispatch: stop where you are, change nothing more on the tracker, and hand back with its message. Never reset a budget yourself: `budget.sh reset` is a person's decision. An agent that stopped at its turn limit has not finished: treat its output as incomplete. A denial from Compasso's role or command guard is final too: never work around it; report it.
+
+**Team projects.** `bash ${CLAUDE_PLUGIN_ROOT}/bin/persona.sh show --repo .` says what this checkout is.
+- A **developer** runs steps 1 to 4 for its own work only: `sprint-sync` already leaves out of `next_batch` everything that is not assigned to it, and step 4 covers only the features that carry its name (`features[].dev`). It never runs steps 5 and 6.
+- The **tech lead** never builds: skip steps 3 and 4, and run steps 5 to 7. `sprint-sync`'s `team` block is its queue (questions, work with no developer, each developer's load); `/compasso:work` goes through it.
+- Bugs are filed with no developer and wait for the tech lead. File them as the steps below say: the tracker script drops any `owner::` label in a team project.
 
 1. **Tracker gate.** `bash ${CLAUDE_PLUGIN_ROOT}/bin/tracker.sh check --repo .` Stop on a non-zero exit. `git fetch` and update the default branch.
 
@@ -38,6 +45,6 @@ Move the sprint forward as far as it can go, then say exactly what waits and on 
 
    - **What is ahead.** When `.compasso/roadmap.yaml` exists, offer `/compasso:roadmap` to refine the sprints still to come with this sprint's measured velocity, then `/compasso:plan` for the next one. When this was the roadmap's MVP sprint (`mvp_sprint`), say the MVP is complete and offer `/compasso:harden`.
 
-6. **Results from testers.** When a tester sends back their results file: `bash ${CLAUDE_PLUGIN_ROOT}/bin/test-results.sh --repo . --guide docs/releases/S<n>-test-guide.json --results <file>`. Each scenario that does not work becomes a Bug under its feature, and a summary goes on the epic. Those bugs are built by the next `/compasso:sprint` run.
+6. **Results from testers.** When a tester sends back their results file: `bash ${CLAUDE_PLUGIN_ROOT}/bin/test-results.sh --repo . --guide docs/releases/S<n>-test-guide.json --results <file>`. Each scenario that does not work becomes a Bug under its feature, and a summary goes on the epic. Those bugs are built by the next `/compasso:sprint` run; in a team project, once the tech lead assigned them.
 
 7. **Report**, every run: post on the epic what merged without a person since the last run (`tracker.sh digest --since <the date in RUN/last-digest, else the sprint start>`, then write today to `RUN/last-digest`), and report what was built and its merge requests; what waits for a person to approve and merge (with links); human-owned stories and their assignees; open blockers and who owns them; stories waiting on other stories; features verified; bugs filed. End with the command to run next.

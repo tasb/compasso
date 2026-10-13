@@ -5,6 +5,8 @@ description: Compasso start - the entry point when you have ideas, requirements 
 
 Find where the product stands and move it one step forward. Scripts are in `${CLAUDE_PLUGIN_ROOT}/bin`.
 
+**Persona.** `bash ${CLAUDE_PLUGIN_ROOT}/bin/persona.sh gate --repo . --skill start` first. On a non-zero exit, show its message and stop: this checkout's persona may not run this command.
+
 1. `bash ${CLAUDE_PLUGIN_ROOT}/bin/start.sh --repo .` Show its three lines as they are.
 
 2. Say in one line what the user can bring to that stage, then run it when they agree:

@@ -5,6 +5,8 @@ description: Compasso present - build one self-contained HTML presentation of th
 
 Build the solution presentation. Scripts are in `${CLAUDE_PLUGIN_ROOT}/bin`. `RUN` is `.compasso/runs/present`. It writes one HTML file and changes nothing else.
 
+**Persona.** `bash ${CLAUDE_PLUGIN_ROOT}/bin/persona.sh gate --repo . --skill present` first. On a non-zero exit, show its message and stop: this checkout's persona may not run this command.
+
 1. **What exists.** `bash ${CLAUDE_PLUGIN_ROOT}/bin/start.sh --repo .` The presentation uses whatever exists and says on the page what is missing; for the full picture, the product needs a brief and a backlog (`/compasso:discover`, `/compasso:backlog`), a technical solution (`/compasso:architect`), sprints (`/compasso:roadmap`) and a planned next sprint (`/compasso:plan`). Say which are missing and ask whether to build now or run them first.
 
 2. **Language.** The page's labels come in the project's `language` (`templates/locales/`). Only to change a label, or for a language Compasso does not ship, write `RUN/ui.json` with the labels to replace (`{"key": "text"}`; the keys are under `ui.presentation` in `${CLAUDE_PLUGIN_ROOT}/templates/locales/en.yaml`) and pass `--ui RUN/ui.json`.

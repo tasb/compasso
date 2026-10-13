@@ -423,3 +423,26 @@ workflow() { cfg_set '.ci.image = "node:22" | .commands.test = "npm test"'"${1:-
   [ "$status" -eq 1 ]
   [ "$(calls 'POST repos/acme/app/issues')" -eq 0 ]
 }
+
+# ---------- team projects: dev:: labels in place of owner:: ----------
+
+@test "push-plan in a team: developers' labels on stories and features, no owner label, and a change moves the label" {
+  cfg_set '.team.enabled = true'
+  "$ROOT/bin/persona.sh" set --repo "$REPO" --persona tech-lead >/dev/null
+  yq -i 'del(.features[].stories[].owner) | .features[0].dev = "ana" | .features[0].stories[2].dev = "rui"' "$PLAN"
+  printf 'dev::ana\ndev::rui\n' >> "$FAKE_GH/labels.txt"
+  run gh_ push-plan
+  [ "$status" -eq 0 ]
+  [ "$(labels_of "$(num S-3)")" = '["dev::rui"]' ]
+  [ "$(labels_of "$(num S-1)")" = '[]' ]
+  [ "$(labels_of "$(num S-4)")" = '["blocked"]' ]
+  [ "$(labels_of "$(num F-1)")" = '["dev::ana","type::feature"]' ]
+  yq -i '.features[0].stories[2].dev = "ana" | .features[0].dev = "rui"' "$PLAN"
+  gh_ push-plan >/dev/null
+  [ "$(labels_of "$(num S-3)")" = '["dev::ana"]' ]
+  [ "$(labels_of "$(num F-1)")" = '["dev::rui","type::feature"]' ]
+  yq -i '.features[0].stories[0].dev = "zed"' "$PLAN"
+  run gh_ push-plan
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"zed is not in the team"* ]] || false
+}
