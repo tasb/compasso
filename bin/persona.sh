@@ -119,7 +119,12 @@ case "$CMD" in
     git -C "$REPO" config --local --add "$k" "" && git -C "$REPO" config --local --add "$k" "!'$HOME_DIR/bin/git-credential-compasso'" || exit 1
     case "$(persona)" in developer) who="$(name)" ;; tech-lead) who=tech-lead ;; *) who="$ACCOUNT" ;; esac
     git -C "$REPO" config --local user.name "$who" && git -C "$REPO" config --local user.email "$EMAIL" || exit 1
-    echo "persona: this checkout uses $ACCOUNT on $host; its commits are $who <$EMAIL>" ;;
+    echo "persona: this checkout uses $ACCOUNT on $host; its commits are $who <$EMAIL>"
+    # the tech lead owns the configuration: its own login joins the agents, whose approvals never count as a person's
+    if [ "$(persona)" = tech-lead ]; then
+      A="$ACCOUNT" yq -i '.team.agents = ((.team.agents // []) + [strenv(A)] | unique)' "$CFG_REPO/.compasso/project.yaml" || exit 1
+      echo "persona: $ACCOUNT is in team.agents - commit .compasso/project.yaml"
+    fi ;;
   env)
     [ -n "$(field account)" ] || exit 0
     t="$("$BIN/git-credential-compasso" token --repo "$REPO")" && [ -n "$t" ] || exit 1

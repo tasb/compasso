@@ -86,6 +86,19 @@ fill() { printf 'protocol=https\nhost=%s\n\n' "$1" | git -C "$REPO" credential f
   [ "$(cat "$FAKE_GH/token")" = gho_svc-bot ]
 }
 
+@test "the tech lead's account joins team.agents when it is set; a developer's own checkout never writes the configuration" {
+  token_file svc-lead 600; token_file svc-ana 600
+  cfg_set '.team.enabled = true'
+  p account --set svc-ana --email ana@agents.example >/dev/null
+  [ "$(yq -o=json -I0 .team.agents "$CFG")" = '[]' ]
+  p set --persona tech-lead >/dev/null
+  run p account --set svc-lead --email lead@agents.example
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"team.agents"* ]] || false
+  p account --set svc-lead --email lead@agents.example >/dev/null
+  [ "$(yq -o=json -I0 .team.agents "$CFG")" = '["svc-lead"]' ]
+}
+
 @test "the tech lead's and the default persona's commits carry their own names" {
   token_file svc-lead 600
   cfg_set '.team.enabled = true'; p set --persona tech-lead >/dev/null
