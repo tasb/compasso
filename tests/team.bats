@@ -90,6 +90,21 @@ join() { "$ROOT/bin/persona.sh" join --repo "$1"; }
   [ "$(labels_of 14)" = '["compasso::backlog","dev::ana"]' ]
 }
 
+@test "mark-backlog (upgrading): assigned, unstarted work gets compasso::backlog; work being built, in review or with no developer does not" {
+  issue 14 "Status filter" '["dev::rui","compasso::building"]' $'**Tests:** unit\\\n**Touches:** `src/status/**`' 6
+  run team "$ANA" mark-backlog --milestone S20
+  [ "$status" -eq 6 ]
+  run team "$REPO" mark-backlog --milestone S20
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"#11, #16"* ]] || false
+  [ "$(labels_of 11)" = '["compasso::backlog"]' ]
+  [ "$(labels_of 16)" = '["compasso::backlog","dev::ana"]' ]
+  [ "$(labels_of 14)" = '["compasso::building","dev::rui"]' ]
+  [ "$(labels_of 9)" = '["blocked"]' ]
+  [ "$(labels_of 15)" = '["type::bug"]' ]
+  [ "$(team "$REPO" inbox --milestone S20 --json | jq -c '[.queue[] | [.dev, .backlog]]')" = '[["ana",2],["rui",0]]' ]
+}
+
 @test "assign: only the tech lead, and only to a developer in the team" {
   run team "$ANA" assign --iid 15 --dev ana
   [ "$status" -eq 6 ]

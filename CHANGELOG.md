@@ -14,7 +14,7 @@ From running 2.0.0 with a tech lead and developers. Team projects change how the
 - **Status labels.** `compasso::backlog` (assigned, not started) joins `building` and `in-review`. The tech lead polls every `team.lead_poll_minutes` (default 30); developers every `team.poll_minutes` (60).
 - **The queue.** In `mvp` the tech lead keeps each developer's backlog between `team.queue.min` (5) and `team.queue.target` (15) on its own, within the sprint.
 - **One account per agent.** `persona.sh account --set <login> --email <email>`: every tracker call and git push of the checkout use that account's token (a GitLab service account; a GitHub machine user), and its commits carry the agent's name and email. `team.agents` lists the agents' logins, whose approvals never count as a person's.
-- **Upgrading.** Run `/compasso:setup` once in each project: it adds the new keys and the finops model to `.compasso/project.yaml` and creates the `compasso::backlog` and `needs::approval` labels. Until then the configuration does not validate.
+- **Upgrading.** Run `/compasso:setup` once in each project: it adds the new keys and the finops model to `.compasso/project.yaml` and creates the `compasso::backlog` and `needs::approval` labels. Until then the configuration does not validate. A team with work already assigned runs `team.sh mark-backlog` once per open sprint (setup says so), so the queue counts it. Developers who joined under 2.x run setup again to set their account and paste the new join block into the tech lead: their name is kept and their account recorded in `team.agents`.
 
 ## 2.0.0 (2026-10-13)
 

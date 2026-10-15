@@ -111,6 +111,24 @@ fill() { printf 'protocol=https\nhost=%s\n\n' "$1" | git -C "$REPO" credential f
   [ "$(yq -o=json -I0 .team.agents "$LEAD/.compasso/project.yaml")" = '["svc-ana"]' ]
 }
 
+@test "a developer who joined before it had an account joins again with it: the account is recorded, the label kept" {
+  cfg_set '.tracker.provider = "github" | .tracker.host = "github.com" | .team.enabled = true'
+  printf 'dev::ana\n' > "$FAKE_GH/labels.txt"; : > "$FAKE_GH/calls.log"
+  LEAD="$BATS_TEST_TMPDIR/lead"; mkdir -p "$LEAD"; cp -R "$REPO/.compasso" "$LEAD/"
+  "$ROOT/bin/persona.sh" set --repo "$LEAD" --persona tech-lead >/dev/null
+  p account --set svc-ana --email ana@agents.example >/dev/null
+  p join > "$BATS_TEST_TMPDIR/join.json"
+  run "$ROOT/bin/team.sh" add --repo "$LEAD" --join "$BATS_TEST_TMPDIR/join.json"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"ana is already in the team; its account svc-ana is recorded"* ]] || false
+  [ "$(yq -o=json -I0 .team.agents "$LEAD/.compasso/project.yaml")" = '["svc-ana"]' ]
+  ! grep -q "POST repos/acme/app/labels" "$FAKE_GH/calls.log"
+  jq 'del(.account)' "$BATS_TEST_TMPDIR/join.json" > "$BATS_TEST_TMPDIR/old.json"
+  run "$ROOT/bin/team.sh" add --repo "$LEAD" --join "$BATS_TEST_TMPDIR/old.json"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"the name ana is taken"* ]] || false
+}
+
 @test "a checkout with no account works as before: no token is set, git is left alone" {
   run "$ROOT/bin/persona.sh" env --repo "$REPO"
   [ "$status" -eq 0 ]
