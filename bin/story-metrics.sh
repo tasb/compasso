@@ -12,6 +12,7 @@
 # none, they are left out rather than guessed.
 # Exit: 0 | 2 usage or missing input
 set -u
+case "${1:-}" in -h|--help) sed -n '2,/^set -u/s/^# \{0,1\}//p' "$0"; exit 0 ;; esac   # the header above is the help
 
 CMD="${1:-}"; shift || true
 RUN="" REPO="." ROLE="" MODEL="" TOKENS="" MS="" TYPE=""

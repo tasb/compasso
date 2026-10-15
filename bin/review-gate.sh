@@ -13,6 +13,7 @@
 # --comment prints every finding as a merge request comment instead (same exit codes).
 # Exit: 0 clear | 1 blocked (open findings listed) | 2 malformed findings
 set -u
+case "${1:-}" in -h|--help) sed -n '2,/^set -u/s/^# \{0,1\}//p' "$0"; exit 0 ;; esac   # the header above is the help
 
 BIN="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 F="" FOR=review COMMENT=0 REPO="."

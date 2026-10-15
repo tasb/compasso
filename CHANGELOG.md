@@ -2,6 +2,14 @@
 
 Versions follow `version` in `.claude-plugin/plugin.json`. Claude Code updates an installed plugin only when this version changes, so every change users should receive ships in a new version.
 
+## 3.0.1 (2026-10-15)
+
+Fixes reported from a team running the story flow on GitLab ([#1](https://github.com/tasb/compasso/issues/1)).
+
+- **Follow-ups attach where GitLab allows them.** GitLab allows no Task under a Task, so a follow-up of a story with no feature was created and then left unattached, and `ship.sh` stopped. A story's follow-up now goes to its feature, else to its sprint's epic. A failed attach is tried again (GitLab's transient "Internal server error"). When no parent works, the follow-up is linked to the story ("relates to") and GitLab's own error is shown. Either way its number is returned, so running `ship.sh` again never files it twice. GitHub's follow-ups also retry and are always returned.
+- **One dispatch spends one run.** On Claude Code the hook claims the budget when an agent is dispatched; a `budget.sh claim` by hand is now refused there instead of spending a second run. Codex, where the claim is made by hand, is unchanged. `budget.sh reset --role <role>` gives one role its runs back.
+- **Commands are discoverable.** Every script answers `--help` with the commands written at its top. `tracker.sh` says when a command belongs to `team.sh` (`release`, `working`, `claim`...). The story flow says to run `ship.sh` on its own and read its result before pushing.
+
 ## 3.0.0 (2026-10-15)
 
 From running 2.0.0 with a tech lead and developers. Team projects change how they merge; every project gets the stage, the security rule and the new risk rules.

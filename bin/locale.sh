@@ -9,6 +9,7 @@
 # without a config, English.
 # Exit: 0 | 1 unknown language | 2 usage
 set -u
+case "${1:-}" in -h|--help) sed -n '2,/^set -u/s/^# \{0,1\}//p' "$0"; exit 0 ;; esac   # the header above is the help
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 LOC="$ROOT/templates/locales"
 REPO="" LANG_="" MODE=one

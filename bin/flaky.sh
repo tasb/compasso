@@ -9,6 +9,7 @@
 # every run sees the same code.
 # Exit: 0 all runs agree | 3 the runs disagree (flaky) | 4 every run failed | 2 usage
 set -u
+case "${1:-}" in -h|--help) sed -n '2,/^set -u/s/^# \{0,1\}//p' "$0"; exit 0 ;; esac   # the header above is the help
 
 BIN="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="." TEST="" RUNS=5 TIMEOUT=600 OUT=""

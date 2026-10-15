@@ -32,6 +32,7 @@
 # member wrote count as either.
 # Exit: 0 ok | 1 failure | 2 usage | 6 the persona may not do this, or someone else holds the claim
 set -u
+case "${1:-}" in -h|--help) sed -n '2,/^set -u/s/^# \{0,1\}//p' "$0"; exit 0 ;; esac   # the header above is the help
 
 BIN="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CMD="${1:-}"; shift || true

@@ -7,6 +7,7 @@
 #
 # Exit: 0 valid | 1 invalid | 3 no backlog or config
 set -u
+case "${1:-}" in -h|--help) sed -n '2,/^set -u/s/^# \{0,1\}//p' "$0"; exit 0 ;; esac   # the header above is the help
 
 BIN="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="." JSON=0

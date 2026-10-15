@@ -12,6 +12,7 @@
 # commands.e2e (e2e), coverage.command (coverage).
 # Exit: 0 | 1 failure | 2 usage
 set -u
+case "${1:-}" in -h|--help) sed -n '2,/^set -u/s/^# \{0,1\}//p' "$0"; exit 0 ;; esac   # the header above is the help
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CAT="$ROOT/templates/test-defaults.yaml"

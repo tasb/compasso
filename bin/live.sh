@@ -15,6 +15,7 @@
 #   a11y  axe-core in the official Playwright image on the configured pages. Gaps: serious and critical.
 # Exit: 0 the check ran (findings are results, not errors) | 1 it could not run | 2 usage
 set -u
+case "${1:-}" in -h|--help) sed -n '2,/^set -u/s/^# \{0,1\}//p' "$0"; exit 0 ;; esac   # the header above is the help
 
 BIN="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CMD="${1:-}"; CHECK="${2:-}"; shift 2 2>/dev/null || true

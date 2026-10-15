@@ -16,6 +16,7 @@
 # (test_paths) left out, for the mutator to work from.
 # Exit: 0 done | 1 the tree could not be restored (stop everything) | 2 usage
 set -u
+case "${1:-}" in -h|--help) sed -n '2,/^set -u/s/^# \{0,1\}//p' "$0"; exit 0 ;; esac   # the header above is the help
 
 BIN="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="." DIR="" TEST="" TIMEOUT=120 OUT="" COMMITS="" RESULTS="" VERDICTS="" FEATURE="" BASE="" SENSITIVE=0

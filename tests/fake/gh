@@ -46,6 +46,8 @@ done
 [ -n "$method" ] || { [ -n "$fields${body+x}${q+x}$input" ] && method=POST || method=GET; }
 echo "$method $path$fields" >> "$D/calls.log"
 [ -n "${FAKE_GH_FAIL:-}" ] && case "$method $path" in $FAKE_GH_FAIL) echo '{"message":"Server Error"}'; exit 1 ;; esac
+# $FAKE_GH_FAIL_ONCE: the first call matching it fails, the next ones work (a transient error)
+[ -n "${FAKE_GH_FAIL_ONCE:-}" ] && [ ! -e "$D/failed-once" ] && case "$method $path" in $FAKE_GH_FAIL_ONCE) touch "$D/failed-once"; echo '{"message":"Server Error"}'; exit 1 ;; esac
 
 out() { if [ -n "$jqf" ]; then jq -r "$jqf"; else cat; fi; }
 nf() { echo '{"message":"Not Found","status":"404"}'; exit 1; }

@@ -10,6 +10,7 @@
 # security review's result as markdown ("no findings" or one bullet per finding).
 # Exit: 0 | 1 input problem
 set -u
+case "${1:-}" in -h|--help) sed -n '2,/^set -u/s/^# \{0,1\}//p' "$0"; exit 0 ;; esac   # the header above is the help
 
 BIN="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CMD="${1:-}"; shift || true

@@ -27,6 +27,8 @@ done
 echo "$method $path$fields" >> "$D/calls.log"
 printf '%s' "${GITLAB_TOKEN:-}" > "$D/token"
 [ -n "${FAKE_GL_FAIL:-}" ] && case "$method $path" in $FAKE_GL_FAIL) echo '{"message":"500"}'; exit 1 ;; esac
+# $FAKE_GL_FAIL_ONCE: the first call matching it fails, the next ones work (a transient error)
+[ -n "${FAKE_GL_FAIL_ONCE:-}" ] && [ ! -e "$D/failed-once" ] && case "$method $path" in $FAKE_GL_FAIL_ONCE) touch "$D/failed-once"; echo 'glab: Internal server error' >&2; exit 1 ;; esac
 
 next_iid() { n="$(cat "$D/next_iid" 2>/dev/null || echo 1)"; echo $((n + 1)) > "$D/next_iid"; echo "$n"; }
 issue_json() { printf '{"iid":%s,"id":%s}\n' "$1" "$((1000 + $1))"; }
@@ -100,8 +102,12 @@ case "$method $path" in
       query*) p="$(cat "$D/parent/$child" 2>/dev/null)"
               if [ -n "$p" ]; then printf '{"data":{"workItem":{"widgets":[{},{"parent":{"id":"gid://gitlab/WorkItem/%s","iid":"%s"}}]}}}\n' "$p" "$((p - 1000))"
               else echo '{"data":{"workItem":{"widgets":[{},{"parent":null}]}}}'; fi ;;
-      *) if [ -e "$D/parent/$child" ]; then echo '{"data":{"workItemUpdate":{"errors":["Work item(s) already assigned"]}}}'
-         else printf '%s' "$q" | sed -E 's/.*parentId: "gid:\/\/gitlab\/WorkItem\/([0-9]+)".*/\1/' > "$D/parent/$child"
+      *) pid="$(printf '%s' "$q" | sed -E 's/.*parentId: "gid:\/\/gitlab\/WorkItem\/([0-9]+)".*/\1/')"
+         ptype="$(cat "$D"/issues/*.json 2>/dev/null | jq -r --argjson id "$pid" 'select(.id == $id) | .issue_type' | head -1)"
+         if [ -n "${FAKE_GL_GQL_ERROR:-}" ]; then printf '{"data":{"workItemUpdate":{"errors":["%s"]}}}\n' "$FAKE_GL_GQL_ERROR"
+         elif [ "$ptype" = task ]; then echo '{"data":{"workItemUpdate":{"errors":["Task cannot be added as a parent"]}}}'
+         elif [ -e "$D/parent/$child" ]; then echo '{"data":{"workItemUpdate":{"errors":["Work item(s) already assigned"]}}}'
+         else echo "$pid" > "$D/parent/$child"
               echo '{"data":{"workItemUpdate":{"errors":[]}}}'; fi ;;
     esac ;;
   "GET projects/"*)

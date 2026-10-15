@@ -8,6 +8,7 @@
 #
 # Exit: 0 ok | 1 a test file was added, removed or changed since record | 2 usage or no record
 set -u
+case "${1:-}" in -h|--help) sed -n '2,/^set -u/s/^# \{0,1\}//p' "$0"; exit 0 ;; esac   # the header above is the help
 set -f   # test_paths are patterns, never expanded against the working directory
 
 BIN="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

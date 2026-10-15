@@ -10,6 +10,7 @@
 # A file that already exists with different content is left alone and reported.
 # Exit: 0 ok (including skips) | 1 usage or copy failure
 set -u
+case "${1:-}" in -h|--help) sed -n '2,/^set -u/s/^# \{0,1\}//p' "$0"; exit 0 ;; esac   # the header above is the help
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 REPO="."

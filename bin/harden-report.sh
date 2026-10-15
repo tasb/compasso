@@ -11,6 +11,7 @@
 # with no result file is reported as not run.
 # Exit: 0 | 2 usage or a malformed result
 set -u
+case "${1:-}" in -h|--help) sed -n '2,/^set -u/s/^# \{0,1\}//p' "$0"; exit 0 ;; esac   # the header above is the help
 
 BIN="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DIR="" SET="code" FEATURE="" DATE="$(date +%Y-%m-%d)" REPO="."

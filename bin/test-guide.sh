@@ -10,6 +10,7 @@
 # results can be filed as bugs on the right feature.
 # Exit: 0 written | 1 invalid data
 set -u
+case "${1:-}" in -h|--help) sed -n '2,/^set -u/s/^# \{0,1\}//p' "$0"; exit 0 ;; esac   # the header above is the help
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DATA="" OUT="" REPO="."

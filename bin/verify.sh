@@ -11,6 +11,7 @@
 # Exit: 0 all passed | 1 a command failed, or the story needs e2e and there is no e2e command | 2 usage
 #       4 a Verify command is not approved (listed)
 set -u
+case "${1:-}" in -h|--help) sed -n '2,/^set -u/s/^# \{0,1\}//p' "$0"; exit 0 ;; esac   # the header above is the help
 
 BIN="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="." RUN="" STORY=""

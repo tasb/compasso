@@ -33,6 +33,7 @@
 #   and temporary folders, reading secrets (.env, private keys, credential files), piping a download
 #   into a shell.
 set -u
+case "${1:-}" in -h|--help) sed -n '2,/^set -u/s/^# \{0,1\}//p' "$0"; exit 0 ;; esac   # the header above is the help
 
 BIN="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 EVENT="${1:-}"
@@ -167,7 +168,7 @@ budget_guard() {
       role="$(jq -r .role <<<"$info")"; run="$(jq -r .run <<<"$info")" ;;
     *) return 0 ;;
   esac
-  out="$("$BIN/budget.sh" claim --repo "$ROOT" --run "$ROOT/$run" --role "$role" 2>&1)"; rc=$?
+  out="$("$BIN/budget.sh" claim --repo "$ROOT" --run "$ROOT/$run" --role "$role" --hook 2>&1)"; rc=$?
   case "$rc" in
     0) return 0 ;;
     3) deny "${out#budget: }" ;;

@@ -1,4 +1,5 @@
 ROOT="$(cd "$(dirname "$BATS_TEST_FILENAME")/.." && pwd)"
+unset CLAUDECODE   # the suite may run inside Claude Code; a test that needs it sets it
 
 setup_repo() {
   export COMPASSO_HOME="$BATS_TEST_TMPDIR/compasso-home"   # approvals never touch the real home

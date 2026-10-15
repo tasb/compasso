@@ -19,6 +19,7 @@
 # (default DIR/risk.json): {level: low|high, changed_lines (product lines), files, reasons: []}.
 # Exit: 0 low | 3 high | 2 usage
 set -u
+case "${1:-}" in -h|--help) sed -n '2,/^set -u/s/^# \{0,1\}//p' "$0"; exit 0 ;; esac   # the header above is the help
 set -f   # the paths are patterns
 
 BIN="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

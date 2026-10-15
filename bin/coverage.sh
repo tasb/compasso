@@ -10,6 +10,7 @@
 # Writes DIR/coverage.json: {status, percent, min, uncovered: ["file:line"...]}.
 # Exit: 0 at or above min, or nothing changed | 3 below min, or not measured | 2 usage
 set -u
+case "${1:-}" in -h|--help) sed -n '2,/^set -u/s/^# \{0,1\}//p' "$0"; exit 0 ;; esac   # the header above is the help
 set -f   # coverage.paths are patterns
 
 BIN="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

@@ -12,6 +12,7 @@
 # the merge request (a pull request on GitHub). Prints its {iid, web_url}.
 # Exit: 0 | 1 git or tracker failure | 2 usage or nothing to send
 set -u
+case "${1:-}" in -h|--help) sed -n '2,/^set -u/s/^# \{0,1\}//p' "$0"; exit 0 ;; esac   # the header above is the help
 
 BIN="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="." TITLE="" BRANCH="" INCLUDES=""

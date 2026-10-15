@@ -23,6 +23,7 @@
 # Exit: 0 ok | 1 config/usage/tracker failure | 2 not logged in | 3 repository not found or no access
 #       4 cannot push to the repository
 set -u
+case "${1:-}" in -h|--help) sed -n '2,/^set -u/s/^# \{0,1\}//p' "$0"; exit 0 ;; esac   # the header above is the help
 
 BIN="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CMD="${1:-}"; shift || true
@@ -474,7 +475,9 @@ followup() {
   # shellcheck disable=SC2046
   num="$(upsert_issue "" "$TITLE" "$BODY" "$ms" $(printf '%s' "$LABELS_ARG" | tr ',' ' '))" || true
   [ -n "$num" ] || { echo "github: could not create the follow-up" >&2; return 1; }
-  attach "$num" "$PARENT" || { echo "github: created #$num but could not attach it to #$PARENT" >&2; return 1; }
+  # the follow-up exists from here on: it is always returned, so a caller never files it twice
+  attach "$num" "$PARENT" || { sleep 1; attach "$num" "$PARENT"; } || { sleep 1; attach "$num" "$PARENT"; } ||
+    echo "github: created #$num but could not attach it to #$PARENT: attach it by hand" >&2
   echo "$num"
 }
 

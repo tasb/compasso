@@ -11,6 +11,7 @@
 # Roles with `dispatch: inline` (the planner) run in the conversation and get no agent.
 # Exit: 0 | 1 out of date (--check) or a malformed role | 2 usage
 set -u
+case "${1:-}" in -h|--help) sed -n '2,/^set -u/s/^# \{0,1\}//p' "$0"; exit 0 ;; esac   # the header above is the help
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CHECK=0

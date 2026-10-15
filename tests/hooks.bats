@@ -74,6 +74,12 @@ dispatch() { jq -cn --arg c "$REPO" --arg t "$1" --arg p "$2" '{hook_event_name:
 
 # ---------- budget guard ----------
 
+@test "budget guard: on Claude Code the hook's own claim counts once, though a claim by hand is refused there" {
+  export CLAUDECODE=1
+  [ "$(decision "$(dispatch compasso:reviewer "Review .compasso/runs/8/diff.patch")")" = allow ]
+  [ "$(wc -l < "$REPO/.compasso/runs/8/budget.jsonl" | tr -d ' ')" = 1 ]
+}
+
 @test "budget guard: dispatching a Compasso agent claims its run's budget, and is denied when it is spent" {
   cfg_set '.limits.agent_runs.reviewer = 2'
   [ "$(decision "$(dispatch compasso:reviewer "Review .compasso/runs/8/diff.patch")")" = allow ]

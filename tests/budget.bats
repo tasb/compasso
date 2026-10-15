@@ -31,6 +31,26 @@ b() { "$ROOT/bin/budget.sh" "$@" --repo "$REPO" --run "$RUN"; }
   [ "$status" -eq 0 ]
 }
 
+@test "on Claude Code a claim by hand is refused and spends nothing: the hook claims when the agent is dispatched" {
+  CLAUDECODE=1 run b claim --role tester
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"the hook claims the budget when compasso:tester is dispatched"* ]] || false
+  [ ! -s "$RUN/budget.jsonl" ]
+  CLAUDECODE=1 run b claim --role tester --hook
+  [ "$status" -eq 0 ]
+  run b claim --role tester
+  [ "$status" -eq 0 ]
+  [ "$(wc -l < "$RUN/budget.jsonl" | tr -d ' ')" = 2 ]
+}
+
+@test "reset --role gives one role its runs back and keeps the others'" {
+  b claim --role reviewer >/dev/null; b claim --role reviewer >/dev/null; b claim --role tester >/dev/null
+  "$ROOT/bin/budget.sh" reset --run "$RUN" --role reviewer >/dev/null
+  [ "$(jq -sc 'map(.role)' "$RUN/budget.jsonl")" = '["tester"]' ]
+  run b claim --role reviewer
+  [ "$status" -eq 0 ]
+}
+
 @test "show lists runs used and left; an unknown role is refused" {
   b claim --role security >/dev/null
   run b show

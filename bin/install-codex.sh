@@ -16,6 +16,7 @@
 # and marked files of skills or roles that no longer exist are removed.
 # Exit: 0 | 1 refused or failed
 set -u
+case "${1:-}" in -h|--help) sed -n '2,/^set -u/s/^# \{0,1\}//p' "$0"; exit 0 ;; esac   # the header above is the help
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 HOME_DIR="${COMPASSO_HOME:-$HOME/.compasso}" SKILLS="${CODEX_SKILLS_DIR:-$HOME/.agents/skills}" REPO=""

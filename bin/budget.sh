@@ -2,9 +2,11 @@
 # Strict orchestration: a budget of agent runs for one flow run (a story, a plan, a review...).
 #
 #   budget.sh claim --repo R --run DIR --role ROLE   before every dispatch of an agent, and before
-#                                                    continuing one: records the run, or refuses it
+#                                                    continuing one: records the run, or refuses it.
+#                                                    On Claude Code the hook claims (--hook) and a claim by
+#                                                    hand is refused: it would spend a second run
 #   budget.sh show  --repo R --run DIR               runs used and left, per role
-#   budget.sh reset --run DIR                        start the budget again: a person's decision only
+#   budget.sh reset --run DIR [--role ROLE]          start the budget again, or one role's: a person's decision only
 #
 # The limits are limits.agent_runs in .compasso/project.yaml: per role, and a total for every role
 # together. Claims are kept in DIR/budget.jsonl, so a flow that is restarted continues the same budget
@@ -12,15 +14,17 @@
 # bounded: no agent loops without end, and none can start another.
 # Exit: 0 claimed | 3 refused (the flow stops and hands back) | 1 usage or config
 set -u
+case "${1:-}" in -h|--help) sed -n '2,/^set -u/s/^# \{0,1\}//p' "$0"; exit 0 ;; esac   # the header above is the help
 
 BIN="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CMD="${1:-}"; shift || true
-REPO="." RUN="" ROLE=""
+REPO="." RUN="" ROLE="" HOOK=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --repo) REPO="$2"; shift 2 ;;
     --run) RUN="$2"; shift 2 ;;
     --role) ROLE="$2"; shift 2 ;;
+    --hook) HOOK=1; shift ;;
     *) echo "budget: unknown argument '$1'" >&2; exit 1 ;;
   esac
 done
@@ -32,6 +36,9 @@ used() { [ -f "$LEDGER" ] && jq -s --arg r "${1:-}" 'if $r == "" then length els
 case "$CMD" in
   claim)
     [ -n "$ROLE" ] || { echo "budget: claim needs --role" >&2; exit 1; }
+    # Claude Code sets CLAUDECODE in its sessions' commands; Codex claims by hand, as its hook only checks
+    [ "${CLAUDECODE:-}" != 1 ] || [ "$HOOK" -eq 1 ] ||
+      { echo "budget: not claimed - on Claude Code the hook claims the budget when compasso:$ROLE is dispatched (with the run folder in its prompt); a claim by hand would spend a second run" >&2; exit 1; }
     lim="$(limits)"
     cap="$(jq -r --arg r "$ROLE" '.[$r] // empty' <<<"$lim")"
     [ -n "$cap" ] && [ "$ROLE" != total ] || { echo "budget: unknown role '$ROLE'" >&2; exit 1; }
@@ -50,6 +57,11 @@ case "$CMD" in
       to_entries[] | select(.key != "total") | "\(.key): \($u[.key] // 0) of \(.value)"' <<<"$lim"
     echo "all roles: $(used) of $(jq -r .total <<<"$lim")" ;;
   reset)
-    rm -f "$LEDGER" && echo "budget: reset for $RUN" ;;
+    if [ -n "$ROLE" ]; then
+      [ -f "$LEDGER" ] || { echo "budget: nothing to reset in $RUN"; exit 0; }
+      jq -c --arg r "$ROLE" 'select(.role != $r)' "$LEDGER" > "$LEDGER.tmp" && mv "$LEDGER.tmp" "$LEDGER" && echo "budget: $ROLE reset for $RUN"
+    else
+      rm -f "$LEDGER" && echo "budget: reset for $RUN"
+    fi ;;
   *) echo "usage: budget.sh claim|show|reset --run DIR ..." >&2; exit 1 ;;
 esac

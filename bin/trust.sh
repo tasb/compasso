@@ -16,6 +16,7 @@
 # F is the JSON from `tracker.sh story`; --plan takes every story in .compasso/plan.yaml.
 # Exit: 0 all approved | 3 some not approved (check; listed on stdout) | 1 failure | 2 usage
 set -u
+case "${1:-}" in -h|--help) sed -n '2,/^set -u/s/^# \{0,1\}//p' "$0"; exit 0 ;; esac   # the header above is the help
 
 CMD="${1:-}"; shift || true
 REPO="." STORY="" PLAN=0

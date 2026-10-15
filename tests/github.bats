@@ -219,6 +219,18 @@ story_fixture() {
   [ "$(calls 'POST repos/acme/app/pulls')" -eq 0 ]
 }
 
+@test "followup: a failed attach is tried again; when it keeps failing the follow-up is still returned, with a warning" {
+  issue 6 "Feature" open '["type::feature"]' '' 1
+  echo "x" > "$BATS_TEST_TMPDIR/f.md"
+  n="$(FAKE_GH_FAIL_ONCE="POST repos/acme/app/issues/6/sub_issues" gh_ followup --parent 6 --title "Rename helper" --body-file "$BATS_TEST_TMPDIR/f.md")"
+  [ "$(cat "$FAKE_GH/parent/$n")" = 6 ]
+  FAKE_GH_FAIL="POST repos/acme/app/issues/6/sub_issues" run gh_ followup --parent 6 --title "Again" --body-file "$BATS_TEST_TMPDIR/f.md"
+  [ "$status" -eq 0 ]
+  n="$(tail -1 <<<"$output")"
+  [ -f "$FAKE_GH/issues/$n.json" ] && [ ! -e "$FAKE_GH/parent/$n" ]
+  [[ "$output" == *"created #$n but could not attach it to #6: attach it by hand"* ]] || false
+}
+
 @test "followup: a sub-issue of the parent, in its milestone unless --milestone none" {
   issue 6 "Feature" open '["type::feature"]' '' 1
   echo '[{"number":1,"title":"S20"}]' > "$FAKE_GH/milestones.json"

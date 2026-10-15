@@ -31,6 +31,7 @@
 # Exit: 0 ok | 1 config/usage | 2 not logged in | 3 project not found or no access
 #       4 role below Developer | 5 tier cannot be detected (set tracker.tier)
 set -u
+case "${1:-}" in -h|--help) sed -n '2,/^set -u/s/^# \{0,1\}//p' "$0"; exit 0 ;; esac   # the header above is the help
 
 BIN="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CMD="${1:-}"; shift || true
@@ -441,18 +442,41 @@ open_mr() {
 }
 
 followup() {
-  local res pj ms
+  local res pj ms new target tj epic why errs try
   need PARENT TITLE BODY
   pj="$(api "projects/$PID/issues/$PARENT")"
   [ -n "$(jq -r '.iid // empty' <<<"$pj" 2>/dev/null)" ] || { echo "gitlab: no work item #$PARENT" >&2; return 1; }
   # the parent's sprint, unless --milestone none puts it in the backlog for a later sprint
   ms=""; [ "$MILESTONE" = none ] || ms="$(jq -r '.milestone.id // ""' <<<"$pj")"
+  # GitLab allows no Task under a Task: a story's follow-up goes to its feature, else to its sprint's epic
+  tj="$pj"
+  if [ "$(jq -r .issue_type <<<"$pj")" = task ]; then
+    target="$(parent_iid "$(jq -r .id <<<"$pj")")"
+    if [ -z "$target" ] && [ -n "$(jq -r '.milestone.title // ""' <<<"$pj")" ]; then
+      epic="$(api "projects/$PID/issues?milestone=$(jq -r .milestone.title <<<"$pj")&labels=type::epic&state=all" | jq -r '.[0].iid // empty')"
+      target="$epic"
+    fi
+    tj=""; [ -z "$target" ] || tj="$(api "projects/$PID/issues/$target")" || tj=""
+  fi
   res="$(upsert_issue "" "$TITLE" "$(cat "$BODY")" "$ms" task "" $(printf '%s' "$LABELS_ARG" | tr ',' ' '))"
   [ -n "$res" ] || { echo "gitlab: could not create the follow-up" >&2; return 1; }
-  api graphql -f query="mutation { workItemUpdate(input: { id: \"gid://gitlab/WorkItem/${res#* }\", hierarchyWidget: { parentId: \"gid://gitlab/WorkItem/$(jq -r .id <<<"$pj")\" } }) { errors } }" |
-    jq -e '(.data.workItemUpdate.errors // ["no response"]) | length == 0' >/dev/null ||
-    { echo "gitlab: created #${res% *} but could not attach it to #$PARENT" >&2; return 1; }
-  echo "${res% *}"
+  new="${res% *}"
+  # the follow-up exists from here on: it is always returned, so a caller never files it twice
+  if [ -n "$tj" ]; then
+    for try in 1 2 3; do   # a transient error (GitLab's "Internal server error") is tried again
+      errs="$(api graphql -f query="mutation { workItemUpdate(input: { id: \"gid://gitlab/WorkItem/${res#* }\", hierarchyWidget: { parentId: \"gid://gitlab/WorkItem/$(jq -r .id <<<"$tj")\" } }) { errors } }" 2>&1 |
+        jq -r 'if .data.workItemUpdate then (.data.workItemUpdate.errors | join("; ")) else "no response" end' 2>/dev/null)" || errs="no response"
+      [ -n "$errs" ] || { echo "$new"; return 0; }
+      [ "$try" -eq 3 ] || sleep 1
+    done
+    why="could not attach #$new to #$(jq -r .iid <<<"$tj") ($errs)"
+  else
+    why="#$PARENT has no feature or epic to attach #$new to"
+  fi
+  api -X POST "projects/$PID/issues/$new/links" -f target_project_id="$(api "projects/$PID" | jq -r .id)" -f target_issue_iid="$PARENT" -f link_type=relates_to >/dev/null &&
+    echo "gitlab: $why; linked to #$PARENT instead" >&2 ||
+    echo "gitlab: $why, and could not link it to #$PARENT either: attach it by hand" >&2
+  echo "$new"
 }
 
 merge() {

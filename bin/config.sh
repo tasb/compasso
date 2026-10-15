@@ -8,6 +8,7 @@
 #
 # Exit: 0 ok | 1 invalid or failure | 3 no config file
 set -u
+case "${1:-}" in -h|--help) sed -n '2,/^set -u/s/^# \{0,1\}//p' "$0"; exit 0 ;; esac   # the header above is the help
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ROLES="planner tester builder reviewer security approver shipper mutator finops"

@@ -120,6 +120,44 @@ calls() { grep -c -- "$1" "$FAKE_GL/calls.log" || true; }
   [ "$(cat "$FAKE_GL/parent/$((1000 + output))")" = 1006 ]
 }
 
+@test "followup: a story's follow-up goes to the story's feature: GitLab allows no Task under a Task" {
+  echo "x" > "$BATS_TEST_TMPDIR/f.md"
+  run gl followup --parent 8 --title "Rename helper" --body-file "$BATS_TEST_TMPDIR/f.md"
+  [ "$status" -eq 0 ]
+  [ "$(cat "$FAKE_GL/parent/$((1000 + output))")" = 1006 ]
+}
+
+@test "followup: a story with no feature: the follow-up goes to the sprint's epic" {
+  issue 9 task "Loose story" opened "x"; issue 12 issue "S20: goal" opened "**Goal:** g"
+  echo "x" > "$BATS_TEST_TMPDIR/f.md"
+  run gl followup --parent 9 --title "Rename helper" --body-file "$BATS_TEST_TMPDIR/f.md"
+  [ "$status" -eq 0 ]
+  [ "$(cat "$FAKE_GL/parent/$((1000 + output))")" = 1012 ]
+}
+
+@test "followup: with no issue to attach to, it is linked to the story, said, and its iid still returned" {
+  issue 9 task "Loose story" opened "x"; echo '[]' > "$FAKE_GL/epic-query.json"
+  echo "x" > "$BATS_TEST_TMPDIR/f.md"
+  run gl followup --parent 9 --title "Rename helper" --body-file "$BATS_TEST_TMPDIR/f.md"
+  [ "$status" -eq 0 ]
+  n="$(tail -1 <<<"$output")"
+  [ ! -e "$FAKE_GL/parent/$((1000 + n))" ]
+  grep -q "POST projects/acme%2Fapp/issues/$n/links target_project_id=7 target_issue_iid=9 link_type=relates_to" "$FAKE_GL/calls.log"
+  [[ "$output" == *"#9 has no feature or epic to attach #$n to; linked to #9 instead"* ]] || false
+}
+
+@test "followup: a failed attach is tried again; when it keeps failing, GitLab's error is shown and the follow-up is linked instead" {
+  echo "x" > "$BATS_TEST_TMPDIR/f.md"
+  FAKE_GL_FAIL_ONCE="POST graphql" run gl followup --parent 6 --title "Rename helper" --body-file "$BATS_TEST_TMPDIR/f.md"
+  [ "$status" -eq 0 ]
+  [ "$(cat "$FAKE_GL/parent/$((1000 + output))")" = 1006 ]
+  FAKE_GL_GQL_ERROR="Internal server error" run gl followup --parent 6 --title "Again" --body-file "$BATS_TEST_TMPDIR/f.md"
+  [ "$status" -eq 0 ]
+  n="$(tail -1 <<<"$output")"
+  [[ "$output" == *"could not attach #$n to #6 (Internal server error); linked to #6 instead"* ]] || false
+  grep -q "POST projects/acme%2Fapp/issues/$n/links target_project_id=7 target_issue_iid=6 link_type=relates_to" "$FAKE_GL/calls.log"
+}
+
 # ---------- merge ----------
 
 findings() { echo "$1" > "$BATS_TEST_TMPDIR/findings.json"; }

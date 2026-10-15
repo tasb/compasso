@@ -12,6 +12,7 @@
 # The result is checked before it replaces O: on any failure O is left as it was and the exit is 1.
 # Exit: 0 written | 1 failed | 2 usage
 set -u
+case "${1:-}" in -h|--help) sed -n '2,/^set -u/s/^# \{0,1\}//p' "$0"; exit 0 ;; esac   # the header above is the help
 T="" M="" F="" L="en" TITLE="" OUT=""
 while [ $# -gt 0 ]; do
   case "$1" in
