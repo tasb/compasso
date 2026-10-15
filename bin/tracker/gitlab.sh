@@ -5,11 +5,14 @@
 #   gitlab.sh ensure-labels --repo R   create Compasso's labels that are missing (idempotent)
 #   gitlab.sh push-plan     --repo R   create or update .compasso/plan.yaml in GitLab; ids are written back
 #   gitlab.sh story         --repo R --iid N                      a story, its resolved coverage and open dependencies -> JSON
-#   gitlab.sh set-state     --repo R --iid N --state S            S: building | in-review; drops the other compasso:: states
+#   gitlab.sh set-state     --repo R --iid N --state S            S: backlog | building | in-review; drops the other compasso:: states
 #   gitlab.sh open-mr       --repo R --iid N --branch B --body-file F [--target T]  create or update the story's MR -> JSON {iid, web_url}
 #   gitlab.sh followup      --repo R --parent N --title T --body-file F [--labels a,b]  a task under N (a minor finding, a bug) -> iid
-#   gitlab.sh merge         --repo R --mr N --body-file F [--risk R]  merge when the pipeline succeeds (approvals.merge agent, or risk with a low-risk R)
+#   gitlab.sh merge         --repo R --mr N --body-file F [--risk R]  merge when the pipeline succeeds (approvals.merge agent, or risk with a low-risk R;
+#                                                                 in a team project the tech lead, through bin/team.sh, which decided who approves)
 #   gitlab.sh mr-info       --repo R --mr N                       branches, author and the issues it closes -> JSON
+#   gitlab.sh mr-of         --repo R --iid N                      the story's open merge request -> {iid, source_branch, target_branch, web_url}
+#   gitlab.sh mr-events     --repo R --mr N                       comments and approvals, oldest first -> [{kind, by, at, body, member}]
 #   gitlab.sh comment       --repo R --mr N|--iid N --body-file F  post F as a comment on a merge request or an issue
 #   gitlab.sh sprint-sync   --repo R [--milestone S20] [--parent F] what can be built now, what waits and on whom -> JSON
 #   gitlab.sh merge-commit  --repo R --iid N                      the commit the story's merge request put on the default branch
@@ -20,9 +23,10 @@
 # The primitives bin/team.sh builds assignment, claims and messages on (never run through tracker.sh):
 #   gitlab.sh labels        --repo R                              every label name -> JSON
 #   gitlab.sh label-create  --repo R --name L [--title DESC]      create one label
-#   gitlab.sh label         --repo R --iid N [--add a,b] [--remove c,d]
-#   gitlab.sh comments      --repo R --iid N                      [{id, body, author, at, member}], oldest first
+#   gitlab.sh label         --repo R --iid N|--mr N [--add a,b] [--remove c,d]
+#   gitlab.sh comments      --repo R --iid N|--mr N               [{id, body, author, at, member}], oldest first
 #   gitlab.sh comment-delete --repo R --iid N --id ID
+#   gitlab.sh comment-edit  --repo R --iid N|--mr N --id ID --body-file F   (bin/mr-report.sh)
 #
 # Exit: 0 ok | 1 config/usage | 2 not logged in | 3 project not found or no access
 #       4 role below Developer | 5 tier cannot be detected (set tracker.tier)
@@ -56,6 +60,9 @@ while [ $# -gt 0 ]; do
 done
 
 "$BIN/config.sh" validate --repo "$REPO" >/dev/null || exit 1
+# this agent's own tracker account, when it has one (bin/persona.sh account); else the machine's login
+acct="$("$BIN/persona.sh" env --repo "$REPO")" || { echo "gitlab: cannot read this checkout's account token" >&2; exit 2; }
+eval "$acct"
 cfg() { "$BIN/config.sh" get --repo "$REPO" "$1"; }
 HOST="$(cfg .tracker.host)"
 PROJECT="$(cfg .tracker.project)"
@@ -403,7 +410,7 @@ story() {
 }
 
 set_state() {
-  local all="compasso::new compasso::building compasso::in-review compasso::verifying compasso::done"
+  local all="compasso::new compasso::backlog compasso::building compasso::in-review compasso::verifying compasso::done"
   need IID STATE
   case " $all " in *" compasso::$STATE "*) : ;; *) echo "gitlab: unknown state '$STATE'" >&2; return 1 ;; esac
   api -X PUT "projects/$PID/issues/$IID" -f add_labels="compasso::$STATE" \
@@ -451,16 +458,19 @@ followup() {
 merge() {
   local mode
   need MR
-  mode="$(cfg .approvals.merge)"
-  case "$mode" in agent|risk) ;; *) echo "gitlab: approvals.merge is human - a person merges this merge request" >&2; return 1 ;; esac
+  mode="$(cfg .approvals.merge)"; [ "$TEAM" = true ] && mode=team   # approvals.merge is not used in a team project
+  case "$mode" in agent|risk|team) ;; *) echo "gitlab: approvals.merge is human - a person merges this merge request" >&2; return 1 ;; esac
   [ -n "$BODY" ] && [ -f "$BODY" ] || { echo "gitlab: merge needs --body-file with the review findings" >&2; return 1; }
   "$BIN/review-gate.sh" --findings "$BODY" --for merge || return 1
   if [ "$mode" = risk ]; then
     [ -n "$RISK" ] && [ -f "$RISK" ] || { echo "gitlab: approvals.merge is risk - merge needs --risk with risk.sh's decision" >&2; return 1; }
     [ "$(jq -r .level "$RISK")" = low ] || { echo "gitlab: the change is high risk - a person merges it" >&2; return 1; }
   fi
-  api -X PUT "projects/$PID/merge_requests/$MR" -f add_labels=compasso::auto-merged >/dev/null ||
-    { echo "gitlab: could not label !$MR" >&2; return 1; }
+  # merged without a person: the daily digest lists it (a team's tech lead passes --risk only then)
+  if [ "$mode" != team ] || { [ -n "$RISK" ] && [ "$(jq -r .level "$RISK" 2>/dev/null)" = low ]; }; then
+    api -X PUT "projects/$PID/merge_requests/$MR" -f add_labels=compasso::auto-merged >/dev/null ||
+      { echo "gitlab: could not label !$MR" >&2; return 1; }
+  fi
   api -X PUT "projects/$PID/merge_requests/$MR/merge" -f merge_when_pipeline_succeeds=true >/dev/null ||
     { echo "gitlab: could not merge !$MR" >&2; return 1; }
   echo "gitlab: !$MR merges when its pipeline succeeds"
@@ -474,6 +484,31 @@ mr_info() {
   [ -n "$(jq -r '.iid // empty' <<<"$mr" 2>/dev/null)" ] || { echo "gitlab: no merge request !$MR in $PROJECT" >&2; return 1; }
   closes="$(api "projects/$PID/merge_requests/$MR/closes_issues" | jq -c '[.[].iid]')" || closes='[]'
   jq -c --argjson closes "$closes" '{iid, title, state, source_branch, target_branch, web_url, author: .author.username, draft, closes: $closes}' <<<"$mr"
+}
+
+mr_of() { # the open merge request that closes a story
+  local m
+  need IID
+  m="$(api "projects/$PID/issues/$IID/related_merge_requests" |
+    jq -c --arg c "Closes #$IID" '[.[] | select(.state == "opened" and ((.description // "") | contains($c)))][0] // empty
+      | {iid, source_branch, target_branch, web_url}')"
+  [ -n "$m" ] || { echo "gitlab: #$IID has no open merge request" >&2; return 1; }
+  echo "$m"
+}
+
+mr_events() { # a merge request's comments and approvals, oldest first; GitLab writes an approval as a system note
+  local notes members='{}' a
+  need MR
+  notes="$(api --paginate "projects/$PID/merge_requests/$MR/notes?sort=asc&per_page=100" | jq -s -c 'add // []')" ||
+    { echo "gitlab: cannot read the notes of !$MR" >&2; return 1; }
+  for a in $(jq -r '[.[].author.id] | unique | .[]' <<<"$notes"); do
+    if api "projects/$PID/members/all/$a" >/dev/null 2>&1; then members="$(jq -c --arg a "$a" '.[$a] = true' <<<"$members")"; fi
+  done
+  jq -c --argjson m "$members" 'sort_by(.id) | map(
+      (if .system then ({"approved this merge request": "approved", "unapproved this merge request": "unapproved"}[.body // ""] // null)
+       else "comment" end) as $k | select($k != null)
+      | {kind: $k, by: .author.username, at: .created_at, body: (if .system then "" else (.body // "") end),
+         member: ($m[.author.id | tostring] // false)})' <<<"$notes"
 }
 
 comment() { # on a merge request (--mr) or an issue (--iid)
@@ -594,17 +629,22 @@ label_create() {
     { echo "gitlab: could not create label $NAME" >&2; return 1; }
   echo "gitlab: label $NAME created"
 }
-label_cmd() { # --add and --remove take comma-separated labels
-  need IID
-  api -X PUT "projects/$PID/issues/$IID" ${ADD:+-f "add_labels=$ADD"} ${REMOVE:+-f "remove_labels=$REMOVE"} >/dev/null ||
-    { echo "gitlab: could not label #$IID" >&2; return 1; }
-  echo "gitlab: #$IID labels updated"
+label_cmd() { # --add and --remove take comma-separated labels; on an issue (--iid) or a merge request (--mr)
+  local on where
+  if [ -n "$MR" ]; then on="merge_requests/$MR"; where="!$MR"; else need IID; on="issues/$IID"; where="#$IID"; fi
+  api -X PUT "projects/$PID/$on" ${ADD:+-f "add_labels=$ADD"} ${REMOVE:+-f "remove_labels=$REMOVE"} >/dev/null ||
+    { echo "gitlab: could not label $where" >&2; return 1; }
+  echo "gitlab: $where labels updated"
+}
+notes_of() { # the issue's (--iid) or the merge request's (--mr) notes path
+  if [ -n "$MR" ]; then echo "merge_requests/$MR"; elif [ -n "$IID" ]; then echo "issues/$IID"
+  else echo "gitlab: $CMD needs --iid or --mr" >&2; return 1; fi
 }
 comments() { # oldest first; member: the tracker says a project member wrote it
-  local notes members='{}' a
-  need IID
-  notes="$(api --paginate "projects/$PID/issues/$IID/notes?sort=asc&per_page=100" | jq -s -c 'add // [] | map(select(.system | not))')" ||
-    { echo "gitlab: cannot read the comments of #$IID" >&2; return 1; }
+  local notes members='{}' a on
+  on="$(notes_of)" || return 1
+  notes="$(api --paginate "projects/$PID/$on/notes?sort=asc&per_page=100" | jq -s -c 'add // [] | map(select(.system | not))')" ||
+    { echo "gitlab: cannot read the comments of ${MR:+!$MR}${IID:+#$IID}" >&2; return 1; }
   for a in $(jq -r '[.[].author.id] | unique | .[]' <<<"$notes"); do
     if api "projects/$PID/members/all/$a" >/dev/null 2>&1; then members="$(jq -c --arg a "$a" '.[$a] = true' <<<"$members")"; fi
   done
@@ -615,6 +655,12 @@ comment_delete() {
   need IID ID
   api -X DELETE "projects/$PID/issues/$IID/notes/$ID" >/dev/null || { echo "gitlab: could not delete comment $ID" >&2; return 1; }
 }
+comment_edit() {
+  local on
+  need ID BODY; on="$(notes_of)" || return 1
+  [ -f "$BODY" ] || { echo "gitlab: no body file $BODY" >&2; return 1; }
+  api -X PUT "projects/$PID/$on/notes/$ID" -f body="$(cat "$BODY")" >/dev/null || { echo "gitlab: could not edit comment $ID" >&2; return 1; }
+}
 
 case "$CMD" in
   labels) labels_cmd ;;
@@ -622,6 +668,7 @@ case "$CMD" in
   label) label_cmd ;;
   comments) comments ;;
   comment-delete) comment_delete ;;
+  comment-edit) comment_edit ;;
   check) check ;;
   ensure-labels) ensure_labels ;;
   push-plan) push_plan ;;
@@ -632,6 +679,8 @@ case "$CMD" in
   followup) followup ;;
   merge) merge ;;
   mr-info) mr_info ;;
+  mr-of) mr_of ;;
+  mr-events) mr_events ;;
   comment) comment ;;
   sprint-sync) sprint_sync ;;
   merge-commit) merge_commit ;;

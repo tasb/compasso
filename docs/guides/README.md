@@ -22,7 +22,7 @@ Not sure? Run `/compasso:start`: it looks at what the repository holds and tells
 ## What every path shares
 
 - **Setup first.** `/compasso:setup` connects GitLab or GitHub. No other command runs until the tracker check passes.
-- **You approve.** A person approves every plan and, by default, every merge. Security review runs on every plan and every merge request and is never skipped.
+- **You approve.** A person approves every plan and, by default, every merge. A team's tech lead merges for you, and asks you only when the risk needs it. Security review runs on every plan and every merge request and is never skipped.
 - **Small work.** A story is at most one day (target half a day), a feature at most half a sprint, an epic one sprint.
 - **Files in the repository.** The brief, backlog, roadmap and plan live in `.compasso/`, each with a decision record, and reach the default branch through a merge request.
 

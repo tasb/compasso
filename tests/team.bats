@@ -76,12 +76,18 @@ join() { "$ROOT/bin/persona.sh" join --repo "$1"; }
 
 # ---------- assignment ----------
 
-@test "assign: one developer's label, the other's removed; none takes the work back" {
+@test "assign: one developer's label, the other's removed, and compasso::backlog; none takes the work back" {
   run team "$REPO" assign --iid 14 --dev ana
   [ "$status" -eq 0 ]
-  [ "$(labels_of 14)" = '["dev::ana"]' ]
+  [ "$(labels_of 14)" = '["compasso::backlog","dev::ana"]' ]
   team "$REPO" assign --iid 14 --dev none >/dev/null
   [ "$(labels_of 14)" = '[]' ]
+}
+
+@test "assign: work being built or in review goes back to the backlog of the developer it moves to" {
+  issue 14 "Status filter" '["dev::rui","compasso::in-review"]' $'**Tests:** unit' 6
+  team "$REPO" assign --iid 14 --dev ana >/dev/null
+  [ "$(labels_of 14)" = '["compasso::backlog","dev::ana"]' ]
 }
 
 @test "assign: only the tech lead, and only to a developer in the team" {

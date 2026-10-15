@@ -51,6 +51,18 @@ findings() { echo "$1" > "$BATS_TEST_TMPDIR/f.json"; "$ROOT/bin/review-gate.sh" 
   [ "$status" -eq 0 ]
 }
 
+@test "review-gate: security may defer a minor finding, and only security, and never a blocker or major" {
+  run findings '[{"by":"security","severity":"minor","status":"followup","verified_by":"security","summary":"verbose error"}]' --for merge
+  [ "$status" -eq 0 ]
+  run findings '[{"by":"security","severity":"minor","status":"followup","summary":"verbose error"}]' --for merge
+  [ "$status" -eq 1 ]
+  run findings '[{"by":"security","severity":"major","status":"followup","verified_by":"security","summary":"sql injection"}]' --for merge
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"[security/major] sql injection"* ]] || false
+  run findings '[{"by":"security","severity":"blocker","status":"followup","verified_by":"security","summary":"rce"}]' --for review
+  [ "$status" -eq 1 ]
+}
+
 @test "review-gate: malformed findings exit 2" {
   run findings '[{"by":"someone","severity":"major","status":"open","summary":"x"}]'
   [ "$status" -eq 2 ]

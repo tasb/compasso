@@ -25,6 +25,7 @@ while [ $# -gt 0 ]; do
 done
 [ -n "$method" ] || { [ -n "$fields${desc+x}" ] && method=POST || method=GET; }  # glab: POST once fields are given
 echo "$method $path$fields" >> "$D/calls.log"
+printf '%s' "${GITLAB_TOKEN:-}" > "$D/token"
 [ -n "${FAKE_GL_FAIL:-}" ] && case "$method $path" in $FAKE_GL_FAIL) echo '{"message":"500"}'; exit 1 ;; esac
 
 next_iid() { n="$(cat "$D/next_iid" 2>/dev/null || echo 1)"; echo $((n + 1)) > "$D/next_iid"; echo "$n"; }
@@ -60,6 +61,17 @@ case "$method $path" in
   "GET projects/"*"/issues?"*)   # per-milestone lists live in issues-<milestone>.json
     m="$(printf '%s' "$path" | sed -n 's/.*milestone=\([^&]*\).*/\1/p')"
     if [ -n "$m" ] && [ -f "$D/issues-$m.json" ]; then cat "$D/issues-$m.json"; else cat "$D/issue-query.json" 2>/dev/null || echo '[]'; fi ;;
+  "POST projects/"*"/merge_requests/"*"/notes")   # notes/mr-<iid>.json, as an issue's
+    i="${path%/notes}"; i="${i##*/}"; mkdir -p "$D/notes"
+    id="$(cat "$D/next_note" 2>/dev/null || echo 900)"; echo $((id + 1)) > "$D/next_note"
+    [ -f "$D/notes/mr-$i.json" ] || echo '[]' > "$D/notes/mr-$i.json"
+    jq --argjson id "$id" --arg b "${f_body:-}" --argjson a "${FAKE_GL_AUTHOR:-77}" \
+      '. + [{id: $id, body: $b, system: false, author: {id: $a, username: "user\($a)"}, created_at: "2026-10-06T09:00:00Z"}]' "$D/notes/mr-$i.json" > "$D/tmp" && mv "$D/tmp" "$D/notes/mr-$i.json"
+    echo "{\"id\":$id}" ;;
+  "GET projects/"*"/merge_requests/"*"/notes"*) i="${path%/notes*}"; i="${i##*/}"; cat "$D/notes/mr-$i.json" 2>/dev/null || echo '[]' ;;
+  "PUT projects/"*"/merge_requests/"*"/notes/"*)
+    i="${path%/notes/*}"; i="${i##*/}"
+    jq --argjson id "${path##*/}" --arg b "${f_body:-}" 'map(if .id == $id then .body = $b else . end)' "$D/notes/mr-$i.json" > "$D/tmp" && mv "$D/tmp" "$D/notes/mr-$i.json"; echo '{}' ;;
   "GET projects/"*"/merge_requests?"*) cat "$D/mr-query.json" 2>/dev/null || echo '[]' ;;
   "GET projects/"*"/merge_requests/"*"/closes_issues") cat "$D/closes.json" 2>/dev/null || echo '[]' ;;
   "GET projects/"*"/merge_requests/"*) cat "$D/mr-${path##*/}.json" 2>/dev/null || { echo '{"message":"404"}'; exit 1; } ;;

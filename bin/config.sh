@@ -10,7 +10,7 @@
 set -u
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-ROLES="planner tester builder reviewer security approver shipper mutator"
+ROLES="planner tester builder reviewer security approver shipper mutator finops"
 FLOOR_ROLES="security approver"   # may never run on a fast-tier model or low effort
 
 CMD="${1:-}"; shift || true
@@ -78,7 +78,7 @@ validate() {
   else
     err "limits.story_target_hours must be a positive integer"
   fi
-  for k in tester builder reviewer security approver shipper mutator total; do
+  for k in tester builder reviewer security approver shipper mutator finops total; do
     v="$(val ".limits.agent_runs.$k")"
     is_int "$v" && [ "$v" -gt 0 ] || err "limits.agent_runs.$k must be a positive integer (run: config.sh upgrade)"
   done
@@ -105,10 +105,20 @@ validate() {
   case "$(val .approvals.merge)" in human|agent|risk) : ;; *) err "approvals.merge must be human, agent or risk" ;; esac
   v="$(val .risk.max_changed_lines)"
   [ -z "$v" ] || { is_int "$v" && [ "$v" -ge 1 ]; } || err "risk.max_changed_lines must be a positive number"
+  case "$(val .stage)" in ""|mvp|production) ;; *) err "stage must be mvp or production" ;; esac
+  for k in sensitive_paths product_paths infra_paths production_paths; do
+    case "$(yq -r ".risk.$k | tag" "$CFG")" in '!!seq'|'!!null') ;; *) err "risk.$k must be a list of globs" ;; esac
+  done
 
   case "$(yq -r '.team.enabled' "$CFG")" in true|false) ;; *) err "team.enabled must be true or false (run: config.sh upgrade)" ;; esac
   v="$(val .team.poll_minutes)"
   is_int "$v" && [ "$v" -ge 1 ] && [ "$v" -le 1440 ] || err "team.poll_minutes must be an integer from 1 to 1440 (run: config.sh upgrade)"
+  v="$(val .team.lead_poll_minutes)"
+  is_int "$v" && [ "$v" -ge 1 ] && [ "$v" -le 1440 ] || err "team.lead_poll_minutes must be an integer from 1 to 1440 (run: config.sh upgrade)"
+  v="$(val .team.queue.target)"; m="$(val .team.queue.min)"
+  is_int "$v" && [ "$v" -ge 1 ] || err "team.queue.target must be a positive integer (run: config.sh upgrade)"
+  is_int "$m" && [ "$m" -ge 1 ] && { ! is_int "$v" || [ "$m" -le "$v" ]; } || err "team.queue.min must be at least 1 and at most team.queue.target"
+  [ "$(yq -r '.team.agents | tag' "$CFG")" = '!!seq' ] || err "team.agents must be a list of logins (run: config.sh upgrade)"
 
   [ "$(yq -r '.harnesses | length' "$CFG")" -ge 1 ] 2>/dev/null || err "harnesses must list claude and/or codex"
   for h in $(yq -r '.harnesses[]?' "$CFG"); do

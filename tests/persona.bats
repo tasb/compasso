@@ -86,14 +86,27 @@ team_on() { cfg_set '.team.enabled = true'; }
   team_on; p set --persona developer --name ana >/dev/null
   for s in setup start status story sprint review work; do p gate --skill "$s"; done
   for s in discover backlog architect roadmap plan feature harden report present; do run p gate --skill "$s"; [ "$status" -eq 6 ]; done
-  for c in set-state open-mr followup comment merge sprint-sync story; do p gate --tracker "$c"; done
+  for c in set-state open-mr followup comment sprint-sync story; do p gate --tracker "$c"; done
   for c in push-plan push-backlog ensure-labels protect; do run p gate --tracker "$c"; [ "$status" -eq 6 ]; done
 }
 
 @test "gate: the label and comment-delete primitives are never run through tracker.sh, by any persona" {
-  for c in label label-create comment-delete; do run p gate --tracker "$c"; [ "$status" -eq 6 ]; done
+  for c in label label-create comment-delete comment-edit; do run p gate --tracker "$c"; [ "$status" -eq 6 ]; done
   team_on; p set --persona tech-lead >/dev/null
-  for c in label label-create comment-delete; do run p gate --tracker "$c"; [ "$status" -eq 6 ]; done
+  for c in label label-create comment-delete comment-edit; do run p gate --tracker "$c"; [ "$status" -eq 6 ]; done
+}
+
+@test "gate: in a team project nobody merges through tracker.sh: the tech lead merges through team.sh; elsewhere merge is open" {
+  run p gate --tracker merge
+  [ "$status" -eq 0 ]
+  team_on
+  for who in "tech-lead" "developer --name ana"; do
+    p set --persona $who >/dev/null
+    run p gate --tracker merge
+    [ "$status" -eq 6 ]
+    [[ "$output" == *"team.sh merge"* ]] || false
+  done
+  for c in mr-of mr-events; do run p gate --tracker "$c"; [ "$status" -eq 0 ]; done
 }
 
 @test "tracker.sh applies the gate before it reaches the tracker" {

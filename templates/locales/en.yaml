@@ -58,11 +58,27 @@ text:
   risk_sensitive: "{file} is a sensitive path ({glob})"
   risk_build: "{file} changes the build, the pipeline, the Compasso config or dependencies"
   risk_lines: "{lines} changed lines, over the {max}-line limit"
-  risk_security: "security found {n} blocker or major issue(s) in this story"
+  risk_infra: "{file} changes infrastructure"
+  risk_production_path: "{file} is a production-critical path ({glob})"
+  risk_sensitive_content: "security marked the change sensitive: {what}"
+  risk_cost: "the cost report says {result}"
+  risk_cost_none: "{file} changes infrastructure and its cost was not assessed"
   risk_cov_below: changed-line coverage is below its minimum
   risk_cov_none: changed-line coverage was not measured
   review_title: "**Review** · {n} findings"
   no_findings_cap: No findings
+  data_for_lead: Data for the tech lead
+  cost_title: "**Cost** · finops"
+  cost_result: Result
+  cost_month: "{amount} {currency} a month"
+  cost_add: added
+  cost_change: changed
+  cost_remove: removed
+  cost_assumptions: Assumptions
+  cost_sources: Sources
+  approval_title: "**A person approves this change** before the tech lead merges it:"
+  approval_how_github: "Approve it, or request changes saying what to change. The tech lead merges it after an approval."
+  approval_how_gitlab: "Approve it, or write a comment saying what to change. The tech lead merges it after an approval."
   fix: fix
   blocks: Blocks
   "yes": "yes"

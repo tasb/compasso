@@ -21,7 +21,7 @@
   5. review and security review, fixing tests-first, for at most 3 rounds;
   6. follow-up stories for minor findings, metrics and the decision record;
   7. the merge request.
-- **Merging.** A person merges by default. With `approvals.merge: risk`, low-risk changes merge on their own and a daily digest lists them. A change to a sensitive path, or one over the line limit, always waits for a person, and no mode merges with an open security finding.
+- **Merging.** A person merges by default. With `approvals.merge: risk`, low-risk changes merge on their own and a daily digest lists them. What waits for a person depends on the project's `stage` (in `mvp`, only an infrastructure change whose cost report says `increase` or `unknown`; in `production`, also sensitive paths, a large change to the product's code and the other high-risk reasons), and no mode merges with an open security finding. In a team project the tech lead merges, asking a person when the risk needs one.
 - **Blockers** are assigned to people with step-by-step instructions. Closing one frees the stories it held.
 - **Human-owned stories** stay for a person. `/compasso:status` lists them with their assignee.
 

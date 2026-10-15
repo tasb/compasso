@@ -11,12 +11,14 @@
 #   state       compasso:: labels and the Project's Status field (tracker.github.status)
 #   structure   type:: labels; features are sub-issues of the epic, stories and blockers of their feature
 #   dependency  GitHub's native "blocked by" (depends_on and blocked_by both)
-#   approval    merging is the approval; merge requests are pull requests
+#   approval    merging is the approval; merge requests are pull requests. In a team project a person
+#               approves with a review (Approve, or Request changes), and the tech lead merges
 #
 #   github.sh check | ensure-labels | push-plan | story | set-state | open-mr | followup | merge
-#             | mr-info | comment | sprint-sync | merge-commit | digest | open-mr-branch
+#             | mr-info | mr-of | mr-events | comment | sprint-sync | merge-commit | digest | open-mr-branch
 #             | sprint-items | sprint-done | protect --repo R [options as in gitlab.sh]
-#             | labels | label-create | label | comments | comment-delete   (bin/team.sh's primitives, as in gitlab.sh)
+#             | labels | label-create | label | comments | comment-delete | comment-edit   (bin/team.sh's and
+#               bin/mr-report.sh's primitives, as in gitlab.sh; a pull request's comments are its issue comments)
 #
 # Exit: 0 ok | 1 config/usage/tracker failure | 2 not logged in | 3 repository not found or no access
 #       4 cannot push to the repository
@@ -50,6 +52,9 @@ while [ $# -gt 0 ]; do
 done
 
 "$BIN/config.sh" validate --repo "$REPO" >/dev/null || exit 1
+# this agent's own tracker account, when it has one (bin/persona.sh account); else the machine's login
+acct="$("$BIN/persona.sh" env --repo "$REPO")" || { echo "github: cannot read this checkout's account token" >&2; exit 2; }
+eval "$acct"
 cfg() { "$BIN/config.sh" get --repo "$REPO" "$1"; }
 HOST="$(cfg .tracker.host)"; [ -n "$HOST" ] || HOST=github.com
 R="$(cfg .tracker.project)"; OWNER="${R%%/*}"
@@ -57,7 +62,7 @@ PROJ="$(cfg .tracker.github.project)"; PROJ="${PROJ:-0}"
 LABELS="$(cat "$BIN/tracker/labels.txt")"
 NAMES="$("$BIN/locale.sh" --names)"                   # work-item names in every language, for reading
 LOC="$("$BIN/locale.sh" --repo "$REPO")" || exit 1    # the project's language, for writing
-STATES="new building in-review verifying done"
+STATES="new backlog building in-review verifying done"
 
 # a team project assigns work by dev::<name> labels and uses no owner:: labels (bin/persona.sh, bin/team.sh)
 TEAM=false; [ "$(cfg .team.enabled)" = true ] && TEAM=true
@@ -476,15 +481,18 @@ followup() {
 merge() {
   local mode
   need MR
-  mode="$(cfg .approvals.merge)"
-  case "$mode" in agent|risk) ;; *) echo "github: approvals.merge is human - a person merges this pull request" >&2; return 1 ;; esac
+  mode="$(cfg .approvals.merge)"; [ "$TEAM" = true ] && mode=team   # approvals.merge is not used in a team project
+  case "$mode" in agent|risk|team) ;; *) echo "github: approvals.merge is human - a person merges this pull request" >&2; return 1 ;; esac
   [ -n "$BODY" ] && [ -f "$BODY" ] || { echo "github: merge needs --body-file with the review findings" >&2; return 1; }
   "$BIN/review-gate.sh" --findings "$BODY" --for merge || return 1
   if [ "$mode" = risk ]; then
     [ -n "$RISK" ] && [ -f "$RISK" ] || { echo "github: approvals.merge is risk - merge needs --risk with risk.sh's decision" >&2; return 1; }
     [ "$(jq -r .level "$RISK")" = low ] || { echo "github: the change is high risk - a person merges it" >&2; return 1; }
   fi
-  labels_set "$MR" compasso::auto-merged || { echo "github: could not label #$MR" >&2; return 1; }
+  # merged without a person: the daily digest lists it (a team's tech lead passes --risk only then)
+  if [ "$mode" != team ] || { [ -n "$RISK" ] && [ "$(jq -r .level "$RISK" 2>/dev/null)" = low ]; }; then
+    labels_set "$MR" compasso::auto-merged || { echo "github: could not label #$MR" >&2; return 1; }
+  fi
   gh pr merge "$MR" --repo "$HOST/$R" --auto --merge >/dev/null ||
     { echo "github: could not merge #$MR (is auto-merge allowed on $R?)" >&2; return 1; }
   echo "github: #$MR merges when its checks pass"
@@ -578,7 +586,7 @@ sprint_done() { # hours done in a sprint, or null when the sprint does not exist
 
 closing_prs() { # number -> pull requests that close it: [{number, state, merged, headRefName, mergeCommit}]
   gql -f query="query { repository(owner: \"$OWNER\", name: \"${R#*/}\") { issue(number: $1) {
-      closedByPullRequestsReferences(first: 10, includeClosedPrs: true) { nodes { number state merged headRefName mergeCommit { oid } } } } } }" \
+      closedByPullRequestsReferences(first: 10, includeClosedPrs: true) { nodes { number state merged headRefName baseRefName url mergeCommit { oid } } } } } }" \
     --jq '.data.repository.issue.closedByPullRequestsReferences.nodes // []'
 }
 
@@ -586,6 +594,25 @@ merge_commit() {
   need IID
   closing_prs "$IID" | jq -e -r '[.[] | select(.merged)][0].mergeCommit.oid // empty' ||
     { echo "github: #$IID was not closed by a merged pull request" >&2; return 1; }
+}
+
+mr_of() { # the open pull request that closes a story
+  need IID
+  closing_prs "$IID" | jq -e -c '[.[] | select(.state == "OPEN")][0] // empty
+    | {iid: .number, source_branch: .headRefName, target_branch: .baseRefName, web_url: .url}' ||
+    { echo "github: #$IID has no open pull request" >&2; return 1; }
+}
+
+mr_events() { # a pull request's comments and reviews, oldest first
+  local c r
+  need MR
+  c="$(api --paginate "repos/$R/issues/$MR/comments?per_page=100" | jq -s -c 'add // []')" || { echo "github: cannot read the comments of #$MR" >&2; return 1; }
+  r="$(api --paginate "repos/$R/pulls/$MR/reviews?per_page=100" | jq -s -c 'add // []')" || { echo "github: cannot read the reviews of #$MR" >&2; return 1; }
+  jq -cn --argjson c "$c" --argjson r "$r" 'def member: .author_association | IN("OWNER", "MEMBER", "COLLABORATOR");
+    ($c | map({kind: "comment", by: .user.login, at: .created_at, body: (.body // ""), member: member}))
+    + ($r | map(({APPROVED: "approved", CHANGES_REQUESTED: "changes_requested", COMMENTED: "comment", DISMISSED: "unapproved"}[.state] // null) as $k
+        | select($k != null) | {kind: $k, by: .user.login, at: .submitted_at, body: (.body // ""), member: member}))
+    | sort_by(.at)'
 }
 
 open_mr_branch() {
@@ -645,22 +672,28 @@ label_create() {
     { echo "github: could not create label $NAME" >&2; return 1; }
   echo "github: label $NAME created"
 }
-label_cmd() { # --add and --remove take comma-separated labels
-  local l
-  need IID
+label_cmd() { # --add and --remove take comma-separated labels; a pull request (--mr) takes them as an issue
+  local l n="${MR:-$IID}"
+  [ -n "$n" ] || { echo "github: label needs --iid or --mr" >&2; return 1; }
   # shellcheck disable=SC2046
-  [ -z "$ADD" ] || labels_set "$IID" $(printf '%s' "$ADD" | tr ',' ' ') || { echo "github: could not label #$IID" >&2; return 1; }
-  for l in $(printf '%s' "$REMOVE" | tr ',' ' '); do label_remove "$IID" "$l"; done
-  echo "github: #$IID labels updated"
+  [ -z "$ADD" ] || labels_set "$n" $(printf '%s' "$ADD" | tr ',' ' ') || { echo "github: could not label #$n" >&2; return 1; }
+  for l in $(printf '%s' "$REMOVE" | tr ',' ' '); do label_remove "$n" "$l"; done
+  echo "github: #$n labels updated"
 }
 comments() { # oldest first; member: the tracker says a project member wrote it
-  need IID
-  api --paginate "repos/$R/issues/$IID/comments?per_page=100" | jq -s -c 'add // [] | map({id, body: (.body // ""), author: .user.login, at: .created_at,
+  local n="${MR:-$IID}"
+  [ -n "$n" ] || { echo "github: comments needs --iid or --mr" >&2; return 1; }
+  api --paginate "repos/$R/issues/$n/comments?per_page=100" | jq -s -c 'add // [] | map({id, body: (.body // ""), author: .user.login, at: .created_at,
     member: (.author_association | IN("OWNER", "MEMBER", "COLLABORATOR"))}) | sort_by(.id)'
 }
 comment_delete() {
   need ID
   api -X DELETE "repos/$R/issues/comments/$ID" >/dev/null || { echo "github: could not delete comment $ID" >&2; return 1; }
+}
+comment_edit() {
+  need ID BODY
+  [ -f "$BODY" ] || { echo "github: no body file $BODY" >&2; return 1; }
+  api -X PATCH "repos/$R/issues/comments/$ID" -F body=@"$BODY" >/dev/null || { echo "github: could not edit comment $ID" >&2; return 1; }
 }
 
 case "$CMD" in
@@ -669,6 +702,7 @@ case "$CMD" in
   label) label_cmd ;;
   comments) comments ;;
   comment-delete) comment_delete ;;
+  comment-edit) comment_edit ;;
   check) check ;;
   ensure-labels) ensure_labels ;;
   push-plan) push_plan ;;
@@ -679,6 +713,8 @@ case "$CMD" in
   followup) followup ;;
   merge) merge ;;
   mr-info) mr_info ;;
+  mr-of) mr_of ;;
+  mr-events) mr_events ;;
   comment) comment ;;
   sprint-sync) sprint_sync ;;
   merge-commit) merge_commit ;;

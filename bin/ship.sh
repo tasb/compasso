@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Finish a story run without an agent: file the open minor findings as backlog
-# stories, write the story's metrics and decision record, and commit them with any lessons.
+# Finish a story run without an agent: file the open minor findings, and the minor security
+# findings security deferred, as backlog stories, write the story's metrics and decision
+# record, and commit them with any lessons.
 #
 #   ship.sh --repo R --run DIR
 #
@@ -28,8 +29,10 @@ iid="$(jq -r .iid "$RUN/story.json")"; feature="$(jq -r '.feature // empty' "$RU
 test_cmd="$("$BIN/config.sh" get --repo "$REPO" .commands.test)"
 L="$("$BIN/locale.sh" --repo "$REPO")" || exit 2   # follow-ups in the project's language
 
-# open minors -> backlog stories under the feature (or under the story when it has no feature)
-for id in $(jq -r 'to_entries[] | select(.value.by == "reviewer" and .value.severity == "minor" and .value.status == "open") | .key' "$RUN/findings.json"); do
+# open minors, and security's deferred minors not filed yet -> backlog stories under the feature (or the story)
+for id in $(jq -r 'to_entries[] | select(.value.severity == "minor" and (
+    (.value.by == "reviewer" and .value.status == "open")
+    or (.value.by == "security" and .value.status == "followup" and .value.verified_by == "security" and .value.followup_iid == null))) | .key' "$RUN/findings.json"); do
   f="$(jq -c ".[$id]" "$RUN/findings.json")"
   body="$RUN/followup-$id.md"
   jq -r -L "$BIN" --argjson L "$L" --arg cmd "$test_cmd" --argjson story "$iid" 'include "i18n";

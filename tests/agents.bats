@@ -9,7 +9,7 @@ fm() { yq --front-matter=extract -r "$2" "$ROOT/agents/$1.md"; }
 }
 
 @test "every dispatched role is an agent; the planner runs in the conversation" {
-  [ "$(ls "$ROOT/agents" | sort | tr '\n' ' ')" = "approver.md builder.md mutator.md reviewer.md security.md shipper.md tester.md " ]
+  [ "$(ls "$ROOT/agents" | sort | tr '\n' ' ')" = "approver.md builder.md finops.md mutator.md reviewer.md security.md shipper.md tester.md " ]
 }
 
 @test "no agent can start another agent, and every agent has a turn limit" {
@@ -24,6 +24,7 @@ fm() { yq --front-matter=extract -r "$2" "$ROOT/agents/$1.md"; }
 @test "security and the approver can only read; the reviewer can write lessons but not edit code or run commands" {
   [ "$(fm security .tools)" = "Read, Grep, Glob" ]
   [ "$(fm approver .tools)" = "Read, Grep, Glob" ]
+  [ "$(fm finops .tools)" = "Read, Grep, Glob, WebFetch, WebSearch" ]
   [ "$(fm reviewer .tools)" = "Read, Write, Grep, Glob" ]
 }
 

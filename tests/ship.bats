@@ -29,6 +29,17 @@ ship() { "$ROOT/bin/ship.sh" --repo "$REPO" --run "$RUN"; }
   [ "$(jq -c '.[2] | [.status, .followup_iid]' "$RUN/findings.json")" = '["fixed",null]' ]
 }
 
+@test "a minor security finding that security deferred becomes a follow-up too; one already filed does not" {
+  jq '. + [{by: "security", severity: "minor", status: "followup", verified_by: "security", summary: "Errors show the stack trace.", fix: "log it instead"},
+           {by: "security", severity: "minor", status: "followup", verified_by: "security", followup_iid: 40, summary: "filed before"}]' "$RUN/findings.json" > "$RUN/f" && mv "$RUN/f" "$RUN/findings.json"
+  run ship
+  [ "$status" -eq 0 ]
+  grep -q "POST projects/acme%2Fapp/issues title=Errors show the stack trace. issue_type=task" "$FAKE_GL/calls.log"
+  [ "$(grep -c 'POST projects/acme%2Fapp/issues ' "$FAKE_GL/calls.log")" -eq 2 ]
+  [ "$(jq -c '.[3] | [.status, .verified_by, (.followup_iid | type)]' "$RUN/findings.json")" = '["followup","security","number"]' ]
+  [ "$(jq -c '.[4].followup_iid' "$RUN/findings.json")" = 40 ]
+}
+
 @test "the follow-up is a story in the Story format" {
   ship >/dev/null
   f="$(ls "$FAKE_GL/desc/")"

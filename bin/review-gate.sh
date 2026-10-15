@@ -6,7 +6,8 @@
 # F is a JSON array of {by: reviewer|security, severity: blocker|major|minor,
 # status: open|fixed|followup, verified_by?, file?, line?, summary, fix?}.
 # A security finding counts as resolved only when security itself verified it
-# (verified_by: security), whoever changed its status.
+# (verified_by: security), whoever changed its status: fixed, or followup (security
+# accepts the deferral), which only a minor finding may be.
 #   review: blocks while any blocker or major finding is open
 #   merge:  also blocks while any security finding, of any severity, is open
 # --comment prints every finding as a merge request comment instead (same exit codes).
@@ -38,7 +39,8 @@ bad="$(jq -r 'if type != "array" then "not an array" else
 [ -z "$bad" ] || { printf 'review-gate: %s\n' "$bad" >&2; exit 2; }
 
 open="$(jq -r --arg for "$FOR" '
-  map(. + {open: (if .by == "security" then .verified_by != "security" or .status == "open" else .status == "open" end)})
+  map(. + {open: (if .by == "security" then (.verified_by == "security" and (.status == "fixed" or (.status == "followup" and .severity == "minor"))) | not
+          else .status == "open" end)})
   | map(select(.open and (.severity != "minor" or ($for == "merge" and .by == "security"))))
   | .[] | "  - [\(.by)/\(.severity)] \(.summary)" + (if .file then " (\(.file)\(if .line then ":\(.line)" else "" end))" else "" end)' "$F")"
 

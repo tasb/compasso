@@ -14,6 +14,17 @@
 #   team.sh inbox    --repo R [--milestone S20] [--json]     the poll: what is new for this persona; skipped while working
 #   team.sh working  --repo R start --iid N | stop [--iid N]  mark this checkout as busy with a story, so the poll is skipped
 #
+# The tech lead merges (stage and risk: bin/risk.sh). On a story whose merge request is open:
+#   team.sh review   --repo R --iid N           read its reports, work out the risk from its branch, and whether a
+#                                               person approved -> JSON (the files in .compasso/runs/lead-<mr>)
+#   team.sh ask      --repo R --iid N           a person must approve: needs::approval and the reasons, on the merge request
+#   team.sh merge    --repo R --iid N           merge it, when every check holds and nothing waits for a person
+#   team.sh return   --repo R --iid N --body-file F   back to its developer (compasso::backlog), with a message;
+#                                               the fix goes on the same merge request
+# A person approves with the tracker's own review: Approve, or (GitHub) Request changes, or (GitLab, where
+# Request changes is not on every tier) a comment saying what to change. Only what a project member whose
+# login is not in team.agents does after the tech lead asked counts.
+#
 # A claim is a comment "<!-- compasso:claim name=<name> checkout=<id> -->"; a message starts with
 # "<!-- compasso:msg from=<name|lead> to=<name|lead> -->". Only comments the tracker says a project
 # member wrote count as either.
@@ -38,6 +49,7 @@ while [ $# -gt 0 ]; do
   esac
 done
 MAX=250          # characters in a message
+MARK_ASK="<!-- compasso:approval -->"
 STALE_MIN=60     # a working marker nothing touched for this long is ignored
 
 provider="$("$BIN/config.sh" get --repo "$REPO" .tracker.provider 2>/dev/null)"
@@ -76,6 +88,44 @@ drop() { # jq filter over the claims: delete the ones it selects
 }
 MINE='.[] | select(.name == $n and .checkout == $c)'
 
+review_json() { # the tech lead's view of a story's open merge request -> JSON
+  local m mr branch target dir rep infra gate risk ev agents head
+  m="$(adapter mr-of --iid "$IID")" || exit 1
+  mr="$(jq -r .iid <<<"$m")"; branch="$(jq -r .source_branch <<<"$m")"; target="$(jq -r .target_branch <<<"$m")"
+  # the approver's verdicts (approver-<head>.json) stay; what this review reads again is replaced
+  dir="$MAIN/.compasso/runs/lead-$mr"; mkdir -p "$dir" || exit 1
+  rm -f "$dir"/findings.json "$dir"/coverage.json "$dir"/sensitive.json "$dir"/cost.json "$dir"/risk.json "$dir"/diff.patch
+  rep="$("$BIN/mr-report.sh" read --repo "$REPO" --mr "$mr" --out "$dir")" || exit 1
+  git -C "$MAIN" fetch -q origin "+refs/heads/$target:refs/remotes/origin/$target" "+refs/heads/$branch:refs/remotes/origin/$branch" ||
+    { echo "team: cannot fetch $branch and $target from origin" >&2; exit 1; }
+  git -C "$MAIN" diff "origin/$target...origin/$branch" > "$dir/diff.patch" || exit 1
+  head="$(git -C "$MAIN" rev-parse "origin/$branch")" || exit 1
+  infra="$("$BIN/risk.sh" --repo "$MAIN" --run "$dir" --base "origin/$target" --head "origin/$branch" --infra | jq -R . | jq -s -c .)" || exit 1
+  gate=missing
+  if [ "$(jq -r .findings <<<"$rep")" = true ]; then
+    if "$BIN/review-gate.sh" --findings "$dir/findings.json" --for merge >/dev/null; then gate=clear; else gate=blocked; fi
+  fi
+  "$BIN/risk.sh" --repo "$MAIN" --run "$dir" --base "origin/$target" --head "origin/$branch" --out "$dir/risk.json" >/dev/null
+  [ -f "$dir/risk.json" ] || { echo "team: could not work out the risk of $mr" >&2; exit 1; }
+  ev="$(adapter mr-events --mr "$mr")" || exit 1
+  agents="$("$BIN/config.sh" get --repo "$REPO" '.team.agents' | yq -o=json -I0 '. // []')"
+  # a rejection: GitHub's Request changes; on GitLab (not every tier has it) also a person's comment
+  jq -c --argjson m "$m" --argjson rep "$rep" --argjson infra "$infra" --arg gate "$gate" --arg dir "$dir" --arg head "$head" \
+    --slurpfile risk "$dir/risk.json" --argjson agents "$agents" --arg mark "$MARK_ASK" --arg p "$provider" '
+    ([to_entries[] | select(.value.kind == "comment" and .value.member and (.value.body | startswith($mark))) | .key] | last) as $ask
+    | (if $ask == null then [] else .[$ask + 1:] end
+       | map(select(.member and (.by as $b | $agents | index($b) | not) and ((.body // "") | test("^<!-- compasso:") | not)))) as $after
+    | (reduce $after[] as $e ([]; if $e.kind == "approved" then (. - [$e.by]) + [$e.by]
+                                  elif $e.kind == "unapproved" or $e.kind == "changes_requested" then . - [$e.by] else . end)) as $approved
+    | ([$after[] | select(.kind == "changes_requested" or ($p == "gitlab" and .kind == "comment"))] | last) as $rej
+    | {iid: ($m.iid), mr: $m.iid, branch: $m.source_branch, target: $m.target_branch, web_url: $m.web_url, dir: $dir, head: $head,
+       reports: $rep, gate: $gate, infra: $infra, risk: ($risk[0] | {level, reasons}), approved_by: $approved,
+       rejection: (if $rej then {by: $rej.by, text: $rej.body} else null end),
+       approval: (if $risk[0].level == "low" then "not-needed" elif ($approved | length) > 0 then "approved"
+                  elif $rej then "rejected" elif $ask != null then "asked" else "needed" end)}
+    | del(.iid)' <<<"$ev"
+}
+
 case "$CMD" in
   add)
     need_lead "add a developer"; need JOIN
@@ -88,7 +138,11 @@ case "$CMD" in
     d="$(devs)" || exit 1
     jq -e --arg n "$n" 'index($n) | not' <<<"$d" >/dev/null ||
       { echo "team: the name $n is taken - the developer runs setup again and picks another" >&2; exit 1; }
+    a="$(jq -r '.account // ""' <<<"$j")"
+    [ -z "$a" ] || [[ "$a" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$ ]] || { echo "team: '$a' is not a tracker login" >&2; exit 1; }
     adapter label-create --name "dev::$n" --title "Work assigned to the developer $n" >/dev/null || exit 1
+    # its approvals never count as a person's: the tech lead commits this change to the configuration
+    [ -z "$a" ] || A="$a" yq -i '.team.agents = ((.team.agents // []) + [strenv(A)] | unique)' "$REPO/.compasso/project.yaml" || exit 1
     echo "team: $n joined - assign work with: team.sh assign --iid N --dev $n" ;;
   list) need_team; devs ;;
   assign)
@@ -97,8 +151,10 @@ case "$CMD" in
     if [ "$DEV" != none ]; then
       jq -e --arg n "$DEV" 'index($n)' <<<"$d" >/dev/null || { echo "team: no developer $DEV in the team ($(jq -r 'join(", ")' <<<"$d"))" >&2; exit 1; }
     fi
-    add=""; [ "$DEV" = none ] || add="dev::$DEV"
-    rm="$(jq -r --arg n "$DEV" 'map(select(. != $n) | "dev::" + .) | join(",")' <<<"$d")"
+    # assigned and not started; whatever was being built or reviewed is the new developer's to resume
+    add="compasso::backlog"; [ "$DEV" = none ] || add="dev::$DEV,$add"
+    rm="$(jq -r --arg n "$DEV" 'map(select(. != $n) | "dev::" + .) + ["compasso::building", "compasso::in-review"] | join(",")' <<<"$d")"
+    [ "$DEV" != none ] || { rm="$rm,compasso::backlog"; add=""; }
     adapter label --iid "$IID" ${add:+--add "$add"} ${rm:+--remove "$rm"} >/dev/null || exit 1
     WHO=""; drop '.[]' || exit 1   # whoever was building it no longer is
     if [ "$DEV" = none ]; then echo "team: #$IID has no developer"; else echo "team: #$IID is $DEV's"; fi ;;
@@ -183,10 +239,17 @@ case "$CMD" in
         waiting: [(.waiting + .blocked)[] | select(.dev == $me) | {iid, title}]}
         | .nothing = ((.build + .verify) | length == 0)' <<<"$sync")"
     else
-      out="$(jq -c '{busy: false, persona: "tech-lead", milestone,
-        questions: .team.needs_lead, unassigned: .team.unassigned, load: .team.load,
+      stage="$("$BIN/config.sh" get --repo "$REPO" .stage)"; [ -n "$stage" ] || stage=production
+      out="$(jq -c --argjson devs "$(devs)" --arg stage "$stage" \
+        --argjson target "$("$BIN/config.sh" get --repo "$REPO" .team.queue.target)" --argjson min "$("$BIN/config.sh" get --repo "$REPO" .team.queue.min)" '
+        {busy: false, persona: "tech-lead", milestone, stage: $stage,
+        questions: .team.needs_lead, review: [.in_review[] | {iid, title, dev}], unassigned: .team.unassigned, load: .team.load,
+        # each developer'"'"'s backlog: assigned, not started; in mvp the tech lead tops it up to the target
+        queue: (.team.load as $l | $devs | map(. as $d | ([$l[] | select(.dev == $d) | .backlog][0] // 0) as $b
+          | {dev: $d, backlog: $b, room: ([$target - $b, 0] | max), below_min: ($b < $min)})),
+        queue_target: $target, queue_min: $min,
         blocked: [.blocked[] | {iid, title, dev, by}]}
-        | .nothing = ((.questions + .unassigned) | length == 0)' <<<"$sync")"
+        | .nothing = ((.questions + .review + .unassigned) | length == 0)' <<<"$sync")"
       # each question with its last message, as data
       for IID in $(jq -r '.questions[].iid' <<<"$out"); do
         last="$("$0" messages --repo "$REPO" --iid "$IID" | jq -c '[.[] | select(.to == "lead")] | last // null')" || last=null
@@ -205,9 +268,43 @@ case "$CMD" in
       else
         (if .nothing then "team: nothing waits for the tech lead in \(.milestone)" else empty end),
         (.questions[] | "Question on #\(.iid) \(.title) (\(.dev // "no developer")): \(.message.text // "no message")"),
+        (if (.review | length) > 0 then "To review: " + (.review | map("#\(.iid) \(.title) (\(.dev // "no developer"))") | join("; ")) else empty end),
         (if (.unassigned | length) > 0 then "No developer: " + (.unassigned | map("#\(.iid) \(.kind) \(.title)" + (if .unblocked then " (its blocker closed)" else "" end)) | join("; ")) else empty end),
         (if (.blocked | length) > 0 then "Blocked: " + (.blocked | map("#\(.iid) by " + (.by | map("#\(.iid)") | join(", "))) | join("; ")) else empty end),
-        (if (.load | length) > 0 then "Load: " + (.load | map("\(.dev) \(.open) open, \(.hours)h") | join("; ")) else empty end)
+        (if (.load | length) > 0 then "Load: " + (.load | map("\(.dev) \(.open) open, \(.hours)h") | join("; ")) else empty end),
+        (if (.queue | length) > 0 then "Backlog (queue \(.queue_target), at least \(.queue_min)): " + (.queue | map("\(.dev) \(.backlog)") | join(", ")) else empty end)
       end' <<<"$out" ;;
-  *) echo "usage: team.sh add|list|assign|claim|release|msg|messages|inbox|working --repo R ..." >&2; exit 2 ;;
+  review) need_lead "review merge requests"; need IID; review_json ;;
+  ask)
+    need_lead "ask a person to approve"; need IID
+    v="$(review_json)" || exit 1
+    [ "$(jq -r .approval <<<"$v")" != not-needed ] || { echo "team: !$(jq -r .mr <<<"$v") needs no person - merge it (team.sh merge)" >&2; exit 1; }
+    mr="$(jq -r .mr <<<"$v")"; f="$(mktemp)"
+    jq -r -L "$BIN" --argjson L "$("$BIN/locale.sh" --repo "$REPO")" --arg m "$MARK_ASK" --arg p "$provider" 'include "i18n";
+      $m, t("approval_title"), "", (.risk.reasons[] | "- " + .), "", t("approval_how_" + $p)' <<<"$v" > "$f"
+    adapter label --mr "$mr" --add needs::approval >/dev/null && adapter comment --mr "$mr" --body-file "$f" >/dev/null ||
+      { rm -f "$f"; echo "team: could not ask for approval on $mr" >&2; exit 1; }
+    rm -f "$f"; echo "team: a person approves $mr; the next poll merges it once approved" ;;
+  merge)
+    need_lead "merge"; need IID
+    v="$(review_json)" || exit 1
+    mr="$(jq -r .mr <<<"$v")"; dir="$(jq -r .dir <<<"$v")"
+    [ "$(jq -r .reports.findings <<<"$v")" = true ] || { echo "team: $mr has no findings report - its developer posts one (mr-report.sh post)" >&2; exit 1; }
+    [ "$(jq '.infra | length' <<<"$v")" -eq 0 ] || [ "$(jq -r .reports.cost <<<"$v")" = true ] ||
+      { echo "team: $mr changes infrastructure and has no cost report - its developer runs the finops role" >&2; exit 1; }
+    case "$(jq -r .approval <<<"$v")" in
+      not-needed) adapter merge --mr "$mr" --body-file "$dir/findings.json" --risk "$dir/risk.json" || exit 1 ;;
+      approved) adapter merge --mr "$mr" --body-file "$dir/findings.json" || exit 1
+                adapter label --mr "$mr" --remove needs::approval >/dev/null || true ;;
+      *) echo "team: a person approves it first ($(jq -r '.risk.reasons | join("; ")' <<<"$v")) - team.sh ask" >&2; exit 1 ;;
+    esac ;;
+  return)
+    need_lead "send work back"; need IID BODY
+    dev="$(adapter story --iid "$IID" | jq -r '.dev // ""')" || exit 1
+    [ -n "$dev" ] || { echo "team: #$IID has no developer - assign it (team.sh assign)" >&2; exit 1; }
+    "$0" msg --repo "$REPO" --iid "$IID" --to "$dev" --body-file "$BODY" || exit 1
+    adapter label --iid "$IID" --add compasso::backlog --remove compasso::in-review >/dev/null || exit 1
+    if m="$(adapter mr-of --iid "$IID" 2>/dev/null)"; then adapter label --mr "$(jq -r .iid <<<"$m")" --remove needs::approval >/dev/null || true; fi
+    echo "team: #$IID is back with $dev" ;;
+  *) echo "usage: team.sh add|list|assign|claim|release|msg|messages|inbox|working|review|ask|merge|return --repo R ..." >&2; exit 2 ;;
 esac

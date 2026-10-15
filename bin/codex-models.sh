@@ -8,7 +8,7 @@
 # whose effort that model does not support, is a problem. For each problem it proposes a model from
 # the catalog by the role's tier, never a hard-coded id:
 #   strong  (planner, security, approver, reviewer): the best model that is not a fast tier
-#   standard (tester, builder, mutator):             the best model
+#   standard (tester, builder, mutator, finops):     the best model
 #   fast    (shipper):                               the best fast-tier model, else the best model
 # keeping the role's effort when that model supports it, else the model's default effort. When only
 # the effort is unsupported, the model stays and the effort becomes the model's default.

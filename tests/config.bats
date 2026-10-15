@@ -203,3 +203,36 @@ setup() { setup_repo; }
   run "$ROOT/bin/config.sh" validate --repo "$REPO"
   [ "$status" -eq 0 ]
 }
+
+@test "stage: production by default, mvp or production only, and a missing stage is fine" {
+  [ "$(yq -r .stage "$CFG")" = production ]
+  cfg_set '.stage = "beta"'
+  run "$ROOT/bin/config.sh" validate --repo "$REPO"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"stage must be mvp or production"* ]] || false
+  cfg_set 'del(.stage)'
+  run "$ROOT/bin/config.sh" validate --repo "$REPO"
+  [ "$status" -eq 0 ]
+}
+
+@test "risk paths are lists of globs: product, infrastructure, production-critical" {
+  [ "$(yq -o=json -I0 .risk.product_paths "$CFG")" = '["src/**"]' ]
+  [ "$(yq -r '.risk.infra_paths | length' "$CFG")" -gt 0 ]
+  [ "$(yq -r '.risk.production_paths | length' "$CFG")" -gt 0 ]
+  cfg_set '.risk.infra_paths = "infra"'
+  run "$ROOT/bin/config.sh" validate --repo "$REPO"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"risk.infra_paths must be a list"* ]] || false
+}
+
+@test "team: the lead's poll, the queue and the agents' logins" {
+  [ "$(yq -r .team.lead_poll_minutes "$CFG")" = 30 ]
+  [ "$(yq -o=json -I0 .team.queue "$CFG")" = '{"target":15,"min":5}' ]
+  [ "$(yq -o=json -I0 .team.agents "$CFG")" = '[]' ]
+  cfg_set '.team.queue = {"target": 4, "min": 5} | .team.lead_poll_minutes = 0 | .team.agents = "bot"'
+  run "$ROOT/bin/config.sh" validate --repo "$REPO"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"team.queue.min must be at least 1 and at most team.queue.target"* ]] || false
+  [[ "$output" == *"team.lead_poll_minutes must be an integer from 1 to 1440"* ]] || false
+  [[ "$output" == *"team.agents must be a list of logins"* ]] || false
+}

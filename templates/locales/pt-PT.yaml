@@ -55,11 +55,27 @@ text:
   risk_sensitive: "{file} é um caminho sensível ({glob})"
   risk_build: "{file} altera o build, a pipeline, a configuração do Compasso ou as dependências"
   risk_lines: "{lines} linhas alteradas, acima do limite de {max}"
-  risk_security: "a segurança encontrou {n} problema(s) bloqueante(s) ou grave(s) nesta story"
+  risk_infra: "{file} altera a infraestrutura"
+  risk_production_path: "{file} é um caminho crítico em produção ({glob})"
+  risk_sensitive_content: "a segurança marcou a alteração como sensível: {what}"
+  risk_cost: "o relatório de custos diz {result}"
+  risk_cost_none: "{file} altera a infraestrutura e o seu custo não foi avaliado"
   risk_cov_below: a cobertura das linhas alteradas está abaixo do mínimo
   risk_cov_none: a cobertura das linhas alteradas não foi medida
   review_title: "**Revisão** · {n} findings"
   no_findings_cap: Sem findings
+  data_for_lead: Dados para o tech lead
+  cost_title: "**Custo** · finops"
+  cost_result: Resultado
+  cost_month: "{amount} {currency} por mês"
+  cost_add: adicionado
+  cost_change: alterado
+  cost_remove: removido
+  cost_assumptions: Pressupostos
+  cost_sources: Fontes
+  approval_title: "**Uma pessoa aprova esta alteração** antes de o tech lead a integrar:"
+  approval_how_github: "Aprove-a, ou peça alterações dizendo o que mudar. O tech lead integra-a depois de uma aprovação."
+  approval_how_gitlab: "Aprove-a, ou escreva um comentário a dizer o que mudar. O tech lead integra-a depois de uma aprovação."
   fix: correção
   blocks: Bloqueia
   "yes": sim

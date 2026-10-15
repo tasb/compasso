@@ -15,13 +15,21 @@
 #   persona.sh set  --repo R --persona P [--name N]           after a person chose (setup)
 #   persona.sh join --repo R                                  the JSON a developer hands to the tech lead
 #   persona.sh gate --repo R --skill S | --tracker C [--read-only]   may this persona run it?
+#   persona.sh account --repo R --set LOGIN --email E   the tracker account this agent uses (one per agent, never a person's)
+#   persona.sh env  --repo R                                  "export ..." of the account's token, for the adapters to eval
+#
+# The account: every tracker call exports its token for that call only (GitLab GITLAB_TOKEN, from
+# <home>/accounts/<host>/<login>, mode 600, written by a person; GitHub GH_TOKEN, from gh, which holds the
+# account), and git gets the same token from a credential helper set in the repository's own configuration
+# (bin/git-credential-compasso, copied to <home>/bin). The agent's commits carry its name (a developer's
+# name, "tech-lead", or the login) and email. A checkout with no account uses the machine's login, as before.
 #
 # Exit: 0 ok or allowed | 1 failure | 2 usage | 6 the persona may not do this
 set -u
 
 BIN="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CMD="${1:-}"; shift || true
-REPO="." PERSONA="" NAME="" SKILL="" TRACKER="" READ_ONLY=0 JSON=0
+REPO="." PERSONA="" NAME="" SKILL="" TRACKER="" READ_ONLY=0 JSON=0 ACCOUNT="" EMAIL=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --repo) REPO="$2"; shift 2 ;;
@@ -31,6 +39,8 @@ while [ $# -gt 0 ]; do
     --tracker) TRACKER="$2"; shift 2 ;;
     --read-only) READ_ONLY=1; shift ;;
     --json) JSON=1; shift ;;
+    --set) ACCOUNT="$2"; shift 2 ;;
+    --email) EMAIL="$2"; shift 2 ;;
     *) echo "persona: unknown argument '$1'" >&2; exit 2 ;;
   esac
 done
@@ -50,8 +60,13 @@ valid_name() { # lowercase letters, digits and hyphens, starting with a letter, 
   [[ "$1" =~ ^[a-z][a-z0-9-]{0,19}$ ]] || return 1
   case "$1" in default|lead|none) return 1 ;; esac
 }
-persona() { local p; p="$(sed -n 's/^persona=//p' "$FILE" 2>/dev/null | head -1)"; echo "${p:-default}"; }
-name() { sed -n 's/^name=//p' "$FILE" 2>/dev/null | head -1; }
+field() { sed -n "s/^$1=//p" "$FILE" 2>/dev/null | head -1; }
+persona() { local p; p="$(field persona)"; echo "${p:-default}"; }
+name() { field name; }
+keep() { # rewrite the file with these key=value lines replaced (the others kept)
+  local tmp="$FILE.tmp" k
+  { grep -v -E "^($(printf '%s\n' "$@" | sed 's/=.*//' | paste -sd'|' -))=" "$FILE" 2>/dev/null; printf '%s\n' "$@"; } > "$tmp" && mv "$tmp" "$FILE"
+}
 team() { [ "$("$BIN/config.sh" get --repo "$CFG_REPO" .team.enabled 2>/dev/null)" = true ]; }
 refuse() { echo "persona: $1" >&2; exit 6; }
 
@@ -59,8 +74,9 @@ case "$CMD" in
   show)
     t=false; team && t=true
     if [ "$JSON" -eq 1 ]; then
-      jq -n --arg p "$(persona)" --arg n "$(name)" --arg c "$CHECKOUT" --argjson t "$t" \
-        '{persona: $p, name: (if $n == "" then null else $n end), checkout: $c, team: $t}'
+      jq -n --arg p "$(persona)" --arg n "$(name)" --arg c "$CHECKOUT" --argjson t "$t" --arg a "$(field account)" --arg e "$(field email)" \
+        '{persona: $p, name: (if $n == "" then null else $n end), checkout: $c, team: $t,
+          account: (if $a == "" then null else $a end), email: (if $e == "" then null else $e end)}'
     else
       echo "$(persona)$( [ -n "$(name)" ] && echo " $(name)")"
     fi ;;
@@ -70,17 +86,52 @@ case "$CMD" in
       developer) valid_name "$NAME" || { echo "persona: a developer needs --name: lowercase letters, digits and hyphens, starting with a letter, at most 20 (not default, lead or none)" >&2; exit 2; } ;;
       *) echo "persona: --persona must be default, tech-lead or developer" >&2; exit 2 ;;
     esac
-    { echo "persona=$PERSONA"; [ -z "$NAME" ] || echo "name=$NAME"; } > "$FILE" || exit 1
+    { echo "persona=$PERSONA"; [ -z "$NAME" ] || echo "name=$NAME"; grep -E '^(account|email|host|provider)=' "$FILE" 2>/dev/null || true; } > "$FILE.tmp" &&
+      mv "$FILE.tmp" "$FILE" || exit 1   # the account stays: it is the agent's, whatever its persona
     echo "persona: this checkout is $PERSONA$( [ -n "$NAME" ] && echo " $NAME")" ;;
   join)
     [ "$(persona)" = developer ] || { echo "persona: only a developer joins a team - run setup and choose developer" >&2; exit 1; }
-    jq -n --arg n "$(name)" --arg p "$("$BIN/config.sh" get --repo "$CFG_REPO" .tracker.project)" --arg c "$CHECKOUT" \
-      '{compasso: "join", name: $n, project: $p, harness: "claude", checkout: $c}' ;;
+    jq -n --arg n "$(name)" --arg p "$("$BIN/config.sh" get --repo "$CFG_REPO" .tracker.project)" --arg c "$CHECKOUT" --arg a "$(field account)" \
+      '{compasso: "join", name: $n, project: $p, harness: "claude", checkout: $c} + (if $a == "" then {} else {account: $a} end)' ;;
+  account)
+    [ -n "$ACCOUNT" ] || { jq -n --arg a "$(field account)" --arg e "$(field email)" '{account: (if $a == "" then null else $a end), email: (if $e == "" then null else $e end)}'; exit 0; }
+    [[ "$ACCOUNT" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$ ]] || { echo "persona: '$ACCOUNT' is not a tracker login" >&2; exit 2; }
+    [[ "$EMAIL" =~ ^[^@[:space:]]+@[^@[:space:]]+\.[^@[:space:]]+$ ]] || { echo "persona: --email is the agent's commit email (name@domain)" >&2; exit 2; }
+    provider="$("$BIN/config.sh" get --repo "$CFG_REPO" .tracker.provider)"; host="$("$BIN/config.sh" get --repo "$CFG_REPO" .tracker.host)"
+    [ "$provider" != github ] || [ -n "$host" ] || host=github.com
+    case "$provider" in
+      gitlab)
+        tf="$HOME_DIR/accounts/$host/$ACCOUNT"
+        [ -s "$tf" ] || { echo "persona: no token for $ACCOUNT - the person writes the service account's token to $tf, in their own terminal, never in a chat:" >&2
+          echo "  mkdir -p '$HOME_DIR/accounts/$host' && (umask 077; read -rs T && printf '%s' \"\$T\" > '$tf')" >&2; exit 1; }
+        [ "$(ls -l "$tf" | cut -c5-10)" = "------" ] || { echo "persona: $tf can be read by others - chmod 600 '$tf'" >&2; exit 1; } ;;
+      github)
+        gh auth token --hostname "$host" --user "$ACCOUNT" >/dev/null 2>&1 ||
+          { echo "persona: gh holds no account $ACCOUNT - log it in first: gh auth login --hostname $host (as $ACCOUNT)" >&2; exit 1; } ;;
+      *) echo "persona: no tracker in .compasso/project.yaml - run setup" >&2; exit 1 ;;
+    esac
+    [ -f "$FILE" ] || echo "persona=default" > "$FILE"
+    keep "account=$ACCOUNT" "email=$EMAIL" "host=$host" "provider=$provider" || exit 1
+    # git: the token from the helper, for the tracker's host only; the inherited helpers are reset first
+    mkdir -p "$HOME_DIR/bin" && cp "$BIN/git-credential-compasso" "$HOME_DIR/bin/" && chmod 755 "$HOME_DIR/bin/git-credential-compasso" || exit 1
+    k="credential.https://$host.helper"
+    git -C "$REPO" config --local --unset-all "$k" 2>/dev/null
+    git -C "$REPO" config --local --add "$k" "" && git -C "$REPO" config --local --add "$k" "!'$HOME_DIR/bin/git-credential-compasso'" || exit 1
+    case "$(persona)" in developer) who="$(name)" ;; tech-lead) who=tech-lead ;; *) who="$ACCOUNT" ;; esac
+    git -C "$REPO" config --local user.name "$who" && git -C "$REPO" config --local user.email "$EMAIL" || exit 1
+    echo "persona: this checkout uses $ACCOUNT on $host; its commits are $who <$EMAIL>" ;;
+  env)
+    [ -n "$(field account)" ] || exit 0
+    t="$("$BIN/git-credential-compasso" token --repo "$REPO")" && [ -n "$t" ] || exit 1
+    case "$(field provider)" in
+      gitlab) printf 'export GITLAB_TOKEN=%q\n' "$t" ;;
+      github) printf 'export GH_TOKEN=%q GH_ENTERPRISE_TOKEN=%q\n' "$t" "$t" ;;
+    esac ;;
   gate)
     p="$(persona)"
     [ -n "$SKILL$TRACKER" ] || { echo "persona: gate needs --skill or --tracker" >&2; exit 2; }
-    case "$TRACKER" in label|label-create|comment-delete)
-      refuse "$TRACKER is used through bin/team.sh, which checks who may assign, claim and message" ;; esac
+    case "$TRACKER" in label|label-create|comment-delete|comment-edit)
+      refuse "$TRACKER is used through bin/team.sh and bin/mr-report.sh, which check who may assign, claim, message and report" ;; esac
     if ! team; then
       [ "$p" = default ] || refuse "this checkout is $p, but the project has no team (team.enabled is false in .compasso/project.yaml). The tech lead's setup turns it on; pull its change, or run setup and choose default."
       [ "$SKILL" != work ] || refuse "the poll is for team projects (team.enabled: true)"
@@ -99,7 +150,8 @@ case "$CMD" in
       exit 0
     fi
     case "$TRACKER" in
-      check|story|mr-info|sprint-items|sprint-done|merge-commit|open-mr-branch|digest|labels|comments) exit 0 ;;
+      check|story|mr-info|mr-of|mr-events|sprint-items|sprint-done|merge-commit|open-mr-branch|digest|labels|comments) exit 0 ;;
+      merge) refuse "in a team project the tech lead merges, through bin/team.sh merge, which checks the reports, the risk and a person's approval" ;;
       sprint-sync) [ "$READ_ONLY" -eq 1 ] && exit 0 ;;
     esac
     case "$p:$TRACKER" in
@@ -109,5 +161,5 @@ case "$CMD" in
       developer:*) ;;
     esac
     exit 0 ;;
-  *) echo "usage: persona.sh show|set|join|gate --repo R ..." >&2; exit 2 ;;
+  *) echo "usage: persona.sh show|set|join|gate|account|env --repo R ..." >&2; exit 2 ;;
 esac

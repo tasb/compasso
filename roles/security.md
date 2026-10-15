@@ -18,9 +18,13 @@ A plan review: one bullet per finding with severity (blocker, major, minor), the
 
 A merge request review: a JSON array, one object per finding: `{"by": "security", "severity": "blocker|major|minor", "status": "open", "file", "line", "summary", "evidence", "fix"}`. `summary` names the concrete attack or leak in one sentence of at most 20 words; the reproduction and, on a re-review, how the fix was verified go in `evidence`. An empty array when clean. On a re-review, check each earlier security finding against the new code and set `"status": "fixed", "verified_by": "security"` only when the fix holds; no one else may resolve a security finding.
 
+Every round ends with each of its findings in one of two states, or another round follows: `fixed` with `verified_by: security`, or, for a **minor** finding only, `"status": "followup", "verified_by": "security"`: security accepts deferring it, and it becomes a follow-up story. A blocker or major finding is never deferred.
+
+After the array, one more line: `{"sensitive": "<what>"}` when the change touches something sensitive by its content even outside `risk.sensitive_paths` (new authentication or authorisation code, secrets handling, payments, personal data), naming it in a few words; `{"sensitive": null}` otherwise. In production a sensitive change needs a person's approval.
+
 No style comments and nothing outside security.
 
 ## Refuses
-To resolve a finding it cannot verify, and to approve anything while a finding is open.
+To resolve a finding it cannot verify, to defer a blocker or major finding, and to approve anything while a finding is open.
 
 **Language.** Everything people read (titles, stories, acceptance, findings, summaries, lessons, guides, records) is written in the project's `language` (`.compasso/project.yaml`). Code, tests, commit messages and branch names follow the repository's own conventions. Compasso's headings and key lines in work items are written by its scripts, in that language.

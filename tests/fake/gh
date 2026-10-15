@@ -14,6 +14,11 @@ D="$FAKE_GH"; mkdir -p "$D/issues" "$D/parent" "$D/blocked" "$D/est" "$D/status"
 [ -f "$D/milestones.json" ] || echo '[]' > "$D/milestones.json"
 touch "$D/labels.txt" "$D/calls.log"
 
+if [ "$1 $2" = "auth token" ]; then   # gh auth token --hostname H --user L: an account gh holds, unless FAKE_GH_NO_USER
+  u="$(printf '%s\n' "$@" | sed -n '/^--user$/{n;p;}')"; [ -n "$u" ] && [ "$u" != "${FAKE_GH_NO_USER:-}" ] || exit 1
+  echo "gho_$u"; exit 0
+fi
+printf '%s' "${GH_TOKEN:-}" > "$D/token"
 if [ "$1 $2" = "pr merge" ]; then echo "PR merge $3 ${*:4}" >> "$D/calls.log"; exit 0; fi
 [ "$1" = api ] || { echo "fake gh: only api and pr merge are supported" >&2; exit 1; }
 shift
@@ -68,6 +73,10 @@ case "$method $path" in
       '{number: $n, id: (1000 + $n), node_id: "I_\($n)", title: $t, body: $b, state: "open", labels: ($l | map({name: .})),
         milestone: $m, assignees: [], created_at: "2026-10-05T09:00:00Z", closed_at: null}' > "$D/issues/$n.json"
     out < "$D/issues/$n.json" ;;
+  "PATCH repos/"*"/issues/comments/"*)
+    for f in "$D"/comments/*.json; do [ -e "$f" ] || continue
+      jq --argjson id "${path##*/}" --arg b "${body:-}" 'map(if .id == $id then .body = $b else . end)' "$f" > "$D/tmp" && mv "$D/tmp" "$f"; done
+    echo '{}' | out ;;
   "PATCH repos/"*"/issues/"*)
     n="${path##*/}"; [ -f "$D/issues/$n.json" ] || nf
     jq --arg t "${f_title:-}" --arg b "${body-__keep__}" --argjson m "$(milestone_obj "${f_milestone:-0}")" \
@@ -97,7 +106,7 @@ case "$method $path" in
     id="$(cat "$D/next_comment" 2>/dev/null || echo 900)"; echo $((id + 1)) > "$D/next_comment"
     [ -f "$D/comments/$n.json" ] || echo '[]' > "$D/comments/$n.json"
     jq --argjson id "$id" --arg b "${body:-}" --arg u "${FAKE_GH_USER:-dev}" --arg a "${FAKE_GH_ASSOC:-MEMBER}" \
-      '. + [{id: $id, body: $b, user: {login: $u}, author_association: $a, created_at: "2026-10-06T09:00:00Z"}]' "$D/comments/$n.json" > "$D/tmp" && mv "$D/tmp" "$D/comments/$n.json"
+      --arg at "${FAKE_GH_AT:-2026-10-06T09:00:00Z}" '. + [{id: $id, body: $b, user: {login: $u}, author_association: $a, created_at: $at}]' "$D/comments/$n.json" > "$D/tmp" && mv "$D/tmp" "$D/comments/$n.json"
     echo "{\"id\":$id}" | out ;;
   "GET repos/"*"/issues/"*"/comments"*) n="${path%/comments*}"; n="${n##*/}"; { cat "$D/comments/$n.json" 2>/dev/null || echo '[]'; } | out ;;
   "DELETE repos/"*"/issues/comments/"*)
@@ -108,6 +117,7 @@ case "$method $path" in
     cat "$D"/issues/*.json 2>/dev/null | jq -s --arg m "$m" --arg lb "$lb" 'map(select((.milestone.number | tostring) == $m)
       | select($lb == "" or ([.labels[].name] | index($lb)))) | sort_by(.number)' | out ;;
   "GET repos/"*"/issues/"*) out < "$D/issues/${path##*/}.json" 2>/dev/null || nf ;;
+  "GET repos/"*"/pulls/"*"/reviews"*) n="${path%/reviews*}"; n="${n##*/}"; { cat "$D/reviews/$n.json" 2>/dev/null || echo '[]'; } | out ;;
   "GET repos/"*"/pulls?"*) { cat "$D/pr-query.json" 2>/dev/null || echo '[]'; } | out ;;
   "POST repos/"*"/pulls") echo "{\"number\":31,\"html_url\":\"https://github.com/acme/app/pull/31\",\"base\":\"${f_base:-}\"}" | out ;;
   "PATCH repos/"*"/pulls/"*) echo "{\"number\":${path##*/},\"html_url\":\"https://github.com/acme/app/pull/${path##*/}\"}" | out ;;

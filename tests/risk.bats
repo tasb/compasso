@@ -43,13 +43,104 @@ reasons() { jq -r '.reasons | join(" | ")' "$RUN/risk.json"; }
   [[ "$(reasons)" == *"package.json changes the build, the pipeline, the Compasso config or dependencies"* ]] || false
 }
 
-@test "a blocker or major security finding makes the story high risk, even once fixed" {
+@test "a security finding fixed in the story needs no person, a blocker included" {
   echo more >> src/billing/a.js
-  echo '[{"by":"security","severity":"major","status":"fixed","verified_by":"security","summary":"x"}]' > "$RUN/findings.json"
+  echo '[{"by":"security","severity":"blocker","status":"fixed","verified_by":"security","summary":"x"}]' > "$RUN/findings.json"
+  run risk
+  [ "$status" -eq 0 ]
+}
+
+@test "the line limit counts only product lines: src by default, risk.product_paths when set" {
+  cfg_set '.risk.max_changed_lines = 3'; git commit -qam config
+  mkdir -p tests docs && printf '1\n2\n3\n4\n5\n' > tests/a.test.js && printf '1\n2\n3\n4\n' > docs/x.md && printf 'k: 1\nj: 2\ni: 3\nh: 4\n' > app.yaml
+  git add tests docs app.yaml
+  echo more >> src/billing/a.js
+  run risk
+  [ "$status" -eq 0 ]
+  [ "$(jq .changed_lines "$RUN/risk.json")" = 1 ]
+  cfg_set '.risk.product_paths = ["src/**", "docs/**"]'
   run risk
   [ "$status" -eq 3 ]
-  [[ "$(reasons)" == *"security found 1 blocker or major issue(s)"* ]] || false
-  echo '[{"by":"security","severity":"minor","status":"fixed","verified_by":"security","summary":"x"}]' > "$RUN/findings.json"
+  [[ "$(reasons)" == *"5 changed lines, over the 3-line limit"* ]] || false
+}
+
+@test "no stage is production" {
+  cfg_set 'del(.stage)'; git commit -qam config
+  echo '{}' > package.json && git add package.json
+  run risk
+  [ "$status" -eq 3 ]
+}
+
+@test "in mvp, only the cost of an infrastructure change needs a person" {
+  cfg_set '.stage = "mvp" | .risk.sensitive_paths = ["src/auth/**"] | .risk.max_changed_lines = 1'; git commit -qam config
+  printf '1\n2\n3\n' >> src/auth/b.js
+  echo '{}' > package.json && mkdir -p db/migrations && echo 'create' > db/migrations/1.sql && git add package.json db
+  echo '{"status":"below","percent":10,"min":80}' > "$RUN/coverage.json"
+  echo '{"sensitive":"authentication"}' > "$RUN/sensitive.json"
+  run risk
+  [ "$status" -eq 0 ]
+  [ "$(jq -c .reasons "$RUN/risk.json")" = '[]' ]
+}
+
+@test "an infrastructure change needs its cost report: increase or unknown, or none at all, needs a person, in either stage" {
+  cfg_set '.stage = "mvp"'; git commit -qam config
+  mkdir -p infra && echo 'resource "aws_instance" "a" {}' > infra/main.tf && git add infra
+  run risk
+  [ "$status" -eq 3 ]
+  [[ "$(reasons)" == *"infra/main.tf changes infrastructure and its cost was not assessed"* ]] || false
+  echo '{"result":"increase"}' > "$RUN/cost.json"
+  run risk
+  [ "$status" -eq 3 ]
+  [[ "$(reasons)" == *"the cost report says increase"* ]] || false
+  echo '{"result":"unknown"}' > "$RUN/cost.json"
+  run risk
+  [ "$status" -eq 3 ]
+  for r in none decrease; do
+    echo "{\"result\":\"$r\"}" > "$RUN/cost.json"
+    run risk
+    [ "$status" -eq 0 ]
+  done
+}
+
+@test "a **/ glob matches at the top of the repository too" {
+  echo 'services: {}' > docker-compose.yml && git add docker-compose.yml
+  echo '{"result":"none"}' > "$RUN/cost.json"
+  run risk
+  [ "$status" -eq 3 ]
+  [[ "$(reasons)" == *"docker-compose.yml changes infrastructure"* ]] || false
+}
+
+@test "--infra lists the changed infrastructure files, for the finops role, and decides nothing" {
+  run "$ROOT/bin/risk.sh" --repo "$REPO" --run "$RUN" --base main --infra
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+  mkdir -p infra && echo x > infra/main.tf && echo 'services: {}' > docker-compose.yml && git add infra docker-compose.yml
+  echo more >> src/billing/a.js
+  run "$ROOT/bin/risk.sh" --repo "$REPO" --run "$RUN" --base main --infra
+  [ "$status" -eq 0 ]
+  [ "$(printf '%s\n' "$output" | sort | tr '\n' ' ')" = "docker-compose.yml infra/main.tf " ]
+  [ ! -e "$RUN/risk.json" ]
+}
+
+@test "in production, infrastructure, migrations, API contracts and security's mark each need a person" {
+  echo '{"result":"none"}' > "$RUN/cost.json"
+  mkdir -p infra && echo 'x' > infra/main.tf && git add infra
+  run risk
+  [ "$status" -eq 3 ]
+  [[ "$(reasons)" == *"infra/main.tf changes infrastructure"* ]] || false
+  git rm -rq --cached infra && rm -r infra
+  mkdir -p db/migrations api && echo 'x' > db/migrations/2.sql && echo 'x' > api/openapi.yaml && git add db api
+  run risk
+  [ "$status" -eq 3 ]
+  [[ "$(reasons)" == *"db/migrations/2.sql is a production-critical path (**/migrations/**)"* ]] || false
+  [[ "$(reasons)" == *"api/openapi.yaml is a production-critical path"* ]] || false
+  git rm -rq --cached db api && rm -r db api
+  echo more >> src/billing/a.js
+  echo '{"sensitive":"authentication"}' > "$RUN/sensitive.json"
+  run risk
+  [ "$status" -eq 3 ]
+  [[ "$(reasons)" == *"security marked the change sensitive: authentication"* ]] || false
+  echo '{"sensitive":null}' > "$RUN/sensitive.json"
   run risk
   [ "$status" -eq 0 ]
 }

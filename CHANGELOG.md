@@ -2,6 +2,20 @@
 
 Versions follow `version` in `.claude-plugin/plugin.json`. Claude Code updates an installed plugin only when this version changes, so every change users should receive ships in a new version.
 
+## 3.0.0 (2026-10-15)
+
+From running 2.0.0 with a tech lead and developers. Team projects change how they merge; every project gets the stage, the security rule and the new risk rules.
+
+- **Stage.** `stage: mvp | production` (no stage is `production`). In `mvp` a person approves only an infrastructure change whose cost report says `increase` or `unknown`. In `production` the high-risk reasons apply, now including infrastructure, migrations and public API contracts (`risk.infra_paths`, `risk.production_paths`) and a change security marks sensitive by its content.
+- **Product lines.** `risk.max_changed_lines` counts only the lines of `risk.product_paths` (default `src/**`): tests, configuration, docs and other folders no longer count. A security finding fixed in its own story no longer makes the change high risk.
+- **Security closes what it opens.** Every security round ends with each finding `fixed` or, for a minor one only, `followup`, both verified by security; a deferred finding becomes a follow-up story. The story flow does not open a merge request until then. This is what stopped merge requests from ever merging.
+- **Reports on the merge request.** The run posts its findings, and for an infrastructure change the new **finops** role's cost report, as comments the tech lead reads back (`bin/mr-report.sh`); a later round edits them in place.
+- **The tech lead merges** (team projects). The developer opens the merge request and stops. The tech lead's poll reads the reports, works out the risk from the branch, has the approver check it, and merges; when the risk needs a person it labels the merge request `needs::approval`, and a person approves or rejects it with the tracker's own review. A rejection goes back to the same developer on the same merge request. New `team.sh review|ask|merge|return`; `tracker.sh merge` is refused in a team project.
+- **Status labels.** `compasso::backlog` (assigned, not started) joins `building` and `in-review`. The tech lead polls every `team.lead_poll_minutes` (default 30); developers every `team.poll_minutes` (60).
+- **The queue.** In `mvp` the tech lead keeps each developer's backlog between `team.queue.min` (5) and `team.queue.target` (15) on its own, within the sprint.
+- **One account per agent.** `persona.sh account --set <login> --email <email>`: every tracker call and git push of the checkout use that account's token (a GitLab service account; a GitHub machine user), and its commits carry the agent's name and email. `team.agents` lists the agents' logins, whose approvals never count as a person's.
+- **Upgrading.** Run `/compasso:setup` once in each project: it adds the new keys and the finops model to `.compasso/project.yaml` and creates the `compasso::backlog` and `needs::approval` labels. Until then the configuration does not validate.
+
 ## 2.0.0 (2026-10-13)
 
 Personas: several agents on one project. Claude Code only for now. Projects that do not turn a team on work as before.

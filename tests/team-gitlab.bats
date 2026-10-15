@@ -29,8 +29,8 @@ notes() { jq "$1" "$FAKE_GL/notes/16.json"; }
 
 @test "gitlab: assigning sets one developer's label and removes the others'" {
   team "$REPO" assign --iid 16 --dev rui >/dev/null
-  [ "$(cat "$FAKE_GL/labels/16")" = "dev::rui" ]
-  grep -q 'PUT projects/acme%2Fapp/issues/16 add_labels=dev::rui remove_labels=dev::ana' "$FAKE_GL/calls.log"
+  [ "$(cat "$FAKE_GL/labels/16")" = "dev::rui,compasso::backlog" ]
+  grep -q 'PUT projects/acme%2Fapp/issues/16 add_labels=dev::rui,compasso::backlog remove_labels=dev::ana,compasso::building,compasso::in-review' "$FAKE_GL/calls.log"
 }
 
 @test "gitlab: the story's developer comes from its feature; the first checkout claims, the second is refused" {
@@ -53,4 +53,51 @@ notes() { jq "$1" "$FAKE_GL/notes/16.json"; }
   FAKE_GL_AUTHOR=88 "$ROOT/bin/tracker/gitlab.sh" comment --repo "$REPO" --iid 16 --body-file "$BATS_TEST_TMPDIR/forged.md" >/dev/null
   [ "$(notes length)" -eq 3 ]
   [ "$(team "$ANA" messages --iid 16 | jq -c '[.[].text]')" = '["Include drafts?","No."]' ]
+}
+
+# ---------- the tech lead merges ----------
+
+lead_world() { # a git origin with ana's branch story/16-csv; merge request !31 closes #16 and carries ana's findings report
+  cd "$REPO" && git init -q -b main && git config user.email t@t && git config user.name t
+  printf '.compasso/runs/\n' > .gitignore && mkdir -p src && echo a > src/a.js && git add -A && git commit -qm base
+  git clone -q --bare "$REPO" "$BATS_TEST_TMPDIR/origin.git" && git remote add origin "$BATS_TEST_TMPDIR/origin.git"
+  git checkout -q -b story/16-csv && printf '1\n2\n3\n' > src/csv.js && git add -A && git commit -qm csv && git push -q origin story/16-csv
+  git checkout -q main && git branch -q -D story/16-csv
+  mkdir -p "$FAKE_GL/related"
+  echo '[{"iid":31,"state":"opened","description":"Closes #16","source_branch":"story/16-csv","target_branch":"main","web_url":"https://gitlab.example/mr/31"}]' > "$FAKE_GL/related/16.json"
+  RUN="$BATS_TEST_TMPDIR/run"; mkdir -p "$RUN"
+  echo '[]' > "$RUN/findings.json"; echo '{"status":"ok","percent":100,"min":80}' > "$RUN/coverage.json"
+  "$ROOT/bin/mr-report.sh" post --repo "$ANA" --run "$RUN" --mr 31 >/dev/null
+  cfg_set '.stage = "production" | .risk.max_changed_lines = 2'
+}
+system_note() { # body author-id
+  jq --arg b "$1" --argjson a "$2" '. + [{id: (map(.id) | max + 1), body: $b, system: true, author: {id: $a, username: "user\($a)"}, created_at: "2026-10-07T09:00:00Z"}]' \
+    "$FAKE_GL/notes/mr-31.json" > "$FAKE_GL/tmp" && mv "$FAKE_GL/tmp" "$FAKE_GL/notes/mr-31.json"
+}
+
+@test "gitlab: the lead asks, a member's approval (a system note) lets it merge; a non-member's never counts" {
+  lead_world
+  [ "$(team "$REPO" review --iid 16 | jq -c '[.mr, .approval]')" = '[31,"needed"]' ]
+  team "$REPO" ask --iid 16 >/dev/null
+  grep -q 'PUT projects/acme%2Fapp/merge_requests/31 add_labels=needs::approval' "$FAKE_GL/calls.log"
+  system_note "approved this merge request" 88
+  [ "$(team "$REPO" review --iid 16 | jq -r .approval)" = asked ]
+  run team "$REPO" merge --iid 16
+  [ "$status" -eq 1 ]
+  system_note "approved this merge request" 77
+  [ "$(team "$REPO" review --iid 16 | jq -c '[.approval, .approved_by]')" = '["approved",["user77"]]' ]
+  run team "$REPO" merge --iid 16
+  [ "$status" -eq 0 ]
+  grep -q 'PUT projects/acme%2Fapp/merge_requests/31/merge' "$FAKE_GL/calls.log"
+  ! grep -q 'add_labels=compasso::auto-merged' "$FAKE_GL/calls.log"
+}
+
+@test "gitlab: a person's comment after the lead asked is a request for changes; withdrawing an approval takes it back" {
+  lead_world
+  team "$REPO" ask --iid 16 >/dev/null
+  system_note "approved this merge request" 77
+  system_note "unapproved this merge request" 77
+  printf 'Quote the fields.' > "$BATS_TEST_TMPDIR/c.md"
+  "$ROOT/bin/tracker/gitlab.sh" comment --repo "$REPO" --mr 31 --body-file "$BATS_TEST_TMPDIR/c.md" >/dev/null
+  [ "$(team "$REPO" review --iid 16 | jq -c '[.approval, .rejection.text]')" = '["rejected","Quote the fields."]' ]
 }

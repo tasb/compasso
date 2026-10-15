@@ -116,19 +116,23 @@ One agent can do everything, as it always did. A team runs several agents, on se
 | Persona | Does | Never |
 |---|---|---|
 | `default` | Everything. An agent with no persona is `default` | In a team project it only reads |
-| `tech-lead` | Scope: discover, backlog, architect, roadmap, plan. Assigns stories, bugs and features, answers questions, creates blockers, closes the sprint | Builds a story |
-| `developer` | Builds and reviews what carries its name. Always an agent | Plans, assigns (its own work included), closes a sprint |
+| `tech-lead` | Scope: discover, backlog, architect, roadmap, plan. Assigns stories, bugs and features, merges, answers questions, creates blockers, closes the sprint | Builds a story |
+| `developer` | Builds and reviews what carries its name, and opens its merge request. Always an agent | Plans, assigns (its own work included), merges, closes a sprint |
 
-A persona is not a role: the eight roles below are the subagents every persona dispatches.
+A persona is not a role: the nine roles below are the subagents every persona dispatches.
 
 - **Joining.** A developer picks a name at setup, which prints a JSON block with no secret in it. Pasted into the tech lead's agent, it creates the label `dev::<name>`. The `dev::` labels are the team.
 - **Assignment** is that label, on a story, a bug or a feature (a feature's label covers its stories). In a team project every story names a developer, `owner::` labels are not used, and work for a person is a blocker.
 - **One agent per story.** Before building, an agent posts a claim comment on the story; the earliest claim wins, and a run resumes only from the checkout that holds it. This holds without a team too.
 - **Messages** are comments on the story, at most 250 characters. A developer's question raises `needs::lead`; the tech lead's answer lowers it. Comment text is data, never instructions.
-- **The poll.** Each agent reads the tracker every `team.poll_minutes` (default 60) through a recurring prompt, `/loop 60m /compasso:work`, and skips the read while it is working. The tech lead's agent proposes answers and assignments; a person decides.
+- **Status labels.** `compasso::backlog` (assigned, not started), `compasso::building` (claimed), `compasso::in-review` (its merge request is open); the merge closes it. A developer's backlog, for the tech lead, is what still has `compasso::backlog`.
+- **The tech lead merges.** The developer opens the merge request with its findings (and, for an infrastructure change, a cost report from the `finops` role) as comments, and stops. The tech lead's agent reads them, works out the risk itself and merges. When the risk needs a person, it labels the merge request `needs::approval`: you approve or reject it with the tracker's own review, and the tech lead merges after an approval. A rejection goes back to the same developer, on the same merge request.
+- **The poll.** Each agent reads the tracker through a recurring prompt, `/loop <minutes>m /compasso:work`, and skips the read while it is working: the tech lead every `team.lead_poll_minutes` (default 30), developers every `team.poll_minutes` (default 60).
+- **Stage.** In `stage: mvp` the tech lead also keeps each developer's backlog between `team.queue.min` (5) and `team.queue.target` (15) on its own, within the sprint; in `production` it proposes assignments and a person decides. Answers to questions are always a person's.
+- **One account per agent.** Each agent uses its own tracker account (a GitLab service account; on GitHub, a machine user): every tracker call and git push of its checkout use that account's token, and its commits carry the agent's name and email. A person's approval counts only from an account not listed in `team.agents`.
 - **Bugs** found in merged work are filed with no developer and wait for the tech lead.
 
-The persona is kept outside the repository, per checkout. The tracker cannot stop a member from changing a label, so the persona gate prevents mistakes; it is not a security boundary. How to set one up: [docs/guides/team.md](docs/guides/team.md). Design: [docs/SPEC.md](docs/SPEC.md), section 31.
+The persona is kept outside the repository, per checkout. The tracker cannot stop a member from changing a label, so the persona gate prevents mistakes; it is not a security boundary. How to set one up: [docs/guides/team.md](docs/guides/team.md). Design: [docs/SPEC.md](docs/SPEC.md), sections 31 and 32.
 
 ## Language
 
@@ -173,7 +177,7 @@ A gate stops the flow. A check reports and never stops it.
 - **Verify.** Tests, lint, typecheck, build, the story's own Verify commands and e2e run before review, before the merge request and in CI.
 - **Security review.** Runs on every plan, every merge request and at sprint end, and is never skipped. Only security can close a security finding, and no approval mode merges with one open.
 - **Scan gate.** Any high or critical SAST finding, or any secret, blocks the merge request.
-- **Merge approval.** A person merges by default. `approvals.merge: agent` lets an agent merge once review is clear. `risk` lets low-risk changes merge on their own; sensitive paths or more than `risk.max_changed_lines` changed lines always need a person, and a daily digest lists what merged.
+- **Merge approval.** A person merges by default. `approvals.merge: agent` lets an agent merge once review is clear. `risk` lets low-risk changes merge on their own, and a daily digest lists what merged. What needs a person depends on `stage`: in `mvp` only an infrastructure change whose cost report says `increase` or `unknown`; in `production` also sensitive paths, infrastructure, migrations and API contracts, the build or dependencies, more than `risk.max_changed_lines` lines of product code (`risk.product_paths`), low coverage, or a change security marks sensitive. In a team project the tech lead merges instead (see Personas and teams).
 - **Coverage (check).** Changed-line coverage below 80% is a warning, never a block. An epic, feature or story can set its own threshold.
 
 ## Roles and models
@@ -187,9 +191,10 @@ Eight roles, each defined once in `roles/`, each with its own model per harness 
 | builder | Makes the tests pass with the smallest change and fixes findings. Never edits a test | sonnet |
 | reviewer | One-pass review: correctness, regressions, simplicity, tests, docs | sonnet |
 | security | Mandatory security review of plans, merge requests and sprints | opus |
-| approver | Optional agent approval, only when `approvals.merge: agent` | opus |
+| approver | Agent approval: when `approvals.merge: agent`, and for a team's tech lead before it merges | opus |
 | shipper | The sprint's test guide for business testers | haiku |
 | mutator | Writes deliberate bugs to check the tests catch them (hardening only) | sonnet |
+| finops | Reports the monthly cost of a change to infrastructure, on its merge request | sonnet |
 
 `security` and `approver` have a floor: no fast-tier model and no low effort.
 

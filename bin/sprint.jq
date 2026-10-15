@@ -83,5 +83,6 @@ $items[0] as $items | $ext[0] as $ext
           + {unblocked: ((.parsed.blocked_by | length) > 0 and (.open_blockers | length) == 0)})),
         others: ($open | map(select(.status == "other") | brief)),
         load: ($open | map(select(.dev != null)) | group_by(.dev)
-          | map({dev: .[0].dev, open: length, hours: (map(.time_stats.time_estimate // 0) | add / 3600 * 10 | round / 10)}))
+          | map({dev: .[0].dev, open: length, hours: (map(.time_stats.time_estimate // 0) | add / 3600 * 10 | round / 10),
+                 backlog: (map(select(.labels | index("compasso::backlog"))) | length)}))
       }} else {} end)

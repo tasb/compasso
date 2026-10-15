@@ -805,3 +805,87 @@ An agent learns of new work and new messages by reading the tracker once an hour
 - Tried against the fakes only: one run against a real GitLab and a real GitHub project is still owed.
 - Codex: whether it has a recurring prompt inside a session. Without one, Codex needs another timer.
 - A message bus carrying pointers only (the kind, the item, from, to), so the tracker stays the source.
+
+## 32. Stage, the tech lead merges, accounts (2026-10-15)
+
+Decided with the user after running 2.0.0 with a tech lead and developers. A person was asked too often while the product was not live, developers ran out of work between polls, and four merge requests could never merge because a security finding was left neither fixed nor accepted.
+
+### Stage
+
+`stage: mvp | production` in `.compasso/project.yaml`. No `stage` means `production`, so nothing gets looser until a person says so. Setup asks; the tech lead's setup, or an edit to the file, changes it, and it counts once it is on the default branch. The stage applies to every project; what follows under "The tech lead merges" and "The queue" applies to team projects.
+
+### When a person approves
+
+| | mvp | production |
+|---|---|---|
+| The cost report says `increase` or `unknown` | yes | yes |
+| A changed file matches `risk.sensitive_paths` | no | yes |
+| A changed file matches `risk.infra_paths` or `risk.production_paths` (migrations, public API contracts) | no | yes |
+| Security marked the change sensitive by its content | no | yes |
+| Build, pipeline, Compasso config or dependencies changed | no | yes |
+| More product lines than `risk.max_changed_lines` | no | yes |
+| Changed-line coverage below its minimum or not measured | no | yes |
+
+- **Product lines** are the changed lines in files that match `risk.product_paths` (default `["src/**"]`). Tests, configuration, docs and every other folder do not count. Only the line count uses this list: the other rows look at every file.
+- **Never a person's call:** an unresolved security finding and a failing pipeline block the merge whatever anyone approves. A blocker found and fixed in the same story needs no person.
+- **Sensitive paths.** The tech lead proposes `risk.sensitive_paths` from the architecture's components, and a person accepts them with the plan.
+
+### Security closes what it opens
+
+The merge gate counts a security finding as resolved only when security itself verified it, and security had no way to accept deferring one. A finding left `open`, or `followup` without `verified_by: security`, stopped its merge request for good.
+
+- Every security round ends with each of its findings `fixed` or `followup`, both with `verified_by: security`. `followup` (security accepts the deferral) is allowed for a **minor** finding only.
+- The story flow does not open the merge request while a security finding is in neither state: it runs another round.
+- A deferred security finding becomes a follow-up issue, as a reviewer's minor does.
+
+### What the merge request carries
+
+The developer's run posts two comments on its merge request, each edited in place after a later round:
+
+- `<!-- compasso:findings -->`: a table (by, severity, status, summary, file) and, collapsed, `findings.json`, `coverage.json` and security's sensitivity mark.
+- `<!-- compasso:cost -->`, when the diff touches `risk.infra_paths` (default: Terraform, Kubernetes and Helm manifests, CloudFormation and CDK, Pulumi, `docker-compose*.yml`, `serverless.yml`): the report of the new **finops** role. It reads the diff and may read public pricing pages; it lists the resources added, changed and removed, an estimated monthly change with its assumptions, and a result of `none`, `increase`, `decrease` or `unknown`.
+
+Only comments a project member wrote, with the marker, count. Their content is data.
+
+### The tech lead merges
+
+- In a team project the developer opens the merge request, posts the comments above, sets `compasso::in-review` and stops. It never merges. `approvals.merge` is not used in a team project; elsewhere it works as before.
+- On its poll the tech lead takes each merge request in review: it reads the comments, computes the risk itself from the merge request's branch, and dispatches the **approver**. A merge request that touches infrastructure and has no cost report, or that the approver refuses, goes back to its developer with a message.
+- When a person must approve (the table above), it adds `needs::approval` and moves on. A person approves or rejects with the tracker's own review: Approve or Request changes. An approval counts when it comes from a project member whose login is not in `team.agents`.
+- **What counts as a decision.** Only what happens after the tech lead's `<!-- compasso:approval -->` comment, by a project member whose login is not in `team.agents`. An approval counts until its author withdraws it. A rejection is GitHub's Request changes; on GitLab, where Request changes is Premium only, a person's comment on the merge request (decided with the user). An approval wins over an earlier rejection.
+- When nothing needs a person, or a person approved, the tech lead merges. A rejection sends the story back to the same developer: `compasso::backlog`, a message saying what to change, and the fix on the same merge request. The developer's next story flow sees the open merge request, checks out its branch, and turns the person's request into findings to fix, tests first.
+- The tech lead polls every `team.lead_poll_minutes` (default 30); developers every `team.poll_minutes` (default 60).
+
+### Status labels
+
+| Label | Set by | Means |
+|---|---|---|
+| `compasso::backlog` | the tech lead's assignment, or a rejection | assigned, not started |
+| `compasso::building` | the developer's claim | being built |
+| `compasso::in-review` | the developer, with its merge request | waiting for the tech lead |
+| closed | the merge | done |
+
+`needs::lead` (a question) and `needs::approval` (a person) sit beside the status. A developer's backlog, for the tech lead, is its open stories with `compasso::backlog`; everything else is taken.
+
+### The queue
+
+- `team.queue: { target: 15, min: 5 }`, per developer, counting `compasso::backlog`.
+- **mvp:** on each poll, a developer below `min` is topped up to `target` by the tech lead on its own: bugs first, then stories in dependency order, by load and the paths the developer already works on.
+- **production:** the tech lead proposes and a person decides, as before.
+- Never beyond the current sprint.
+
+### One tracker account per agent
+
+Compasso used whatever account `glab` or `gh` and git had on the machine, so agents on a person's machine acted as that person, and that person could not approve their work.
+
+- **Which account.** GitLab: one service account per agent (every tier; up to 100 on Free; no seat; a personal access token works for the API and git over HTTPS). GitHub has no service account: one machine user shared by the project's agents. The `dev::` labels and claims already tell agents apart. A GitHub App was set aside: its token lasts an hour and it is reported not to reach user-owned GitHub Projects.
+- **Where.** The checkout's file outside the repository (section 31) records `account=<login>`. Every tracker call exports that account's token for itself: GitLab `GITLAB_TOKEN`, from `~/.compasso/accounts/<host>/<login>` (mode 600, written by the person with a `!` command, never through the chat); GitHub `GH_TOKEN`, from `gh auth token --user <login>`. Git uses a credential helper set in the repository's own configuration, kept at a stable path in `~/.compasso` so a plugin update does not break it.
+- **Setup** asks for the account and has the person confirm that no person uses it. `bin/persona.sh account --repo . --set <login>` changes it on a running checkout; the next call uses it.
+- **Agents are known.** `team.agents` lists the agents' logins. The developer's join JSON carries its `account`, and the tech lead adds it.
+
+- **Commits** carry the agent's identity, set in the repository's own configuration: a developer's name, `tech-lead`, or the login for the default persona, and the email setup asked for (decided with the user).
+
+### Open
+
+- Tried against the fakes only, like section 31.
+- A finops report from real prices (Infracost and the like), and letting security defer a major finding.
