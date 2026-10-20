@@ -32,15 +32,16 @@ limits:
   story_target_hours: 4       # what the planner aims for
   # A feature may take at most half a sprint; derived from sprint, not configured.
   agent_runs:                 # strict orchestration: how many times each role may run, or be continued,
-    tester: 5                 # in one flow run (a story, a plan, a review...); bin/budget.sh refuses the next one
-    builder: 7
-    reviewer: 3
+    tester: 9                 # in one flow run (a story, a plan, a review...); bin/budget.sh refuses the next one
+    builder: 10
+    reviewer: 6
     security: 4
     approver: 1
     shipper: 2
     mutator: 2
     finops: 2
-    total: 20                 # every role together
+    total: 30                 # every role together
+    mvp_total: 40             # in stage: mvp only this applies, to every role together
 
 commands:                     # the repo's own commands; empty means "not applicable"
   test: ""
@@ -99,6 +100,10 @@ approvals:
                               # (an agent never merges with an open security finding)
 
 stage: production             # mvp | production: in mvp only a cost increase needs a person (bin/risk.sh); no stage is production
+
+trust:                        # who approves a story's Verify commands before they run (bin/trust.sh)
+  mvp_approval: false         # in mvp: false runs them without approval; true asks as in production, where a person
+                              # approves each one, except those the plan on the default branch lists for that story
 
 risk:                         # what makes a change need a person (approvals.merge: risk, or the tech lead), abuse cases and a mutation check
   sensitive_paths: []         # globs where a change needs a person in production, e.g. ["src/auth/**", "src/billing/payments/**"]

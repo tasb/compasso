@@ -8,6 +8,9 @@
 # one file per repository (keyed by its physical path; its worktrees share it), one line per command:
 # "<sha256 of the command>  <command>". A cloned repository brings no approvals, and an
 # edited command no longer matches.
+# A story's command also counts as approved when the plan on the default branch (.compasso/plan.yaml
+# on origin, fetched first) lists it for that story (its `gitlab:` iid): the plan reached that branch
+# through a merge request. In stage: mvp no command needs approval, unless trust.mvp_approval is true.
 #
 #   trust.sh check   --repo R (--story F | --plan)   the Verify commands not yet approved
 #   trust.sh approve --repo R (--story F | --plan)   approve them (after a person said yes)
@@ -51,14 +54,25 @@ commands() { # the Verify commands asked for, one per line
   fi
 }
 approved() { [ -f "$FILE" ] && cut -d' ' -f1 "$FILE" | grep -qxF "$(sha "$1")"; }
+planned() { # the story's Verify commands the plan on the default branch lists for it, one per line
+  local iid def
+  iid="$(jq -r '.iid // empty' "$STORY")"; [ -n "$iid" ] || return 0
+  def="$(git -C "$REPO" symbolic-ref -q --short refs/remotes/origin/HEAD 2>/dev/null | sed 's#^origin/##')"; [ -n "$def" ] || return 0
+  git -C "$REPO" fetch -q origin "+refs/heads/$def:refs/remotes/origin/$def" 2>/dev/null   # unreachable: the last fetch
+  git -C "$REPO" show "origin/$def:.compasso/plan.yaml" 2>/dev/null | yq -o=json '.' 2>/dev/null |
+    jq -r --argjson i "$iid" '[.features[]?.stories[]? | select(.gitlab == $i) | .verify // [] | .[]] | .[]' 2>/dev/null
+}
 
 case "$CMD" in
   check)
+    [ "$(yq -r '.stage' "$REPO/.compasso/project.yaml" 2>/dev/null)" != mvp ] ||
+      [ "$(yq -r '.trust.mvp_approval' "$REPO/.compasso/project.yaml")" = true ] || exit 0
     list="$(commands)" || exit $?
+    plan=""; [ -z "$STORY" ] || plan="$(planned)"
     missing=0
     while IFS= read -r c; do
       [ -n "$c" ] || continue
-      approved "$c" || { printf '%s\n' "$c"; missing=1; }
+      approved "$c" || printf '%s\n' "$plan" | grep -qxF -- "$c" || { printf '%s\n' "$c"; missing=1; }
     done <<EOF
 $(printf '%s\n' "$list" | awk '!seen[$0]++')
 EOF

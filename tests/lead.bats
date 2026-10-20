@@ -52,9 +52,22 @@ later() { # a person's review, after the lead asked
   grep -q '^+++ b/src/status.js' "$dir/diff.patch"
   [ "$(jq .changed_lines "$dir/risk.json")" = 3 ]
   [ "$(jq -r .head <<<"$output")" = "$(git -C "$REPO" rev-parse origin/story/14-status)" ]
-  echo '{"approves":true}' > "$dir/approver-x.json"
+  echo '{"approves":true}' > "$dir/approver.json"
   review_ >/dev/null
-  [ -f "$dir/approver-x.json" ]
+  [ -f "$dir/approver.json" ]
+}
+
+@test "review: each head of the branch gets its own folder, so the approver of a reworked head has a budget of its own" {
+  cfg_set '.stage = "production"'
+  dir="$(review_ | jq -r .dir)"
+  [[ "$dir" == */.compasso/runs/lead-31-"$(git -C "$REPO" rev-parse origin/story/14-status | cut -c1-12)" ]] || false
+  "$ROOT/bin/budget.sh" claim --repo "$REPO" --run "$dir" --role approver >/dev/null
+  W="$BATS_TEST_TMPDIR/w"; git clone -q -b story/14-status "$ORIGIN" "$W"
+  (cd "$W" && git config user.email t@t && git config user.name t && echo 4 >> src/status.js && git commit -qam rework && git push -q origin story/14-status)
+  dir2="$(review_ | jq -r .dir)"
+  [ "$dir2" != "$dir" ]
+  run "$ROOT/bin/budget.sh" claim --repo "$REPO" --run "$dir2" --role approver
+  [ "$status" -eq 0 ]
 }
 
 @test "merge: the lead merges what needs no person, as merged without one" {

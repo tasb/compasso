@@ -889,3 +889,23 @@ Compasso used whatever account `glab` or `gh` and git had on the machine, so age
 
 - Tried against the fakes only, like section 31.
 - A finops report from real prices (Infracost and the like), and letting security defer a major finding.
+
+## 33. Fewer stops while building (2026-10-20)
+
+Decided with the user after a team ran `compasso:work` in `mvp`: a person was asked again and again to reset a role's budget (the tester's most of all) and to approve Verify commands.
+
+### The budget
+
+- **Rework has a budget of its own.** A story's run folder is `.compasso/runs/<iid>` for its whole life, so a merge request the tech lead sent back used to be reworked on what was left of the first build's budget. When the story flow starts a rework, `budget.sh rework --iid N` moves the spent record to `budget-<n>.jsonl` and starts a new one. It is refused unless the story has an open merge request and is not `compasso::building`, so it cannot be used to reset a flow that is running; the story flow runs it before setting the story building.
+- **Each head the tech lead reviews has a budget of its own.** `team.sh review` puts its files in `.compasso/runs/lead-<mr>-<first 12 characters of the head>`, so the approver of a reworked head is not refused by the limit of 1 that the earlier head spent. Its verdict is `approver.json` there.
+- **Defaults from the flow's worst case.** tester 9, builder 10, reviewer 6, total 30 (security 4, approver 1, shipper 2, mutator 2 and finops 2 unchanged). One story without rework can use the builder 10 times (1, 2 more verify attempts, 1 retry after a test violation, and 2 fix rounds of up to 3) and the reviewer 4 (3 rounds and one lesson sent back); the rest is margin the user chose. `config.sh upgrade` never changes a value, so an existing project keeps its limits until a person edits them.
+- **In `mvp` only the total applies:** `limits.agent_runs.mvp_total` (default 40, also when the key is missing), for every role together. The agents' turn limits and the review's 3 rounds still bound a flow run.
+
+### Verify commands
+
+- **The plan on the default branch approves (every stage).** A story's Verify command counts as approved when `.compasso/plan.yaml` on `origin/<default branch>` lists it for that story (the entry whose `gitlab:` is the story's iid), exactly. `trust.sh check` fetches the default branch first, and uses the last fetch when it cannot. The plan reached that branch through a merge request, and the agents already run that branch's code when they run its tests. A command edited on the tracker, a story the plan does not list (a follow-up, a bug) and a plan changed only locally still ask, as before.
+- **In `mvp` no Verify command needs approval,** unless `trust.mvp_approval: true` (default `false`, also when the key is missing). A person who can edit a story on the tracker can then choose what runs on the developer's machine: acceptable for a product nobody uses yet, with a closed team. `production` ignores the key.
+
+### Open
+
+- Tried against the fakes only.

@@ -83,6 +83,8 @@ validate() {
     v="$(val ".limits.agent_runs.$k")"
     is_int "$v" && [ "$v" -gt 0 ] || err "limits.agent_runs.$k must be a positive integer (run: config.sh upgrade)"
   done
+  v="$(val .limits.agent_runs.mvp_total)"   # added in 3.0.2: none is 40
+  [ -z "$v" ] || { is_int "$v" && [ "$v" -gt 0 ]; } || err "limits.agent_runs.mvp_total must be a positive integer"
 
   [ "$(yq -r '.test_paths | length' "$CFG" 2>/dev/null)" -ge 1 ] 2>/dev/null || err "test_paths must list at least one pattern (run: config.sh upgrade)"
 
@@ -107,6 +109,7 @@ validate() {
   v="$(val .risk.max_changed_lines)"
   [ -z "$v" ] || { is_int "$v" && [ "$v" -ge 1 ]; } || err "risk.max_changed_lines must be a positive number"
   case "$(val .stage)" in ""|mvp|production) ;; *) err "stage must be mvp or production" ;; esac
+  case "$(yq -r '.trust.mvp_approval' "$CFG")" in true|false|null) ;; *) err "trust.mvp_approval must be true or false" ;; esac   # none is false
   for k in sensitive_paths product_paths infra_paths production_paths; do
     case "$(yq -r ".risk.$k | tag" "$CFG")" in '!!seq'|'!!null') ;; *) err "risk.$k must be a list of globs" ;; esac
   done

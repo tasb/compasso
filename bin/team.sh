@@ -18,7 +18,8 @@
 #
 # The tech lead merges (stage and risk: bin/risk.sh). On a story whose merge request is open:
 #   team.sh review   --repo R --iid N           read its reports, work out the risk from its branch, and whether a
-#                                               person approved -> JSON (the files in .compasso/runs/lead-<mr>)
+#                                               person approved -> JSON (the files in .compasso/runs/lead-<mr>-<head>:
+#                                               each head of its branch has its own folder, and its own budget)
 #   team.sh ask      --repo R --iid N           a person must approve: needs::approval and the reasons, on the merge request
 #   team.sh merge    --repo R --iid N           merge it, when every check holds and nothing waits for a person
 #   team.sh return   --repo R --iid N --body-file F   back to its developer (compasso::backlog), with a message;
@@ -95,14 +96,14 @@ review_json() { # the tech lead's view of a story's open merge request -> JSON
   local m mr branch target dir rep infra gate risk ev agents head
   m="$(adapter mr-of --iid "$IID")" || exit 1
   mr="$(jq -r .iid <<<"$m")"; branch="$(jq -r .source_branch <<<"$m")"; target="$(jq -r .target_branch <<<"$m")"
-  # the approver's verdicts (approver-<head>.json) stay; what this review reads again is replaced
-  dir="$MAIN/.compasso/runs/lead-$mr"; mkdir -p "$dir" || exit 1
-  rm -f "$dir"/findings.json "$dir"/coverage.json "$dir"/sensitive.json "$dir"/cost.json "$dir"/risk.json "$dir"/diff.patch
-  rep="$("$BIN/mr-report.sh" read --repo "$REPO" --mr "$mr" --out "$dir")" || exit 1
   git -C "$MAIN" fetch -q origin "+refs/heads/$target:refs/remotes/origin/$target" "+refs/heads/$branch:refs/remotes/origin/$branch" ||
     { echo "team: cannot fetch $branch and $target from origin" >&2; exit 1; }
-  git -C "$MAIN" diff "origin/$target...origin/$branch" > "$dir/diff.patch" || exit 1
   head="$(git -C "$MAIN" rev-parse "origin/$branch")" || exit 1
+  # one folder per head: the approver's verdict (approver.json) and budget stay; what this review reads again is replaced
+  dir="$MAIN/.compasso/runs/lead-$mr-${head:0:12}"; mkdir -p "$dir" || exit 1
+  rm -f "$dir"/findings.json "$dir"/coverage.json "$dir"/sensitive.json "$dir"/cost.json "$dir"/risk.json "$dir"/diff.patch
+  rep="$("$BIN/mr-report.sh" read --repo "$REPO" --mr "$mr" --out "$dir")" || exit 1
+  git -C "$MAIN" diff "origin/$target...origin/$branch" > "$dir/diff.patch" || exit 1
   infra="$("$BIN/risk.sh" --repo "$MAIN" --run "$dir" --base "origin/$target" --head "origin/$branch" --infra | jq -R . | jq -s -c .)" || exit 1
   gate=missing
   if [ "$(jq -r .findings <<<"$rep")" = true ]; then

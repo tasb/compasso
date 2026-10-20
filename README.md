@@ -172,7 +172,7 @@ A gate stops the flow. A check reports and never stops it.
 - **Persona.** In a team project every command and every tracker write first checks what this checkout's persona may do. A story is built only by the developer it is assigned to, and only by the checkout that claimed it.
 - **Plan check.** Story and feature sizes, dependencies, cycles and capacity are checked before anything is pushed. Stories that touch sensitive paths need a security review at planning.
 - **Story contract.** A story needs Acceptance and Verify before it is built. A story that cannot be tested goes back to the planner.
-- **Verify commands approved.** A story's Verify commands are tracker text, so they run only after a person approved each exact command on this machine. Plans ask once for all their stories; a command edited later asks again.
+- **Verify commands approved.** A story's Verify commands are tracker text, so they run only after a person approved each exact command on this machine, or when the plan on the default branch lists that command for that story. Plans ask once for all their stories; a command edited later asks again. In `stage: mvp` none is asked, unless `trust.mvp_approval` is true.
 - **Test immutability.** Test files are hashed after the tester writes them, and the builder may never change them.
 - **Verify.** Tests, lint, typecheck, build, the story's own Verify commands and e2e run before review, before the merge request and in CI.
 - **Security review.** Runs on every plan, every merge request and at sprint end, and is never skipped. Only security can close a security finding, and no approval mode merges with one open.
@@ -198,7 +198,7 @@ Eight roles, each defined once in `roles/`, each with its own model per harness 
 
 `security` and `approver` have a floor: no fast-tier model and no low effort.
 
-Each role is a registered subagent (`compasso:<role>`), generated from `roles/` by `bin/gen-agents.sh`, with only the tools it needs: security and the approver can only read, and no role can start another agent. Every run is bounded: each agent has a turn limit, and `bin/budget.sh` caps how many times each role runs in one story or plan (`limits.agent_runs`). When the budget runs out, the flow stops and hands back to a person.
+Each role is a registered subagent (`compasso:<role>`), generated from `roles/` by `bin/gen-agents.sh`, with only the tools it needs: security and the approver can only read, and no role can start another agent. Every run is bounded: each agent has a turn limit, and `bin/budget.sh` caps how many times each role runs in one story or plan (`limits.agent_runs`; in `stage: mvp` only their total, `mvp_total`). A merge request sent back for rework starts a new budget. When the budget runs out, the flow stops and hands back to a person.
 
 ## Hooks
 
@@ -276,7 +276,7 @@ bin/report.sh --data F --out O                         # the sprint report page
 bin/test-guide.sh --data F --out O                     # the test guide
 bin/mutate.sh, flaky.sh, live.sh, harden-report.sh     # hardening
 bin/gen-agents.sh [--check]                            # the Claude Code subagents, from roles/
-bin/budget.sh claim|show|reset --run DIR               # the agent-run budget of one flow run
+bin/budget.sh claim|show|rework|reset --run DIR        # the agent-run budget of one flow run
 bin/codex-models.sh check --repo . [--apply]           # Codex models the account can use, by tier
 bin/install-codex.sh [--repo R]                        # install for Codex
 ```

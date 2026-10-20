@@ -2,6 +2,18 @@
 
 Versions follow `version` in `.claude-plugin/plugin.json`. Claude Code updates an installed plugin only when this version changes, so every change users should receive ships in a new version.
 
+## 3.0.2 (2026-10-20)
+
+From a team running `compasso:work` in `mvp`: a person was asked again and again to reset a role's budget and to approve Verify commands.
+
+- **Rework has its own budget.** A merge request the tech lead sends back used to be reworked on what was left of the first build's budget, so the tester ran out at once. The story flow now starts a new one (`budget.sh rework`, refused while the story is building); the spent one is kept as `budget-<n>.jsonl`.
+- **The tech lead's approver runs once per head.** Its review folder is now `.compasso/runs/lead-<mr>-<head>`, so reviewing a reworked merge request no longer hits the approver's limit of 1 spent on the earlier head.
+- **New limits for new projects:** tester 9, builder 10, reviewer 6, total 30. An existing project keeps its values; edit `limits.agent_runs` to take them.
+- **In `mvp` only the total limit applies:** `limits.agent_runs.mvp_total`, default 40.
+- **The plan approves its Verify commands.** A story's Verify command runs without asking when the plan on the default branch lists it for that story. Edited commands, follow-ups and bugs still ask.
+- **In `mvp` Verify commands run without approval,** unless `trust.mvp_approval: true`. `production` ignores it.
+- No setup needed: a project without the new keys uses their defaults.
+
 ## 3.0.1 (2026-10-15)
 
 Fixes reported from a team running the story flow on GitLab ([#1](https://github.com/tasb/compasso/issues/1)).
