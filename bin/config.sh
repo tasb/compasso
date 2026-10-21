@@ -119,6 +119,8 @@ validate() {
   is_int "$v" && [ "$v" -ge 1 ] && [ "$v" -le 1440 ] || err "team.poll_minutes must be an integer from 1 to 1440 (run: config.sh upgrade)"
   v="$(val .team.lead_poll_minutes)"
   is_int "$v" && [ "$v" -ge 1 ] && [ "$v" -le 1440 ] || err "team.lead_poll_minutes must be an integer from 1 to 1440 (run: config.sh upgrade)"
+  v="$(val .team.lead_merge_minutes)"   # added in 3.1.0: none is 15
+  [ -z "$v" ] || { is_int "$v" && [ "$v" -ge 1 ] && [ "$v" -le 1440 ]; } || err "team.lead_merge_minutes must be an integer from 1 to 1440"
   v="$(val .team.queue.target)"; m="$(val .team.queue.min)"
   is_int "$v" && [ "$v" -ge 1 ] || err "team.queue.target must be a positive integer (run: config.sh upgrade)"
   is_int "$m" && [ "$m" -ge 1 ] && { ! is_int "$v" || [ "$m" -le "$v" ]; } || err "team.queue.min must be at least 1 and at most team.queue.target"

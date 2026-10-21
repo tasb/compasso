@@ -4,8 +4,9 @@
 #
 #   mr-report.sh findings --repo R --run DIR           the findings comment -> stdout
 #   mr-report.sh cost     --repo R --run DIR           the cost comment (DIR/cost.json, the finops report) -> stdout
-#   mr-report.sh post     --repo R --run DIR --mr N    post both (cost only when DIR/cost.json exists); a later
-#                                                      round edits the same comments in place
+#   mr-report.sh post     --repo R --run DIR --mr N    post both (cost only when DIR/cost.json exists), and the
+#                                                      findings on the story too (DIR/story.json's iid), so it records
+#                                                      what was found and fixed; a later round edits them in place
 #   mr-report.sh read     --repo R --mr N --out DIR    the data back: DIR/findings.json, coverage.json,
 #                                                      sensitive.json, cost.json -> {findings, cost} found
 #
@@ -73,16 +74,19 @@ case "$CMD" in
   cost) [ -n "$RUN" ] || { echo "mr-report: cost needs --run" >&2; exit 2; }; cost ;;
   post)
     [ -n "$RUN" ] && [ -n "$MR" ] || { echo "mr-report: post needs --run and --mr" >&2; exit 2; }
-    existing="$(adapter comments --mr "$MR")" || exit 1
+    put() { # --mr N|--iid N kind: post the comment, or edit the one posted before
+      local existing c body="$RUN/mr-$3.md"
+      existing="$(adapter comments "$1" "$2")" || exit 1
+      "$3" > "$body" || exit 2
+      c="$(marked "$existing" "$3")"
+      if [ -n "$c" ]; then adapter comment-edit "$1" "$2" --id "$(jq -r .id <<<"$c")" --body-file "$body" >/dev/null
+      else adapter comment "$1" "$2" --body-file "$body" >/dev/null; fi || { echo "mr-report: could not post the $3 comment on $2" >&2; exit 1; }
+    }
     kinds=findings; [ -f "$RUN/cost.json" ] && kinds="findings cost"
-    for k in $kinds; do
-      body="$RUN/mr-$k.md"
-      "$k" > "$body" || exit 2
-      c="$(marked "$existing" "$k")"
-      if [ -n "$c" ]; then adapter comment-edit --mr "$MR" --id "$(jq -r .id <<<"$c")" --body-file "$body" >/dev/null
-      else adapter comment --mr "$MR" --body-file "$body" >/dev/null; fi || { echo "mr-report: could not post the $k comment on $MR" >&2; exit 1; }
-    done
-    echo "mr-report: $kinds on $MR" ;;
+    for k in $kinds; do put --mr "$MR" "$k"; done
+    story="$(jq -r '.iid // empty' "$RUN/story.json" 2>/dev/null)"
+    [ -z "$story" ] || put --iid "$story" findings
+    echo "mr-report: $kinds on $MR${story:+, findings on #$story}" ;;
   read)
     [ -n "$MR" ] && [ -n "$OUT" ] || { echo "mr-report: read needs --mr and --out" >&2; exit 2; }
     mkdir -p "$OUT" || exit 1

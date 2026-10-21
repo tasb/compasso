@@ -15,7 +15,7 @@
 #               approves with a review (Approve, or Request changes), and the tech lead merges
 #
 #   github.sh check | ensure-labels | push-plan | story | set-state | open-mr | followup | merge
-#             | mr-info | mr-of | mr-events | comment | sprint-sync | merge-commit | digest | open-mr-branch
+#             | mr-info | mr-of | mr-events | mr-checks | mr-update | followups | set-milestone | comment | sprint-sync | merge-commit | digest
 #             | sprint-items | sprint-done | protect --repo R [options as in gitlab.sh]
 #             | labels | label-create | label | comments | comment-delete | comment-edit   (bin/team.sh's and
 #               bin/mr-report.sh's primitives, as in gitlab.sh; a pull request's comments are its issue comments)
@@ -27,7 +27,7 @@ case "${1:-}" in -h|--help) sed -n '2,/^set -u/s/^# \{0,1\}//p' "$0"; exit 0 ;; 
 
 BIN="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CMD="${1:-}"; shift || true
-REPO="." IID="" STATE="" BRANCH="" BODY="" TITLE="" PARENT="" MR="" LABELS_ARG="owner::either" MILESTONE="" RISK="" TARGET="" SINCE="" READ_ONLY=0 NAME="" ADD="" REMOVE="" ID=""
+REPO="." IID="" STATE="" BRANCH="" BODY="" TITLE="" PARENT="" MR="" LABELS_ARG="owner::either" MILESTONE="" RISK="" SINCE="" READ_ONLY=0 NAME="" ADD="" REMOVE="" ID=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --repo) REPO="$2"; shift 2 ;;
@@ -41,7 +41,6 @@ while [ $# -gt 0 ]; do
     --labels) LABELS_ARG="$2"; shift 2 ;;
     --milestone) MILESTONE="$2"; shift 2 ;;
     --risk) RISK="$2"; shift 2 ;;
-    --target) TARGET="$2"; shift 2 ;;
     --since) SINCE="$2"; shift 2 ;;
     --read-only) READ_ONLY=1; shift ;;
     --name) NAME="$2"; shift 2 ;;
@@ -65,10 +64,11 @@ NAMES="$("$BIN/locale.sh" --names)"                   # work-item names in every
 LOC="$("$BIN/locale.sh" --repo "$REPO")" || exit 1    # the project's language, for writing
 STATES="new backlog building in-review verifying done"
 
-# a team project assigns work by dev::<name> labels and uses no owner:: labels (bin/persona.sh, bin/team.sh)
+# a team project assigns work by dev::<name> labels and uses no owner:: labels but owner::human,
+# work for a person no agent is assigned (bin/persona.sh, bin/team.sh)
 TEAM=false; [ "$(cfg .team.enabled)" = true ] && TEAM=true
 ME=""; [ "$TEAM" = true ] && ME="$("$BIN/persona.sh" show --repo "$REPO" --json | jq -r '.name // ""')"
-[ "$TEAM" = true ] && LABELS_ARG="$(printf '%s' "$LABELS_ARG" | tr ',' '\n' | grep -v '^owner::' | paste -sd, -)"
+[ "$TEAM" = true ] && LABELS_ARG="$(printf '%s' "$LABELS_ARG" | tr ',' '\n' | grep -vx -e owner::agent -e owner::either | paste -sd, -)"
 DEV_COLOR="#0e8a16"
 
 api() { gh api --hostname "$HOST" "$@"; }
@@ -460,7 +460,7 @@ open_mr() {
   title="$TITLE"
   [ -n "$title" ] || title="$(issue "$IID" | jq -r '.title // empty')"
   [ -n "$title" ] || { echo "github: no work item #$IID" >&2; return 1; }
-  target="${TARGET:-$(api "repos/$R" --jq .default_branch)}"
+  target="$(api "repos/$R" --jq .default_branch)"   # trunk-based: a story never stacks on another's branch
   pr="$(api "repos/$R/pulls?head=$OWNER:$BRANCH&state=open" --jq '.[0].number // empty')"
   if [ -n "$pr" ]; then out="$(api -X PATCH "repos/$R/pulls/$pr" -F body=@"$BODY" -f base="$target")"
   else out="$(api -X POST "repos/$R/pulls" -f head="$BRANCH" -f base="$target" -f title="$title" -F body=@"$BODY")"; fi
@@ -492,6 +492,8 @@ merge() {
     [ -n "$RISK" ] && [ -f "$RISK" ] || { echo "github: approvals.merge is risk - merge needs --risk with risk.sh's decision" >&2; return 1; }
     [ "$(jq -r .level "$RISK")" = low ] || { echo "github: the change is high risk - a person merges it" >&2; return 1; }
   fi
+  # without required checks, auto-merge would merge at once: main stays green
+  [ "$(mr_checks | jq -r .pipeline)" != failed ] || { echo "github: #$MR is not merged: its checks failed" >&2; return 1; }
   # merged without a person: the daily digest lists it (a team's tech lead passes --risk only then)
   if [ "$mode" != team ] || { [ -n "$RISK" ] && [ "$(jq -r .level "$RISK" 2>/dev/null)" = low ]; }; then
     labels_set "$MR" compasso::auto-merged || { echo "github: could not label #$MR" >&2; return 1; }
@@ -599,6 +601,41 @@ merge_commit() {
     { echo "github: #$IID was not closed by a merged pull request" >&2; return 1; }
 }
 
+followups_cmd() { # filed by ship.sh, which marks each with its story
+  api --paginate "repos/$R/issues?state=open&milestone=none&per_page=100" | jq -s -c 'add // []
+    | map(select(.pull_request == null and ((.body // "") | test("<!-- compasso:followup story=[0-9]+ -->")))
+      | {iid: .number, title, story: (.body | capture("<!-- compasso:followup story=(?<s>[0-9]+) -->").s | tonumber)})'
+}
+
+set_milestone() {
+  local n
+  need IID MILESTONE
+  n="$(milestone_of "$MILESTONE")"
+  [ -n "$n" ] || { echo "github: no sprint $MILESTONE (milestone) in $R" >&2; return 1; }
+  api -X PATCH "repos/$R/issues/$IID" -F milestone="$n" >/dev/null || { echo "github: could not move #$IID into $MILESTONE" >&2; return 1; }
+}
+
+mr_checks() { # the GitLab shape: the checks and commit statuses of its last commit are its pipeline
+  local pr sha runs st
+  need MR
+  pr="$(api "repos/$R/pulls/$MR")" && sha="$(jq -r '.head.sha // empty' <<<"$pr" 2>/dev/null)" && [ -n "$sha" ] ||
+    { echo "github: no pull request #$MR" >&2; return 1; }
+  runs="$(api "repos/$R/commits/$sha/check-runs?per_page=100")" && st="$(api "repos/$R/commits/$sha/status")" ||
+    { echo "github: cannot read the checks of #$MR" >&2; return 1; }
+  jq -cn --argjson pr "$pr" --argjson runs "$runs" --argjson st "$st" '
+    [$runs.check_runs[] | if .status != "completed" then "running"
+       elif .conclusion | IN("failure", "cancelled", "timed_out", "action_required", "startup_failure") then "failed" else "success" end]
+    + (if ($st.total_count // 0) == 0 then [] else [{success: "success", failure: "failed", error: "failed"}[$st.state] // "running"] end)
+    | {pipeline: (if index("failed") then "failed" elif index("running") then "running" elif length > 0 then "success" else "none" end),
+       conflicts: ($pr.mergeable_state == "dirty")}'
+}
+
+mr_update() { # merges its base into the branch; refused when they conflict
+  need MR
+  api -X PUT "repos/$R/pulls/$MR/update-branch" >/dev/null || { echo "github: could not update #$MR: it conflicts with its base" >&2; return 1; }
+  echo "github: #$MR is up to date with its base; its checks run again"
+}
+
 mr_of() { # the open pull request that closes a story
   need IID
   closing_prs "$IID" | jq -e -c '[.[] | select(.state == "OPEN")][0] // empty
@@ -616,12 +653,6 @@ mr_events() { # a pull request's comments and reviews, oldest first
     + ($r | map(({APPROVED: "approved", CHANGES_REQUESTED: "changes_requested", COMMENTED: "comment", DISMISSED: "unapproved"}[.state] // null) as $k
         | select($k != null) | {kind: $k, by: .user.login, at: .submitted_at, body: (.body // ""), member: member}))
     | sort_by(.at)'
-}
-
-open_mr_branch() {
-  need IID
-  closing_prs "$IID" | jq -e -r '[.[] | select(.state == "OPEN")][0].headRefName // empty' ||
-    { echo "github: #$IID has no open pull request to stack on" >&2; return 1; }
 }
 
 digest() {
@@ -717,14 +748,17 @@ case "$CMD" in
   merge) merge ;;
   mr-info) mr_info ;;
   mr-of) mr_of ;;
+  mr-checks) mr_checks ;;
+  followups) followups_cmd ;;
+  set-milestone) set_milestone ;;
+  mr-update) mr_update ;;
   mr-events) mr_events ;;
   comment) comment ;;
   sprint-sync) sprint_sync ;;
   merge-commit) merge_commit ;;
   digest) digest ;;
-  open-mr-branch) open_mr_branch ;;
   sprint-items) sprint_items ;;
   sprint-done) sprint_done ;;
   protect) protect ;;
-  *) echo "usage: github.sh check|ensure-labels|push-plan|push-backlog|story|set-state|open-mr|followup|merge|mr-info|comment|sprint-sync|merge-commit|digest|open-mr-branch|sprint-items|sprint-done|protect --repo R ..." >&2; exit 1 ;;
+  *) echo "usage: github.sh check|ensure-labels|push-plan|push-backlog|story|set-state|open-mr|followup|merge|mr-info|mr-checks|mr-update|followups|set-milestone|comment|sprint-sync|merge-commit|digest|sprint-items|sprint-done|protect --repo R ..." >&2; exit 1 ;;
 esac

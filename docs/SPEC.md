@@ -489,7 +489,7 @@ Decided 2026-09-24: one HTML sprint report, on demand (`/compasso:report`) and a
 A review of the first live runs showed where time and quality went: story #8 took about 10 agent minutes and waited 18.2 hours for approval; each agent run cost 39-62K tokens whatever its size; a fix round cost almost as much as the first build; the shipper was the slowest role for mechanical work; the bug that mattered was caught only by security; and an untestable story wasted a build. Changes:
 
 - **Risk-based merging** (`approvals.merge: risk`). `risk.sh` judges a story low risk only when it touches no `risk.sensitive_paths`, stays within `risk.max_changed_lines`, changes no build, pipeline, Compasso config or dependencies, had no blocker or major security finding, and meets its coverage minimum. Low risk: the approver merges it (`gitlab.sh merge --risk`, which refuses anything else) and labels it `compasso::auto-merged`. High risk: a person approves, with the reasons in the merge request. The sprint flow posts a digest of what merged without a person (`gitlab.sh digest`). Nothing merges with an open security finding.
-- **Stacked stories.** A story whose only open dependency has an open merge request builds on that story's branch and targets it (`sprint-sync` `stack_on`, `gitlab.sh open-mr-branch`, `open-mr --target`); GitLab retargets it when the first merges.
+- **Stacked stories** (removed in 3.1.0, section 34). A story whose only open dependency has an open merge request built on that story's branch and targeted it.
 - **Fewer agent runs.** Fix rounds continue the same agents; the builder commits its work with its own message as verify passes and keeps the Changes list; `ship.sh` files minor findings as backlog stories and commits the metrics without an agent; the reviewer captures lessons; the shipper only writes the test guide.
 - **Quality up front.** A story on a sensitive path needs security's abuse cases in its acceptance before plan-check passes (`security_reviewed: true`); the tester checks every story is testable before a plan is approved; review runs a quick mutation check on a story's sensitive lines (`mutate.sh scope --base --sensitive`).
 
@@ -905,6 +905,36 @@ Decided with the user after a team ran `compasso:work` in `mvp`: a person was as
 
 - **The plan on the default branch approves (every stage).** A story's Verify command counts as approved when `.compasso/plan.yaml` on `origin/<default branch>` lists it for that story (the entry whose `gitlab:` is the story's iid), exactly. `trust.sh check` fetches the default branch first, and uses the last fetch when it cannot. The plan reached that branch through a merge request, and the agents already run that branch's code when they run its tests. A command edited on the tracker, a story the plan does not list (a follow-up, a bug) and a plan changed only locally still ask, as before.
 - **In `mvp` no Verify command needs approval,** unless `trust.mvp_approval: true` (default `false`, also when the key is missing). A person who can edit a story on the tracker can then choose what runs on the developer's machine: acceptable for a product nobody uses yet, with a closed team. `production` ignores the key.
+
+### Open
+
+- Tried against the fakes only.
+
+## 34. Main stays green, fewer follow-ups (2026-10-21)
+
+Decided with the user after reading a team's tracker in `mvp` (read-only): 50 open follow-ups from 37 stories, 47 with no label and no sprint, so nobody built them; 8 of 13 open merge requests stacked on other stories' branches, the deepest four deep, several conflicting or failing; the default branch red for its last 5 pipelines after merge requests whose own pipeline had failed were merged; and each developer's queue full by count while 28 of its 31 stories waited on others.
+
+### Findings
+
+- **Every finding is fixed in its story,** minors too, in every stage: `review-gate.sh --for merge` blocks while any finding is open. A minor finding whose fix depends on someone other than the developer (a person, an admin of an outside system) carries `needs` (who) and is the one exception: `ship.sh` files it for that person, `owner::human`, in the story's sprint. Security may defer only such a finding (`followup` with `needs`). A follow-up filed before (it has `followup_iid`) stays accepted.
+- **The findings are posted on the story too** (`mr-report.sh post`), edited in place by a later round, so the story records what was found and fixed.
+- **`owner::human` in a team project.** The other `owner::` labels are still dropped; work for a person is never offered to a developer (`sprint-sync` lists it in `human`, and the tech lead's inbox shows it).
+- **Upgrading.** `bin/followups.sh` lists the open follow-ups in no sprint and, with `--apply`, moves them into the current sprint, where the queue assigns them like any story (the user's choice for the existing ones).
+
+### Trunk-based
+
+- **No stacking.** A story waits until what it depends on is merged; its developer builds other work. `open-mr` always targets the default branch (`--target` and `open-mr-branch` are gone). A stacked merge request opened before keeps its target; when its base merges, the tracker retargets it.
+
+### Merging
+
+- **Up to date and green.** `team.sh review` reports `behind` (the target moved on), `pipeline` (`success`, `failed`, `running`, `none`) and `conflicts` (`tracker.sh mr-checks`). `team.sh merge` refuses all but an up-to-date branch whose pipeline did not fail and is not running, with no conflicts. `team.sh update` brings a branch up to date (`tracker.sh mr-update`: a rebase on GitLab, GitHub's update-branch); its pipeline runs again and a later poll merges it. Once one merge request merges, the others are behind: about one merge per merge poll when several wait, which the team accepted.
+- **Every merge** (`tracker.sh merge`, any mode) refuses a failed pipeline: with GitLab's "Pipelines must succeed" off, merge-when-pipeline-succeeds merged a failed one at once. Setup asks a Maintainer to turn that setting on, with semi-linear history (GitLab) or, on GitHub, "Require branches to be up to date" in the ruleset `tracker.sh protect` sets (it leaves that off).
+- **The approver runs once per version of the change.** The lead's folder is `.compasso/runs/lead-<mr>-<patch id>`: a rebase that changes nothing keeps it and its verdict; a rework gets a new one and its own budget.
+- **Two polls for the tech lead,** each in its own session: `/compasso:work --merge` every `team.lead_merge_minutes` (new, default 15, also when missing) and `/compasso:work --flow` (questions, the queue, work with no developer) every `team.lead_poll_minutes`.
+
+### The queue
+
+- **Only what can be built counts.** `team.load` gives each developer's `backlog` and `ready` (its backlog with nothing open ahead); the inbox's `queue` measures `room` and `below_min` on `ready`. `unassigned` gives each item `ready` and `holds` (how many open items wait on it), the ready ones holding up the most first, and the tech lead assigns in that order.
 
 ### Open
 

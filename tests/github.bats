@@ -200,15 +200,16 @@ story_fixture() {
 
 # ---------- pull requests ----------
 
-@test "open-mr: a pull request to the default branch, or to --target when stacked" {
+@test "open-mr: a pull request to the default branch, never to another story's branch" {
   issue 8 "Invoice list API" open '[]' ''
   echo "Closes #8" > "$BATS_TEST_TMPDIR/b.md"
   run gh_ open-mr --iid 8 --branch story/8-list --body-file "$BATS_TEST_TMPDIR/b.md"
   [ "$status" -eq 0 ]
   [ "$(jq -c . <<<"$output")" = '{"iid":31,"web_url":"https://github.com/acme/app/pull/31"}' ]
   grep -q "POST repos/acme/app/pulls head=story/8-list base=main title=Invoice list API" "$FAKE_GH/calls.log"
-  gh_ open-mr --iid 8 --branch story/9-next --body-file "$BATS_TEST_TMPDIR/b.md" --target story/8-list >/dev/null
-  grep -q "head=story/9-next base=story/8-list" "$FAKE_GH/calls.log"
+  run gh_ open-mr --iid 8 --branch story/9-next --body-file "$BATS_TEST_TMPDIR/b.md" --target story/8-list
+  [ "$status" -eq 1 ]
+  [ "$(grep -c 'head=story/9-next' "$FAKE_GH/calls.log")" -eq 0 ]
 }
 
 @test "open-mr: updates the branch's open pull request instead of opening another" {
@@ -266,6 +267,38 @@ story_fixture() {
   grep -q "PR merge 31 --repo github.com/acme/app --auto --merge" "$FAKE_GH/calls.log"
 }
 
+@test "merge: never when a check of its last commit failed" {
+  cfg_set '.approvals.merge = "agent"'
+  issue 31 "PR" open '[]' ''
+  echo '[]' > "$BATS_TEST_TMPDIR/f.json"
+  echo '{"check_runs":[{"status":"completed","conclusion":"success"},{"status":"completed","conclusion":"failure"}]}' > "$FAKE_GH/checks.json"
+  run gh_ merge --mr 31 --body-file "$BATS_TEST_TMPDIR/f.json"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"its checks failed"* ]] || false
+  [ "$(calls 'PR merge')" -eq 0 ]
+}
+
+@test "mr-checks: the checks and statuses of the last commit, and whether it conflicts with its base" {
+  [ "$(gh_ mr-checks --mr 31 | jq -c .)" = '{"pipeline":"none","conflicts":false}' ]
+  echo '{"check_runs":[{"status":"completed","conclusion":"success"},{"status":"completed","conclusion":"skipped"}]}' > "$FAKE_GH/checks.json"
+  [ "$(gh_ mr-checks --mr 31 | jq -r .pipeline)" = success ]
+  echo '{"check_runs":[{"status":"in_progress","conclusion":null}]}' > "$FAKE_GH/checks.json"
+  [ "$(gh_ mr-checks --mr 31 | jq -r .pipeline)" = running ]
+  echo '{"check_runs":[]}' > "$FAKE_GH/checks.json"
+  echo '{"state":"failure","total_count":1}' > "$FAKE_GH/status.json"
+  [ "$(gh_ mr-checks --mr 31 | jq -r .pipeline)" = failed ]
+  echo '{"state":"pending","total_count":1}' > "$FAKE_GH/status.json"
+  [ "$(gh_ mr-checks --mr 31 | jq -r .pipeline)" = running ]
+  mkdir -p "$FAKE_GH/pulls"; echo '{"number":31,"mergeable_state":"dirty","head":{"sha":"abc"}}' > "$FAKE_GH/pulls/31.json"
+  [ "$(gh_ mr-checks --mr 31 | jq -r .conflicts)" = true ]
+}
+
+@test "mr-update: brings the pull request's branch up to date with its base" {
+  run gh_ mr-update --mr 31
+  [ "$status" -eq 0 ]
+  grep -q "PUT repos/acme/app/pulls/31/update-branch" "$FAKE_GH/calls.log"
+}
+
 @test "merge: with approvals.merge risk, a high-risk change is left to a person" {
   cfg_set '.approvals.merge = "risk"'
   echo '[]' > "$BATS_TEST_TMPDIR/f.json"; echo '{"level":"high"}' > "$BATS_TEST_TMPDIR/r.json"
@@ -291,14 +324,13 @@ story_fixture() {
   [ "$(calls 'POST repos/acme/app/issues/8/comments')" -eq 1 ]
 }
 
-@test "merge-commit and open-mr-branch come from the pull requests that close the story" {
+@test "merge-commit comes from the pull requests that close the story; open-mr-branch is gone" {
   mkdir -p "$FAKE_GH/closing"
   echo '[{"number":30,"state":"CLOSED","merged":false,"headRefName":"old","mergeCommit":null},{"number":31,"state":"MERGED","merged":true,"headRefName":"story/8","mergeCommit":{"oid":"abc123"}},{"number":32,"state":"OPEN","merged":false,"headRefName":"story/8-fix","mergeCommit":null}]' > "$FAKE_GH/closing/8.json"
   [ "$(gh_ merge-commit --iid 8)" = abc123 ]
-  [ "$(gh_ open-mr-branch --iid 8)" = story/8-fix ]
   run gh_ merge-commit --iid 9
   [ "$status" -eq 1 ]
-  run gh_ open-mr-branch --iid 9
+  run gh_ open-mr-branch --iid 8
   [ "$status" -eq 1 ]
 }
 

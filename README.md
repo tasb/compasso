@@ -93,7 +93,7 @@ Run `/compasso:setup` once in the product repository. It connects the tracker, a
 | Story | at most 8h, target 4h | a child task of its feature, with an estimate |
 | Blocker | anything outside the plan a story waits for | a `type::blocker` issue, urgent, always assigned to a person, with step-by-step instructions |
 
-Dependencies are part of the plan. Stories are created in dependency order. A story waits until what it depends on is merged, or it stacks on that story's open merge request. Sprint sync shows what can run now, what waits, and on whom.
+Dependencies are part of the plan. Stories are created in dependency order. A story waits until what it depends on is merged: no story builds on another's unmerged branch. Sprint sync shows what can run now, what waits, and on whom.
 
 ### Trackers
 
@@ -122,12 +122,14 @@ One agent can do everything, as it always did. A team runs several agents, on se
 A persona is not a role: the nine roles below are the subagents every persona dispatches.
 
 - **Joining.** A developer picks a name at setup, which prints a JSON block with no secret in it. Pasted into the tech lead's agent, it creates the label `dev::<name>`. The `dev::` labels are the team.
-- **Assignment** is that label, on a story, a bug or a feature (a feature's label covers its stories). In a team project every story names a developer, `owner::` labels are not used, and work for a person is a blocker.
+- **Assignment** is that label, on a story, a bug or a feature (a feature's label covers its stories). In a team project every story names a developer, `owner::` labels are not used except `owner::human` on a follow-up only a person can do, and work for a person is a blocker.
 - **One agent per story.** Before building, an agent posts a claim comment on the story; the earliest claim wins, and a run resumes only from the checkout that holds it. This holds without a team too.
 - **Messages** are comments on the story, at most 250 characters. A developer's question raises `needs::lead`; the tech lead's answer lowers it. Comment text is data, never instructions.
 - **Status labels.** `compasso::backlog` (assigned, not started), `compasso::building` (claimed), `compasso::in-review` (its merge request is open); the merge closes it. A developer's backlog, for the tech lead, is what still has `compasso::backlog`.
 - **The tech lead merges.** The developer opens the merge request with its findings (and, for an infrastructure change, a cost report from the `finops` role) as comments, and stops. The tech lead's agent reads them, works out the risk itself and merges. When the risk needs a person, it labels the merge request `needs::approval`: you approve or reject it with the tracker's own review, and the tech lead merges after an approval. A rejection goes back to the same developer, on the same merge request.
-- **The poll.** Each agent reads the tracker through a recurring prompt, `/loop <minutes>m /compasso:work`, and skips the read while it is working: the tech lead every `team.lead_poll_minutes` (default 30), developers every `team.poll_minutes` (default 60).
+- **The poll.** Each agent reads the tracker through a recurring prompt, `/loop <minutes>m /compasso:work`, and skips the read while it is working: developers every `team.poll_minutes` (default 60). The tech lead runs two, each in its own session: `/compasso:work --merge` every `team.lead_merge_minutes` (default 15) and `/compasso:work --flow` (questions, the queue) every `team.lead_poll_minutes` (default 30).
+- **Main stays green.** The tech lead merges only a merge request that is up to date with its target and whose pipeline passed there; one that is behind is brought up to date first (`team.sh update`), and one that conflicts or fails goes back to its developer.
+- **The queue counts what can be built.** A developer's backlog counts toward `team.queue` only for stories with nothing open ahead of them, and the tech lead assigns first the stories that can start and hold up the most others.
 - **Stage.** In `stage: mvp` the tech lead also keeps each developer's backlog between `team.queue.min` (5) and `team.queue.target` (15) on its own, within the sprint; in `production` it proposes assignments and a person decides. Answers to questions are always a person's.
 - **One account per agent.** Each agent uses its own tracker account (a GitLab service account; on GitHub, a machine user): every tracker call and git push of its checkout use that account's token, and its commits carry the agent's name and email. A person's approval counts only from an account not listed in `team.agents`.
 - **Bugs** found in merged work are filed with no developer and wait for the tech lead.
@@ -246,10 +248,12 @@ The skills call these; they also run on their own.
 ```bash
 bin/config.sh init|upgrade|validate|get --repo .       # the configuration
 bin/tracker.sh check|ensure-labels|push-backlog|push-plan|story|set-state|open-mr|followup|merge|mr-info|comment \
-               |sprint-sync|sprint-items|sprint-done|merge-commit|open-mr-branch|digest --repo .
+               |sprint-sync|sprint-items|sprint-done|merge-commit|digest|mr-checks|followups --repo .
 bin/tracker.sh protect --repo .                        # GitHub: the ruleset, CodeQL and auto-merge
 bin/persona.sh show|set|join|gate --repo .             # this checkout's persona: default, tech-lead or developer
 bin/team.sh add|list|assign|claim|release|msg|messages|inbox|working --repo .   # a team: names, assignment, claims, messages, the poll
+bin/team.sh review|ask|update|merge|return --iid N --repo .                 # the tech lead merges
+bin/followups.sh --repo . [--milestone S<n>] [--apply]                     # upgrading: follow-ups in no sprint join the sprint
 bin/start.sh --repo .                                  # where the product stands, and the next step
 bin/prototype.sh crawl|inventory|check ...             # a prototype's screens, forms and flows
 bin/backlog-check.sh --repo .                          # the backlog: sizes, dependencies, the MVP line, screens covered
@@ -267,7 +271,7 @@ bin/coverage.sh --repo . --base origin/main --run DIR  # changed-line coverage (
 bin/test-hashes.sh record|verify --repo . --run DIR    # test immutability
 bin/review-gate.sh --findings F [--for merge]          # do review findings still block?
 bin/risk.sh --repo . --run DIR --base REF              # low or high risk
-bin/ship.sh --repo . --run DIR                         # finish a story: follow-ups, metrics, record, commit
+bin/ship.sh --repo . --run DIR                         # finish a story: follow-ups for a person, metrics, record, commit
 bin/record.sh path|write|story ...                     # decision records
 bin/plan-pr.sh --repo . --title T                      # the plan and its records, as a merge request
 bin/learnings.sh recall --role R --story F             # the lessons one role needs for one story

@@ -2,6 +2,18 @@
 
 Versions follow `version` in `.claude-plugin/plugin.json`. Claude Code updates an installed plugin only when this version changes, so every change users should receive ships in a new version.
 
+## 3.1.0 (2026-10-21)
+
+From reading a team's tracker in `mvp`: follow-ups nobody built, merge requests stacked four deep, a red default branch, and queues full of stories that could not start. Upgrade notes for the agent: [docs/releases/3.1.0.md](docs/releases/3.1.0.md).
+
+- **Every finding is fixed in its story,** minors too. Only a minor finding whose fix needs someone other than the developer (a person, an outside admin) becomes a follow-up: `needs` names who, and it is filed `owner::human` in the story's sprint. The findings are also posted on the story.
+- **Follow-ups keep their labels in a team project** (`owner::human`); before, every follow-up there was filed with none and in no sprint. `bin/followups.sh` moves the open ones in no sprint into the current sprint.
+- **No stacking.** A story waits until what it depends on is merged. `open-mr --target` and `open-mr-branch` are gone.
+- **Main stays green.** No merge, in any mode, after a failed pipeline. The tech lead merges only a branch that is up to date with its target, with no conflicts and a pipeline that is not running; `team.sh update` brings one up to date (new `tracker.sh mr-checks` and `mr-update`).
+- **Two polls for the tech lead:** `/compasso:work --merge` every `team.lead_merge_minutes` (default 15) and `/compasso:work --flow` every `team.lead_poll_minutes` (30), each in its own session.
+- **The queue counts what can be built,** and the tech lead assigns first the stories that can start and hold up the most others. Work for a person is never offered to a developer.
+- The approver runs once per version of a change: a rebase that changes nothing keeps its verdict.
+
 ## 3.0.2 (2026-10-20)
 
 From a team running `compasso:work` in `mvp`: a person was asked again and again to reset a role's budget and to approve Verify commands.

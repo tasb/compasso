@@ -65,6 +65,7 @@ lead_world() { # a git origin with ana's branch story/16-csv; merge request !31 
   git checkout -q main && git branch -q -D story/16-csv
   mkdir -p "$FAKE_GL/related"
   echo '[{"iid":31,"state":"opened","description":"Closes #16","source_branch":"story/16-csv","target_branch":"main","web_url":"https://gitlab.example/mr/31"}]' > "$FAKE_GL/related/16.json"
+  echo '{"iid":31,"has_conflicts":false,"head_pipeline":{"status":"success"}}' > "$FAKE_GL/mr-31.json"
   RUN="$BATS_TEST_TMPDIR/run"; mkdir -p "$RUN"
   echo '[]' > "$RUN/findings.json"; echo '{"status":"ok","percent":100,"min":80}' > "$RUN/coverage.json"
   "$ROOT/bin/mr-report.sh" post --repo "$ANA" --run "$RUN" --mr 31 >/dev/null

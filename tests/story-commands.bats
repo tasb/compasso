@@ -181,9 +181,39 @@ findings() { echo "$1" > "$BATS_TEST_TMPDIR/findings.json"; }
 @test "merge: an agent merges when the pipeline succeeds once review is clear" {
   cfg_set '.approvals.merge = "agent"'
   findings '[{"by":"reviewer","severity":"minor","status":"followup","summary":"naming"}]'
+  echo '{"iid":31,"has_conflicts":false,"head_pipeline":{"status":"running"}}' > "$FAKE_GL/mr-31.json"
   run gl merge --mr 31 --body-file "$BATS_TEST_TMPDIR/findings.json"
   [ "$status" -eq 0 ]
   grep -q "PUT projects/acme%2Fapp/merge_requests/31/merge merge_when_pipeline_succeeds=true" "$FAKE_GL/calls.log"
+}
+
+@test "merge: never when the pipeline of its last commit failed" {
+  cfg_set '.approvals.merge = "agent"'
+  findings '[]'
+  for st in failed canceled; do
+    echo "{\"iid\":31,\"has_conflicts\":false,\"head_pipeline\":{\"status\":\"$st\"}}" > "$FAKE_GL/mr-31.json"
+    run gl merge --mr 31 --body-file "$BATS_TEST_TMPDIR/findings.json"
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"its pipeline failed"* ]] || false
+  done
+  [ "$(grep -c 'merge_requests/31/merge' "$FAKE_GL/calls.log" || true)" -eq 0 ]
+}
+
+@test "mr-checks: the pipeline of the last commit and whether it conflicts with its target" {
+  for p in 'success:success' 'failed:failed' 'canceled:failed' 'running:running' 'pending:running' 'created:running'; do
+    echo "{\"iid\":31,\"has_conflicts\":false,\"head_pipeline\":{\"status\":\"${p%%:*}\"}}" > "$FAKE_GL/mr-31.json"
+    [ "$(gl mr-checks --mr 31 | jq -c .)" = "{\"pipeline\":\"${p#*:}\",\"conflicts\":false}" ]
+  done
+  echo '{"iid":31,"has_conflicts":true,"head_pipeline":null}' > "$FAKE_GL/mr-31.json"
+  [ "$(gl mr-checks --mr 31 | jq -c .)" = '{"pipeline":"none","conflicts":true}' ]
+  run gl mr-checks --mr 32
+  [ "$status" -eq 1 ]
+}
+
+@test "mr-update: rebases the merge request onto its target" {
+  run gl mr-update --mr 31
+  [ "$status" -eq 0 ]
+  grep -q "PUT projects/acme%2Fapp/merge_requests/31/rebase" "$FAKE_GL/calls.log"
 }
 
 @test "merge: without the findings it is refused" {
@@ -220,21 +250,13 @@ findings() { echo "$1" > "$BATS_TEST_TMPDIR/findings.json"; }
   [ "$a" = "$b" ]
 }
 
-@test "open-mr-branch: the branch of the open merge request that closes the story" {
-  mkdir -p "$FAKE_GL/related"
-  echo '[{"state":"merged","description":"Closes #8","source_branch":"old"},{"state":"opened","description":"See #8","source_branch":"mentions"},{"state":"opened","description":"Closes #8\n\n## Changes","source_branch":"story/8-list"}]' > "$FAKE_GL/related/8.json"
-  run gl open-mr-branch --iid 8
-  [ "$status" -eq 0 ]
-  [ "$output" = "story/8-list" ]
-  echo '[]' > "$FAKE_GL/related/8.json"
+@test "open-mr always targets the default branch: no stacking on another story's branch" {
+  echo "Closes #8" > "$BATS_TEST_TMPDIR/body.md"
+  run gl open-mr --iid 8 --branch story/9-next --body-file "$BATS_TEST_TMPDIR/body.md" --target story/8-list
+  [ "$status" -eq 1 ]
+  [ "$(grep -c 'merge_requests' "$FAKE_GL/calls.log")" -eq 0 ]
   run gl open-mr-branch --iid 8
   [ "$status" -eq 1 ]
-}
-
-@test "open-mr --target stacks the merge request on another story's branch" {
-  echo "Closes #8" > "$BATS_TEST_TMPDIR/body.md"
-  gl open-mr --iid 8 --branch story/9-next --body-file "$BATS_TEST_TMPDIR/body.md" --target story/8-list >/dev/null
-  grep -q "source_branch=story/9-next target_branch=story/8-list" "$FAKE_GL/calls.log"
 }
 
 @test "open-mr --title opens a merge request that is not a story's" {

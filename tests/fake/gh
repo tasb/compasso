@@ -116,11 +116,15 @@ case "$method $path" in
       jq --argjson id "${path##*/}" 'map(select(.id != $id))' "$f" > "$D/tmp" && mv "$D/tmp" "$f"; done ;;
   "GET repos/"*"/issues?"*)
     m="$(printf '%s' "$path" | sed -n 's/.*milestone=\([^&]*\).*/\1/p')"; lb="$(printf '%s' "$path" | sed -n 's/.*labels=\([^&]*\).*/\1/p')"
-    cat "$D"/issues/*.json 2>/dev/null | jq -s --arg m "$m" --arg lb "$lb" 'map(select((.milestone.number | tostring) == $m)
+    cat "$D"/issues/*.json 2>/dev/null | jq -s --arg m "$m" --arg lb "$lb" 'map(select(if $m == "none" then .milestone == null else (.milestone.number | tostring) == $m end)
       | select($lb == "" or ([.labels[].name] | index($lb)))) | sort_by(.number)' | out ;;
   "GET repos/"*"/issues/"*) out < "$D/issues/${path##*/}.json" 2>/dev/null || nf ;;
   "GET repos/"*"/pulls/"*"/reviews"*) n="${path%/reviews*}"; n="${n##*/}"; { cat "$D/reviews/$n.json" 2>/dev/null || echo '[]'; } | out ;;
   "GET repos/"*"/pulls?"*) { cat "$D/pr-query.json" 2>/dev/null || echo '[]'; } | out ;;
+  "GET repos/"*"/pulls/"*) n="${path##*/}"; { cat "$D/pulls/$n.json" 2>/dev/null || echo "{\"number\":$n,\"mergeable_state\":\"clean\",\"head\":{\"sha\":\"abc\"}}"; } | out ;;
+  "PUT repos/"*"/pulls/"*"/update-branch") echo '{"message":"Updating pull request branch."}' | out ;;
+  "GET repos/"*"/commits/"*"/check-runs"*) { cat "$D/checks.json" 2>/dev/null || echo '{"check_runs":[]}'; } | out ;;
+  "GET repos/"*"/commits/"*"/status") { cat "$D/status.json" 2>/dev/null || echo '{"state":"pending","total_count":0}'; } | out ;;
   "POST repos/"*"/pulls") echo "{\"number\":31,\"html_url\":\"https://github.com/acme/app/pull/31\",\"base\":\"${f_base:-}\"}" | out ;;
   "PATCH repos/"*"/pulls/"*) echo "{\"number\":${path##*/},\"html_url\":\"https://github.com/acme/app/pull/${path##*/}\"}" | out ;;
   "GET search/issues") { cat "$D/search.json" 2>/dev/null || echo '{"items":[]}'; } | out ;;

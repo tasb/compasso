@@ -90,6 +90,20 @@ gh_() {
   [ "$(jq -r .result "$OUT/cost.json")" = increase ]
 }
 
+@test "post: the findings go on the story too, so it records what was found and fixed, edited in place" {
+  gl
+  echo '{"iid":8}' > "$RUN/story.json"
+  report post --run "$RUN" --mr 31 >/dev/null
+  report post --run "$RUN" --mr 31 >/dev/null
+  [ "$(jq length "$FAKE_GL/notes/8.json")" -eq 1 ]
+  [ "$(jq -r '.[0].body' "$FAKE_GL/notes/8.json" | head -1)" = "<!-- compasso:findings -->" ]
+  grep -q "PUT projects/acme%2Fapp/issues/8/notes/" "$FAKE_GL/calls.log"
+  gh_
+  report post --run "$RUN" --mr 31 >/dev/null
+  report post --run "$RUN" --mr 31 >/dev/null
+  [ "$(jq length "$FAKE_GH/comments/8.json")" -eq 1 ]
+}
+
 @test "read: a comment by someone outside the project counts for nothing, and a missing report is said" {
   gh_
   FAKE_GH_ASSOC=NONE report post --run "$RUN" --mr 31

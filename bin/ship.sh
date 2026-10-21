@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# Finish a story run without an agent: file the open minor findings, and the minor security
-# findings security deferred, as backlog stories, write the story's metrics and decision
-# record, and commit them with any lessons.
+# Finish a story run without an agent: file each minor finding whose fix needs someone other than
+# the developer (its needs: a person, an outside admin) as a story for a person in the sprint, write
+# the story's metrics and decision record, and commit them with any lessons. Every other finding
+# was fixed in the story (review-gate.sh).
 #
 #   ship.sh --repo R --run DIR
 #
@@ -30,24 +31,24 @@ iid="$(jq -r .iid "$RUN/story.json")"; feature="$(jq -r '.feature // empty' "$RU
 test_cmd="$("$BIN/config.sh" get --repo "$REPO" .commands.test)"
 L="$("$BIN/locale.sh" --repo "$REPO")" || exit 2   # follow-ups in the project's language
 
-# open minors, and security's deferred minors not filed yet -> backlog stories under the feature (or the story)
-for id in $(jq -r 'to_entries[] | select(.value.severity == "minor" and (
+# minors someone else fixes, not filed yet -> stories for a person, under the feature (or the story), in its sprint
+for id in $(jq -r 'to_entries[] | select(.value.severity == "minor" and (.value.needs // "") != "" and (
     (.value.by == "reviewer" and .value.status == "open")
     or (.value.by == "security" and .value.status == "followup" and .value.verified_by == "security" and .value.followup_iid == null))) | .key' "$RUN/findings.json"); do
   f="$(jq -c ".[$id]" "$RUN/findings.json")"
   body="$RUN/followup-$id.md"
   jq -r -L "$BIN" --argjson L "$L" --arg cmd "$test_cmd" --argjson story "$iid" 'include "i18n";
-    "**\(md("as"))** \(t("followup_who")) **\(md("i_want"))** \(.fix // t("followup_want")) **\(md("so_that"))** " + tf("followup_so"; {summary: (.summary | ascii_downcase | sub("\\.$"; ""))}) + ".",
+    "**\(md("as"))** \(.needs) **\(md("i_want"))** \(.fix // t("followup_want")) **\(md("so_that"))** " + tf("followup_so"; {summary: (.summary | ascii_downcase | sub("\\.$"; ""))}) + ".",
     "", "## \(md("acceptance"))",
     "- [ ] " + tf("followup_given"; {where: (if .file then "`\(.file)\(if .line then ":\(.line)" else "" end)`" else tf("followup_code_from"; {story: $story}) end), summary: .summary}),
     "", "## \(md("verify"))", "- `\(if $cmd == "" then t("followup_tests") else $cmd end)`",
     "", "**\(md("tests")):** unit", "", "<!-- compasso:followup story=\($story) -->"' <<<"$f" > "$body"
   title="$(jq -r '.summary | if length > 80 then .[0:77] + "..." else . end' <<<"$f")"
   new="$("$BIN/tracker.sh" followup --repo "$REPO" --parent "${feature:-$iid}" --title "$title" \
-          --body-file "$body" --labels owner::either --milestone none)" || { echo "ship: could not file the follow-up for finding $id" >&2; exit 1; }
+          --body-file "$body" --labels owner::human)" || { echo "ship: could not file the follow-up for finding $id" >&2; exit 1; }
   jq --argjson i "$id" --argjson n "$new" '.[$i] += {status: "followup", followup_iid: $n}' "$RUN/findings.json" > "$RUN/findings.new" \
     && mv "$RUN/findings.new" "$RUN/findings.json"
-  echo "ship: minor finding filed as #$new"
+  echo "ship: minor finding filed for $(jq -r .needs <<<"$f") as #$new"
 done
 
 "$BIN/story-metrics.sh" write --run "$RUN" --repo "$REPO" >/dev/null || exit 1

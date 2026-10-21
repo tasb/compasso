@@ -236,3 +236,15 @@ setup() { setup_repo; }
   [[ "$output" == *"team.lead_poll_minutes must be an integer from 1 to 1440"* ]] || false
   [[ "$output" == *"team.agents must be a list of logins"* ]] || false
 }
+
+@test "team: the lead's merge poll, every 15 minutes; a project without it uses 15" {
+  [ "$(yq -r .team.lead_merge_minutes "$CFG")" = 15 ]
+  cfg_set 'del(.team.lead_merge_minutes)'
+  "$ROOT/bin/config.sh" validate --repo "$REPO"
+  for v in 0 1441 '"often"'; do
+    cfg_set ".team.lead_merge_minutes = $v"
+    run "$ROOT/bin/config.sh" validate --repo "$REPO"
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"team.lead_merge_minutes must be an integer from 1 to 1440"* ]] || false
+  done
+}

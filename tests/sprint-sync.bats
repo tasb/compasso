@@ -112,20 +112,12 @@ field() { sync | jq -c "$1"; }
   [ "$(field '[.features[] | select(.iid == 6) | [.ready_to_verify, .ready_to_finish]]')" = '[[false,true]]' ]
 }
 
-@test "a story waiting on one story whose merge request is open can stack on it" {
-  # #16 (in review) is the only open dependency of #17; #18 waits on #16 and #11
-  add 17 task "Stacked story" opened '["owner::agent"]' $'**Depends on:** #16\\\n**Touches:** `src/other/**`' 6
-  add 18 task "Two dependencies" opened '["owner::agent"]' $'**Depends on:** #16, #11\\\n**Touches:** `src/third/**`' 6
+@test "a story waits until what it depends on is merged, even when its merge request is open" {
+  add 17 task "After the export" opened '["owner::agent"]' $'**Depends on:** #16\\\n**Touches:** `src/other/**`' 6
   echo "$items" > "$FAKE_GL/issue-query.json"
-  [ "$(field '[.runnable[] | select(.iid == 17) | .stack_on]')" = '[16]' ]
-  [ "$(field '[.waiting[] | select(.iid == 18) | .iid]')" = '[18]' ]
-  [ "$(field '[.runnable[] | select(.iid == 11) | has("stack_on")]')" = '[false]' ]
-}
-
-@test "a story whose only dependency is not in review yet still waits" {
-  add 17 task "Stacked story" opened '["owner::agent"]' '**Depends on:** #14' 6
-  echo "$items" > "$FAKE_GL/issue-query.json"
-  [ "$(field '[.waiting[] | select(.iid == 17) | .on]')" = '[[14]]' ]
+  [ "$(field '[.waiting[] | select(.iid == 17) | .on]')" = '[[16]]' ]
+  [ "$(field '[.runnable[].iid]')" = '[11,14]' ]
+  [ "$(field '[.runnable[] | has("stack_on")] | any')" = false ]
 }
 
 @test "--read-only reports the same sprint and changes nothing on the tracker" {

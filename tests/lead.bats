@@ -57,10 +57,56 @@ later() { # a person's review, after the lead asked
   [ -f "$dir/approver.json" ]
 }
 
-@test "review: each head of the branch gets its own folder, so the approver of a reworked head has a budget of its own" {
+@test "review: says whether the branch is behind its target, how its pipeline went, and whether it conflicts" {
+  [ "$(review_ | jq -c '[.behind, .pipeline, .conflicts]')" = '[false,"none",false]' ]
+  echo b > src/b.js && git add -A && git commit -qm "main moves" && git push -q origin main
+  echo '{"check_runs":[{"status":"completed","conclusion":"failure"}]}' > "$FAKE_GH/checks.json"
+  [ "$(review_ | jq -c '[.behind, .pipeline, .conflicts]')" = '[true,"failed",false]' ]
+}
+
+@test "merge: only a branch that is up to date with its target, whose pipeline did not fail or is not running, and has no conflicts" {
+  echo b > src/b.js && git add -A && git commit -qm "main moves" && git push -q origin main
+  run team "$REPO" merge --iid 14
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"behind main"* ]] || false
+  git fetch -q origin story/14-status && git checkout -q -b story/14-status origin/story/14-status
+  git rebase -q main && git push -q -f origin story/14-status && git checkout -q main
+  for c in failure:failed in_progress:running; do
+    if [ "${c%%:*}" = failure ]; then r='{"status":"completed","conclusion":"failure"}'; else r='{"status":"in_progress","conclusion":null}'; fi
+    echo "{\"check_runs\":[$r]}" > "$FAKE_GH/checks.json"
+    run team "$REPO" merge --iid 14
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"pipeline ${c#*:}"* ]] || false
+  done
+  rm "$FAKE_GH/checks.json"; mkdir -p "$FAKE_GH/pulls"; echo '{"number":31,"mergeable_state":"dirty","head":{"sha":"abc"}}' > "$FAKE_GH/pulls/31.json"
+  run team "$REPO" merge --iid 14
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"conflicts with main"* ]] || false
+  ! grep -q "^PR merge" "$FAKE_GH/calls.log"
+}
+
+@test "update: the lead brings a branch that is behind up to date; only the lead" {
+  run team "$REPO" update --iid 14
+  [ "$status" -eq 0 ]
+  grep -q "PUT repos/acme/app/pulls/31/update-branch" "$FAKE_GH/calls.log"
+  run team "$RUI" update --iid 14
+  [ "$status" -eq 6 ]
+}
+
+@test "review: a rebase that leaves the change as it was keeps its folder, and the approver's verdict" {
+  dir="$(review_ | jq -r .dir)"
+  echo '{"approves":true}' > "$dir/approver.json"
+  echo b > src/b.js && git add -A && git commit -qm "main moves" && git push -q origin main
+  git fetch -q origin story/14-status && git checkout -q -b story/14-status origin/story/14-status
+  git rebase -q main && git push -q -f origin story/14-status && git checkout -q main
+  [ "$(review_ | jq -r .dir)" = "$dir" ]
+  [ -f "$dir/approver.json" ]
+}
+
+@test "review: each version of the change gets its own folder, so the approver of a rework has a budget of its own" {
   cfg_set '.stage = "production"'
   dir="$(review_ | jq -r .dir)"
-  [[ "$dir" == */.compasso/runs/lead-31-"$(git -C "$REPO" rev-parse origin/story/14-status | cut -c1-12)" ]] || false
+  [[ "$dir" == */.compasso/runs/lead-31-"$(git -C "$REPO" diff origin/main...origin/story/14-status | git patch-id --stable | cut -c1-12)" ]] || false
   "$ROOT/bin/budget.sh" claim --repo "$REPO" --run "$dir" --role approver >/dev/null
   W="$BATS_TEST_TMPDIR/w"; git clone -q -b story/14-status "$ORIGIN" "$W"
   (cd "$W" && git config user.email t@t && git config user.name t && echo 4 >> src/status.js && git commit -qam rework && git push -q origin story/14-status)
@@ -187,9 +233,9 @@ later() { # a person's review, after the lead asked
   issue 17 "Totals" '[]' '**Tests:** unit' 6
   run team "$REPO" inbox --milestone S20 --json
   [ "$(jq -c '[.review[] | [.iid, .dev]]' <<<"$output")" = '[[14,"rui"]]' ]
-  [ "$(jq -c '[.queue[] | [.dev, .backlog, .room, .below_min]]' <<<"$output")" = '[["ana",1,14,true],["rui",0,15,true]]' ]
+  [ "$(jq -c '[.queue[] | [.dev, .backlog, .ready, .room, .below_min]]' <<<"$output")" = '[["ana",1,1,14,true],["rui",0,0,15,true]]' ]
   [ "$(jq -c '[.stage, .nothing]' <<<"$output")" = '["mvp",false]' ]
   run team "$REPO" inbox --milestone S20
   [[ "$output" == *"To review: #14 Status filter (rui)"* ]] || false
-  [[ "$output" == *"Backlog (queue 15, at least 5): ana 1, rui 0"* ]] || false
+  [[ "$output" == *"Backlog (queue 15, at least 5): ana 1 ready of 1, rui 0 ready of 0"* ]] || false
 }

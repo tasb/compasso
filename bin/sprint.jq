@@ -36,24 +36,21 @@ $items[0] as $items | $ext[0] as $ext
         (if (.labels | index("compasso::in-review")) then "in-review"
          elif $team and (.labels | index("needs::lead")) then "needs-lead"
          elif ($blocked | length) > 0 then "blocked"
-         elif $team and .dev == null then "unassigned"
+         elif $team and .dev == null then (if (.labels | index("owner::human")) then "human" else "unassigned" end)
          elif $team and $me != "" and .dev != $me then "other"
-         elif ($waiting | length) == 1 and (($by[$waiting[0] | tostring].labels // []) | index("compasso::in-review"))
-              and ((.labels | index("owner::human")) | not) and ((.labels | index("compasso::building")) | not) then "stackable"
          elif ($waiting | length) > 0 then "waiting"
          elif ($team | not) and (.labels | index("owner::human")) then "human"
          elif (.labels | index("compasso::building")) then "building"
          else "runnable" end),
         open_blockers: $blocked, open_dependencies: $waiting})) as $open
-| ($open | map(select(.status == "runnable" or .status == "stackable")) | sort_by(.iid)) as $runnable
+| ($open | map(select(.status == "runnable")) | sort_by(.iid)) as $runnable
 | (reduce (if $team and $me == "" then [] else $runnable end)[] as $r ([];
      if length < $parallel and all(.[]; overlaps(.parsed.touches; $r.parsed.touches) | not)
      then . + [$r] else . end)) as $batch
 | {
     milestone: $ms,
-    # a stackable story starts from the branch of the one story it waits on, whose merge request is open
-    next_batch: ($batch | map(brief + {kind} + (if .status == "stackable" then {stack_on: .open_dependencies[0]} else {} end))),
-    runnable: ($runnable | map(brief + {kind} + (if .status == "stackable" then {stack_on: .open_dependencies[0]} else {} end))),
+    next_batch: ($batch | map(brief + {kind})),
+    runnable: ($runnable | map(brief + {kind})),
     building: ($open | map(select(.status == "building") | brief)),
     in_review: ($open | map(select(.status == "in-review") | brief)),
     human: ($open | map(select(.status == "human") | brief + {assignees: [.assignees[]?.username]})),
@@ -79,10 +76,16 @@ $items[0] as $items | $ext[0] as $ext
         me: (if $me == "" then null else $me end),
         # the tech lead's queue: questions, work nobody has, and how much each developer holds
         needs_lead: ($open | map(select(.labels | index("needs::lead")) | brief + {kind})),
-        unassigned: ($open | map(select(.status == "unassigned") | brief + {kind}
-          + {unblocked: ((.parsed.blocked_by | length) > 0 and (.open_blockers | length) == 0)})),
+        # what can start first, and what holds up the most open work, comes first
+        unassigned: ([$open[] | .parsed | (.depends_on + .blocked_by)[]] as $deps
+          | $open | map(select(.status == "unassigned") | . as $u | brief + {kind}
+            + {unblocked: ((.parsed.blocked_by | length) > 0 and (.open_blockers | length) == 0),
+               ready: (.open_dependencies | length == 0), holds: ([$deps[] | select(. == $u.iid)] | length)})
+          | sort_by([(.ready | not), -.holds, .iid])),
         others: ($open | map(select(.status == "other") | brief)),
         load: ($open | map(select(.dev != null)) | group_by(.dev)
           | map({dev: .[0].dev, open: length, hours: (map(.time_stats.time_estimate // 0) | add / 3600 * 10 | round / 10),
-                 backlog: (map(select(.labels | index("compasso::backlog"))) | length)}))
+                 backlog: (map(select(.labels | index("compasso::backlog"))) | length),
+                 # of those, what could be built now: nothing open ahead of it
+                 ready: (map(select((.labels | index("compasso::backlog")) and .status == "runnable")) | length)}))
       }} else {} end)

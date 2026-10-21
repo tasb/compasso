@@ -12,14 +12,14 @@
 - **`/compasso:sprint`** builds everything that can run now:
   - It asks once for any Verify commands not yet approved.
   - It runs the ready stories side by side, each in its own worktree under `.compasso/worktrees/`, when their paths don't overlap. The conversation you run it in drives them all, and each step's agents for every story start at the same time.
-  - A story whose only dependency is waiting for review is stacked on that story's branch instead of waiting.
+  - A story waits until what it depends on is merged; its developer builds other work meanwhile.
 - **`/compasso:story <iid>`** builds one story. The steps are:
   1. failing tests first;
   2. the builder makes them pass (it may never edit a test);
   3. verify;
   4. changed-line coverage, as a warning;
   5. review and security review, fixing tests-first, for at most 3 rounds;
-  6. follow-up stories for minor findings, metrics and the decision record;
+  6. every finding fixed in the story, minors too, and posted on it; a follow-up only for a minor finding whose fix needs a person (or an outside admin); metrics and the decision record;
   7. the merge request.
 - **Merging.** A person merges by default. With `approvals.merge: risk`, low-risk changes merge on their own and a daily digest lists them. What waits for a person depends on the project's `stage` (in `mvp`, only an infrastructure change whose cost report says `increase` or `unknown`; in `production`, also sensitive paths, a large change to the product's code and the other high-risk reasons), and no mode merges with an open security finding. In a team project the tech lead merges, asking a person when the risk needs one.
 - **Blockers** are assigned to people with step-by-step instructions. Closing one frees the stories it held.

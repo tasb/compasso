@@ -6,18 +6,22 @@
 #   gitlab.sh push-plan     --repo R   create or update .compasso/plan.yaml in GitLab; ids are written back
 #   gitlab.sh story         --repo R --iid N                      a story, its resolved coverage and open dependencies -> JSON
 #   gitlab.sh set-state     --repo R --iid N --state S            S: backlog | building | in-review; drops the other compasso:: states
-#   gitlab.sh open-mr       --repo R --iid N --branch B --body-file F [--target T]  create or update the story's MR -> JSON {iid, web_url}
+#   gitlab.sh open-mr       --repo R --iid N --branch B --body-file F   create or update the story's MR to the default branch -> JSON {iid, web_url}
 #   gitlab.sh followup      --repo R --parent N --title T --body-file F [--labels a,b]  a task under N (a minor finding, a bug) -> iid
-#   gitlab.sh merge         --repo R --mr N --body-file F [--risk R]  merge when the pipeline succeeds (approvals.merge agent, or risk with a low-risk R;
+#   gitlab.sh merge         --repo R --mr N --body-file F [--risk R]  merge when the pipeline succeeds, never after it failed (approvals.merge agent, or risk with a low-risk R;
 #                                                                 in a team project the tech lead, through bin/team.sh, which decided who approves)
 #   gitlab.sh mr-info       --repo R --mr N                       branches, author and the issues it closes -> JSON
 #   gitlab.sh mr-of         --repo R --iid N                      the story's open merge request -> {iid, source_branch, target_branch, web_url}
 #   gitlab.sh mr-events     --repo R --mr N                       comments and approvals, oldest first -> [{kind, by, at, body, member}]
+#   gitlab.sh followups     --repo R                              open follow-ups in no sprint -> [{iid, title, story}]
+#   gitlab.sh set-milestone --repo R --iid N --milestone S1       move a work item into sprint S1 (bin/followups.sh)
+#   gitlab.sh mr-checks     --repo R --mr N                       its last commit's pipeline and whether it conflicts with its target
+#                                                                 -> {pipeline: success|failed|running|none, conflicts}
+#   gitlab.sh mr-update     --repo R --mr N                       rebase it onto its target (the tech lead, before merging)
 #   gitlab.sh comment       --repo R --mr N|--iid N --body-file F  post F as a comment on a merge request or an issue
 #   gitlab.sh sprint-sync   --repo R [--milestone S20] [--parent F] what can be built now, what waits and on whom -> JSON
 #   gitlab.sh merge-commit  --repo R --iid N                      the commit the story's merge request put on the default branch
 #   gitlab.sh digest        --repo R --since YYYY-MM-DD           merge requests merged without a person, as a comment
-#   gitlab.sh open-mr-branch --repo R --iid N                     the branch of the open MR that closes #N (to stack a story on)
 #   gitlab.sh sprint-items  --repo R --milestone S20              the sprint's work items with their label history (the report)
 #   gitlab.sh sprint-done   --repo R --milestone S19              hours done in a sprint, or null
 # The primitives bin/team.sh builds assignment, claims and messages on (never run through tracker.sh):
@@ -35,7 +39,7 @@ case "${1:-}" in -h|--help) sed -n '2,/^set -u/s/^# \{0,1\}//p' "$0"; exit 0 ;; 
 
 BIN="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CMD="${1:-}"; shift || true
-REPO="." IID="" STATE="" BRANCH="" BODY="" TITLE="" PARENT="" MR="" LABELS_ARG="owner::either" MILESTONE="" RISK="" TARGET="" SINCE="" READ_ONLY=0 NAME="" ADD="" REMOVE="" ID=""
+REPO="." IID="" STATE="" BRANCH="" BODY="" TITLE="" PARENT="" MR="" LABELS_ARG="owner::either" MILESTONE="" RISK="" SINCE="" READ_ONLY=0 NAME="" ADD="" REMOVE="" ID=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --repo) REPO="$2"; shift 2 ;;
@@ -49,7 +53,6 @@ while [ $# -gt 0 ]; do
     --labels) LABELS_ARG="$2"; shift 2 ;;
     --milestone) MILESTONE="$2"; shift 2 ;;
     --risk) RISK="$2"; shift 2 ;;
-    --target) TARGET="$2"; shift 2 ;;
     --since) SINCE="$2"; shift 2 ;;
     --read-only) READ_ONLY=1; shift ;;
     --name) NAME="$2"; shift 2 ;;
@@ -78,10 +81,11 @@ LABELS="$(cat "$BIN/tracker/labels.txt")"
 NAMES="$("$BIN/locale.sh" --names)"                   # work-item names in every language, for reading
 LOC="$("$BIN/locale.sh" --repo "$REPO")" || exit 1    # the project's language, for writing
 
-# a team project assigns work by dev::<name> labels and uses no owner:: labels (bin/persona.sh, bin/team.sh)
+# a team project assigns work by dev::<name> labels and uses no owner:: labels but owner::human,
+# work for a person no agent is assigned (bin/persona.sh, bin/team.sh)
 TEAM=false; [ "$(cfg .team.enabled)" = true ] && TEAM=true
 ME=""; [ "$TEAM" = true ] && ME="$("$BIN/persona.sh" show --repo "$REPO" --json | jq -r '.name // ""')"
-[ "$TEAM" = true ] && LABELS_ARG="$(printf '%s' "$LABELS_ARG" | tr ',' '\n' | grep -v '^owner::' | paste -sd, -)"
+[ "$TEAM" = true ] && LABELS_ARG="$(printf '%s' "$LABELS_ARG" | tr ',' '\n' | grep -vx -e owner::agent -e owner::either | paste -sd, -)"
 DEV_COLOR="#0e8a16"
 
 check() {
@@ -430,7 +434,7 @@ open_mr() {
     title="$(api "projects/$PID/issues/$IID" | jq -r '.title // empty')"
     [ -n "$title" ] || { echo "gitlab: no work item #$IID" >&2; return 1; }
   fi
-  target="${TARGET:-$(api "projects/$PID" | jq -r .default_branch)}"   # --target: stack on another story's branch
+  target="$(api "projects/$PID" | jq -r .default_branch)"   # trunk-based: a story never stacks on another's branch
   mr="$(api "projects/$PID/merge_requests?source_branch=$BRANCH&state=opened" | jq -r '.[0].iid // empty')"
   if [ -n "$mr" ]; then
     out="$(api -X PUT "projects/$PID/merge_requests/$mr" -f description="$(cat "$BODY")")"
@@ -490,6 +494,8 @@ merge() {
     [ -n "$RISK" ] && [ -f "$RISK" ] || { echo "gitlab: approvals.merge is risk - merge needs --risk with risk.sh's decision" >&2; return 1; }
     [ "$(jq -r .level "$RISK")" = low ] || { echo "gitlab: the change is high risk - a person merges it" >&2; return 1; }
   fi
+  # a project that lets a failed pipeline merge would merge at once: main stays green
+  [ "$(mr_checks | jq -r .pipeline)" != failed ] || { echo "gitlab: !$MR is not merged: its pipeline failed" >&2; return 1; }
   # merged without a person: the daily digest lists it (a team's tech lead passes --risk only then)
   if [ "$mode" != team ] || { [ -n "$RISK" ] && [ "$(jq -r .level "$RISK" 2>/dev/null)" = low ]; }; then
     api -X PUT "projects/$PID/merge_requests/$MR" -f add_labels=compasso::auto-merged >/dev/null ||
@@ -508,6 +514,37 @@ mr_info() {
   [ -n "$(jq -r '.iid // empty' <<<"$mr" 2>/dev/null)" ] || { echo "gitlab: no merge request !$MR in $PROJECT" >&2; return 1; }
   closes="$(api "projects/$PID/merge_requests/$MR/closes_issues" | jq -c '[.[].iid]')" || closes='[]'
   jq -c --argjson closes "$closes" '{iid, title, state, source_branch, target_branch, web_url, author: .author.username, draft, closes: $closes}' <<<"$mr"
+}
+
+followups_cmd() { # filed by ship.sh, which marks each with its story
+  api --paginate "projects/$PID/issues?state=opened&milestone=None&per_page=100" | jq -s -c 'add // []
+    | map(select((.description // "") | test("<!-- compasso:followup story=[0-9]+ -->"))
+      | {iid, title, story: (.description | capture("<!-- compasso:followup story=(?<s>[0-9]+) -->").s | tonumber)})'
+}
+
+set_milestone() {
+  local id
+  need IID MILESTONE
+  id="$(api "projects/$PID/milestones?title=$MILESTONE" | jq -r --arg t "$MILESTONE" '[.[] | select(.title == $t)][0].id // empty')"
+  [ -n "$id" ] || { echo "gitlab: no sprint $MILESTONE (milestone) in $PROJECT" >&2; return 1; }
+  api -X PUT "projects/$PID/issues/$IID" -f milestone_id="$id" >/dev/null || { echo "gitlab: could not move #$IID into $MILESTONE" >&2; return 1; }
+}
+
+mr_checks() {
+  local m
+  need MR
+  m="$(api "projects/$PID/merge_requests/$MR")"
+  [ -n "$(jq -r '.iid // empty' <<<"$m" 2>/dev/null)" ] || { echo "gitlab: no merge request !$MR in $PROJECT" >&2; return 1; }
+  jq -c '{pipeline: (.head_pipeline.status // "none"
+            | if . == "success" then "success" elif . == "failed" or . == "canceled" then "failed"
+              elif . == "none" or . == "skipped" then "none" else "running" end),
+          conflicts: (.has_conflicts == true)}' <<<"$m"
+}
+
+mr_update() { # GitLab rebases in the background: a conflict shows as conflicts in the next mr-checks
+  need MR
+  api -X PUT "projects/$PID/merge_requests/$MR/rebase" >/dev/null || { echo "gitlab: could not rebase !$MR" >&2; return 1; }
+  echo "gitlab: !$MR is being rebased onto its target; its pipeline runs again"
 }
 
 mr_of() { # the open merge request that closes a story
@@ -611,16 +648,6 @@ digest() { # merge requests merged without a person since a date, for the daily 
 }
 
 
-open_mr_branch() { # the source branch of the open merge request that closes a story, to stack on
-  local b
-  need IID
-  b="$(api "projects/$PID/issues/$IID/related_merge_requests" |
-    jq -r --arg c "Closes #$IID" '[.[] | select(.state == "opened" and ((.description // "") | contains($c)))][0].source_branch // empty')"
-  [ -n "$b" ] || { echo "gitlab: #$IID has no open merge request to stack on" >&2; return 1; }
-  echo "$b"
-}
-
-
 sprint_items() { # a sprint's work items with their label history, for the report
   local items with='[]' i ev
   need MILESTONE
@@ -704,13 +731,16 @@ case "$CMD" in
   merge) merge ;;
   mr-info) mr_info ;;
   mr-of) mr_of ;;
+  mr-checks) mr_checks ;;
+  followups) followups_cmd ;;
+  set-milestone) set_milestone ;;
+  mr-update) mr_update ;;
   mr-events) mr_events ;;
   comment) comment ;;
   sprint-sync) sprint_sync ;;
   merge-commit) merge_commit ;;
   digest) digest ;;
-  open-mr-branch) open_mr_branch ;;
   sprint-items) sprint_items ;;
   sprint-done) sprint_done ;;
-  *) echo "usage: gitlab.sh check|ensure-labels|push-plan|push-backlog|story|set-state|open-mr|followup|merge|mr-info|comment|sprint-sync|merge-commit|digest|open-mr-branch|sprint-items|sprint-done --repo R ..." >&2; exit 1 ;;
+  *) echo "usage: gitlab.sh check|ensure-labels|push-plan|push-backlog|story|set-state|open-mr|followup|merge|mr-info|mr-checks|mr-update|followups|set-milestone|comment|sprint-sync|merge-commit|digest|sprint-items|sprint-done --repo R ..." >&2; exit 1 ;;
 esac

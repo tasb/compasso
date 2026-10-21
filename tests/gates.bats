@@ -47,16 +47,32 @@ findings() { echo "$1" > "$BATS_TEST_TMPDIR/f.json"; "$ROOT/bin/review-gate.sh" 
   [ "$status" -eq 0 ]
   run findings '[{"by":"security","severity":"minor","status":"open","summary":"verbose error"}]' --for merge
   [ "$status" -eq 1 ]
+}
+
+@test "review-gate: a merge waits for every finding to be fixed, minors too, unless its fix needs someone else" {
   run findings '[{"by":"reviewer","severity":"minor","status":"open","summary":"naming"}]' --for merge
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"[reviewer/minor] naming"* ]] || false
+  run findings '[{"by":"reviewer","severity":"minor","status":"open","needs":"the AWS organisation admin","summary":"no SCP"}]' --for merge
+  [ "$status" -eq 0 ]
+  run findings '[{"by":"reviewer","severity":"minor","status":"open","needs":"","summary":"naming"}]' --for merge
+  [ "$status" -eq 1 ]
+  run findings '[{"by":"reviewer","severity":"major","status":"open","needs":"a person","summary":"no certificate"}]' --for merge
+  [ "$status" -eq 1 ]
+  run findings '[{"by":"reviewer","severity":"minor","status":"followup","followup_iid":40,"summary":"filed before"}]' --for merge
   [ "$status" -eq 0 ]
 }
 
-@test "review-gate: security may defer a minor finding, and only security, and never a blocker or major" {
-  run findings '[{"by":"security","severity":"minor","status":"followup","verified_by":"security","summary":"verbose error"}]' --for merge
+@test "review-gate: security may defer a minor finding whose fix needs someone else, and only security, never a blocker or major" {
+  run findings '[{"by":"security","severity":"minor","status":"followup","verified_by":"security","needs":"the AWS organisation admin","summary":"no SCP"}]' --for merge
   [ "$status" -eq 0 ]
-  run findings '[{"by":"security","severity":"minor","status":"followup","summary":"verbose error"}]' --for merge
+  run findings '[{"by":"security","severity":"minor","status":"followup","verified_by":"security","summary":"verbose error"}]' --for merge
   [ "$status" -eq 1 ]
-  run findings '[{"by":"security","severity":"major","status":"followup","verified_by":"security","summary":"sql injection"}]' --for merge
+  run findings '[{"by":"security","severity":"minor","status":"followup","verified_by":"security","followup_iid":40,"summary":"filed before"}]' --for merge
+  [ "$status" -eq 0 ]
+  run findings '[{"by":"security","severity":"minor","status":"followup","needs":"a person","summary":"verbose error"}]' --for merge
+  [ "$status" -eq 1 ]
+  run findings '[{"by":"security","severity":"major","status":"followup","verified_by":"security","needs":"a person","summary":"sql injection"}]' --for merge
   [ "$status" -eq 1 ]
   [[ "$output" == *"[security/major] sql injection"* ]] || false
   run findings '[{"by":"security","severity":"blocker","status":"followup","verified_by":"security","summary":"rce"}]' --for review

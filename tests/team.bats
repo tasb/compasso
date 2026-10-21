@@ -102,7 +102,7 @@ join() { "$ROOT/bin/persona.sh" join --repo "$1"; }
   [ "$(labels_of 14)" = '["compasso::building","dev::rui"]' ]
   [ "$(labels_of 9)" = '["blocked"]' ]
   [ "$(labels_of 15)" = '["type::bug"]' ]
-  [ "$(team "$REPO" inbox --milestone S20 --json | jq -c '[.queue[] | [.dev, .backlog]]')" = '[["ana",2],["rui",0]]' ]
+  [ "$(team "$REPO" inbox --milestone S20 --json | jq -c '[.queue[] | [.dev, .backlog, .ready, .room, .below_min]]')" = '[["ana",2,1,14,true],["rui",0,0,15,true]]' ]
 }
 
 @test "assign: only the tech lead, and only to a developer in the team" {
@@ -265,6 +265,29 @@ sync() { "$ROOT/bin/tracker.sh" sprint-sync --repo "$1" --read-only --milestone 
   [ "$(jq -c '[.team.unassigned[] | [.iid, .kind, .unblocked]]' <<<"$s")" = '[[15,"bug",false]]' ]
   [ "$(jq -c '[.blocked[].iid]' <<<"$s")" = '[9]' ]
   [ "$(jq -c '[.team.load[] | [.dev, .open]]' <<<"$s")" = '[["ana",2],["rui",1]]' ]
+}
+
+@test "sprint-sync: a developer's backlog counts apart what it can build now" {
+  team "$REPO" mark-backlog --milestone S20 >/dev/null
+  s="$(sync "$REPO")"
+  [ "$(jq -c '[.team.load[] | [.dev, .backlog, .ready]]' <<<"$s")" = '[["ana",2,1],["rui",1,1]]' ]
+}
+
+@test "sprint-sync: work with no developer says whether it can start and how much waits on it, the most first" {
+  issue 17 "Tax rules" '[]' '**Tests:** unit'
+  issue 18 "Tax report" '["dev::rui"]' '**Tests:** unit'
+  issue 19 "Tax export" '[]' '**Tests:** unit'
+  echo 17 > "$FAKE_GH/blocked/18"; echo 18 > "$FAKE_GH/blocked/19"
+  [ "$(sync "$REPO" | jq -c '[.team.unassigned[] | [.iid, .ready, .holds]]')" = '[[17,true,1],[15,true,0],[19,false,0]]' ]
+}
+
+@test "sprint-sync: work for a person is never offered to a developer" {
+  issue 20 "Request the certificate" '["owner::human"]' '**Tests:** unit' 7
+  s="$(sync "$REPO")"
+  [ "$(jq -c '[.team.unassigned[].iid]' <<<"$s")" = '[15]' ]
+  [ "$(jq -c '[.human[].iid]' <<<"$s")" = '[20]' ]
+  [ "$(team "$REPO" inbox --milestone S20 --json | jq -c '[.human[].iid]')" = '[20]' ]
+  [[ "$(team "$REPO" inbox --milestone S20)" == *"For a person: #20 Request the certificate"* ]] || false
 }
 
 @test "sprint-sync: a story whose blocker closed and has no developer goes back to the tech lead" {

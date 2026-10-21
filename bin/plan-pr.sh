@@ -81,4 +81,4 @@ EOF
   echo
   jq -nr -L "$BIN" --argjson L "$L" 'include "i18n"; t("plan_pr_outro")'
 } > "$body"
-"$BIN/tracker.sh" open-mr --repo "$REPO" --branch "$BRANCH" --title "$TITLE" --body-file "$body" --target "$default"
+"$BIN/tracker.sh" open-mr --repo "$REPO" --branch "$BRANCH" --title "$TITLE" --body-file "$body"

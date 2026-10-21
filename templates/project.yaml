@@ -120,7 +120,8 @@ team:                         # several agents on one project, each with a perso
   enabled: false              # true: a tech lead assigns every story to a named developer (dev::<name>);
                               # an agent with no persona only reads. Set by the tech lead's setup
   poll_minutes: 60            # how often a developer reads the tracker for new work and messages
-  lead_poll_minutes: 30       # how often the tech lead reads it: merge requests to merge, questions, queues
+  lead_poll_minutes: 30       # how often the tech lead reads it: questions, queues (/compasso:work --flow)
+  lead_merge_minutes: 15      # how often the tech lead merges what is in review (/compasso:work --merge)
   queue: { target: 15, min: 5 }   # in mvp the tech lead tops up a developer's backlog below min to target
   agents: []                  # the agents' tracker logins: their approvals never count as a person's
 

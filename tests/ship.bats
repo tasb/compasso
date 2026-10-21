@@ -11,30 +11,45 @@ setup() {
   echo '{"iid":6,"id":1006,"milestone":{"id":501}}' > "$FAKE_GL/issues/6.json"
   RUN="$REPO/.compasso/runs/8"; mkdir -p "$RUN"
   jq -n '{iid: 8, title: "List API", kind: "story", feature: 6, estimate_h: 4, story: {key: "S-1"}}' > "$RUN/story.json"
-  jq -n '[{by: "reviewer", severity: "minor", status: "open", file: "src/a.js", line: 3, summary: "The helper name is vague.", fix: "rename it to invoicesOf"},
+  jq -n '[{by: "reviewer", severity: "minor", status: "open", needs: "the AWS organisation admin", file: "src/a.js", line: 3, summary: "The helper name is vague.", fix: "rename it to invoicesOf"},
           {by: "reviewer", severity: "major", status: "fixed", summary: "off by one"},
           {by: "security", severity: "minor", status: "fixed", verified_by: "security", summary: "verbose error"}]' > "$RUN/findings.json"
   echo "- GET /invoices lists the caller's invoices" > "$RUN/changes.md"
 }
 ship() { "$ROOT/bin/ship.sh" --repo "$REPO" --run "$RUN"; }
 
-@test "open minor findings become backlog stories under the feature, and are marked as followed up" {
+@test "a minor finding whose fix needs someone else becomes a story for a person in the sprint, marked as followed up" {
   run ship
   [ "$status" -eq 0 ]
-  grep -q "POST projects/acme%2Fapp/issues title=The helper name is vague. issue_type=task labels=owner::either" "$FAKE_GL/calls.log"
-  [ "$(grep -c 'milestone_id' "$FAKE_GL/calls.log")" -eq 0 ]
+  grep -q "POST projects/acme%2Fapp/issues title=The helper name is vague. milestone_id=501 issue_type=task labels=owner::human" "$FAKE_GL/calls.log"
   [ "$(jq -c '[.[] | select(.severity == "minor" and .by == "reviewer") | [.status, (.followup_iid | type)]]' "$RUN/findings.json")" = '[["followup","number"]]' ]
   [ "$(jq -r '.[1].status' "$RUN/findings.json")" = fixed ]
   [ "$(grep -c 'POST projects/acme%2Fapp/issues ' "$FAKE_GL/calls.log")" -eq 1 ]
   [ "$(jq -c '.[2] | [.status, .followup_iid]' "$RUN/findings.json")" = '["fixed",null]' ]
 }
 
+@test "only findings whose fix needs someone else are filed" {
+  jq '.[0] |= del(.needs)' "$RUN/findings.json" > "$RUN/f" && mv "$RUN/f" "$RUN/findings.json"
+  run ship
+  [ "$status" -eq 0 ]
+  [ "$(grep -c 'POST projects/acme%2Fapp/issues ' "$FAKE_GL/calls.log")" -eq 0 ]
+  [ "$(jq -r '.[0].status' "$RUN/findings.json")" = open ]
+}
+
+@test "a team project files it for a person too" {
+  cfg_set '.team.enabled = true'
+  "$ROOT/bin/persona.sh" set --repo "$REPO" --persona developer --name rui >/dev/null
+  run ship
+  [ "$status" -eq 0 ]
+  grep -q "POST projects/acme%2Fapp/issues title=The helper name is vague. milestone_id=501 issue_type=task labels=owner::human" "$FAKE_GL/calls.log"
+}
+
 @test "a minor security finding that security deferred becomes a follow-up too; one already filed does not" {
-  jq '. + [{by: "security", severity: "minor", status: "followup", verified_by: "security", summary: "Errors show the stack trace.", fix: "log it instead"},
+  jq '. + [{by: "security", severity: "minor", status: "followup", verified_by: "security", needs: "a person", summary: "Errors show the stack trace.", fix: "log it instead"},
            {by: "security", severity: "minor", status: "followup", verified_by: "security", followup_iid: 40, summary: "filed before"}]' "$RUN/findings.json" > "$RUN/f" && mv "$RUN/f" "$RUN/findings.json"
   run ship
   [ "$status" -eq 0 ]
-  grep -q "POST projects/acme%2Fapp/issues title=Errors show the stack trace. issue_type=task" "$FAKE_GL/calls.log"
+  grep -q "POST projects/acme%2Fapp/issues title=Errors show the stack trace. milestone_id=501 issue_type=task labels=owner::human" "$FAKE_GL/calls.log"
   [ "$(grep -c 'POST projects/acme%2Fapp/issues ' "$FAKE_GL/calls.log")" -eq 2 ]
   [ "$(jq -c '.[3] | [.status, .verified_by, (.followup_iid | type)]' "$RUN/findings.json")" = '["followup","security","number"]' ]
   [ "$(jq -c '.[4].followup_iid' "$RUN/findings.json")" = 40 ]
@@ -43,7 +58,7 @@ ship() { "$ROOT/bin/ship.sh" --repo "$REPO" --run "$RUN"; }
 @test "the follow-up is a story in the Story format" {
   ship >/dev/null
   f="$(ls "$FAKE_GL/desc/")"
-  grep -q '^\*\*As\*\* a maintainer \*\*I want\*\* rename it to invoicesOf \*\*so that\*\* the helper name is vague no longer applies\.' "$FAKE_GL/desc/$f"
+  grep -q '^\*\*As\*\* the AWS organisation admin \*\*I want\*\* rename it to invoicesOf \*\*so that\*\* the helper name is vague no longer applies\.' "$FAKE_GL/desc/$f"
   grep -q '^- \[ \] Given `src/a.js:3`, When it is reviewed again, Then the finding "The helper name is vague." no longer applies' "$FAKE_GL/desc/$f"
   grep -qx -- '- `npm test`' "$FAKE_GL/desc/$f"
 }
