@@ -2,6 +2,12 @@
 
 Versions follow `version` in `.claude-plugin/plugin.json`. Claude Code updates an installed plugin only when this version changes, so every change users should receive ships in a new version.
 
+## 3.1.1 (2026-10-22)
+
+Upgrade notes for the agent: [docs/releases/3.1.1.md](docs/releases/3.1.1.md).
+
+- **The 3.1.0 upgrade notes no longer say `/compasso:setup` is required.** `team.lead_merge_minutes` is optional (missing means 15); setup only writes the key so it can be changed. No code changed.
+
 ## 3.1.0 (2026-10-21)
 
 From reading a team's tracker in `mvp`: follow-ups nobody built, merge requests stacked four deep, a red default branch, and queues full of stories that could not start. Upgrade notes for the agent: [docs/releases/3.1.0.md](docs/releases/3.1.0.md).
