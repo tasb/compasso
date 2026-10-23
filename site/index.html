@@ -1,0 +1,699 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Compasso</title>
+  <meta name="description" content="Compasso takes a product from rough ideas to merged, reviewed code, one sprint at a time: spec-driven planning, test-driven building, sprint-paced delivery. A plugin for Claude Code and Codex, on GitLab or GitHub.">
+  <link rel="icon" href="logo.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <script>try { var t = localStorage.getItem('compasso-theme'); if (t) document.documentElement.setAttribute('data-theme', t); } catch (e) {}</script>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+
+  <header class="top">
+    <div class="wrap top-in">
+      <a class="brand" href="#" aria-label="Compasso, home">
+        <svg class="mark" viewBox="0 0 48 48" fill="none" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <g stroke="currentColor" stroke-width="2.5"><line x1="24" y1="2" x2="24" y2="5"/><circle cx="24" cy="9" r="3.5"/><line x1="22.4" y1="12.2" x2="12" y2="38"/><line x1="25.6" y1="12.2" x2="34" y2="33"/></g>
+          <g class="lead" stroke-width="2.5"><line x1="34" y1="33" x2="36" y2="38"/><path d="M36 40 A14 14 0 0 1 12 40" stroke-dasharray="3 3.2"/></g>
+        </svg>
+        <span>Compasso</span>
+        <span class="ver">v3.1.2</span>
+      </a>
+      <nav class="nav" aria-label="Sections">
+        <a href="#walkthrough">Walkthrough</a>
+        <a href="#loops">Loops</a>
+        <a href="#outcomes">Outcomes</a>
+        <a href="#gates">Gates</a>
+      </nav>
+      <div class="top-actions">
+        <button id="theme" class="icon-btn" type="button" aria-label="Switch light or dark theme">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9Z" fill="currentColor"/></svg>
+        </button>
+        <a class="icon-btn" href="https://github.com/tasb/compasso" aria-label="Compasso on GitHub">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 .5a11.5 11.5 0 0 0-3.6 22.4c.6.1.8-.3.8-.6v-2c-3.2.7-3.9-1.5-3.9-1.5-.5-1.3-1.3-1.7-1.3-1.7-1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.8 1.3 3.5 1 .1-.8.4-1.3.7-1.6-2.6-.3-5.3-1.3-5.3-5.7 0-1.3.5-2.3 1.2-3.1-.1-.3-.5-1.5.1-3.1 0 0 1-.3 3.2 1.2a11 11 0 0 1 5.8 0c2.2-1.5 3.2-1.2 3.2-1.2.6 1.6.2 2.8.1 3.1.8.8 1.2 1.8 1.2 3.1 0 4.4-2.7 5.4-5.3 5.7.4.4.8 1.1.8 2.2v3.3c0 .3.2.7.8.6A11.5 11.5 0 0 0 12 .5Z"/></svg>
+        </a>
+        <a class="btn btn-small" href="#install">Install</a>
+      </div>
+    </div>
+  </header>
+
+  <main id="main">
+
+    <!-- Hero -->
+    <section class="hero">
+      <div class="wrap">
+        <p class="eyebrow">A plugin for Claude Code and Codex · GitLab or GitHub</p>
+        <h1>From rough ideas to merged, reviewed code. <span>One sprint at a time.</span></h1>
+        <p class="lede">Compasso turns what you have into a product brief, a backlog, an architecture and a roadmap. Then it builds each sprint story by story: failing tests first, scripts that stop bad work, review and security review, and a pull request on your tracker. You make the decisions; the agents do the work in between.</p>
+        <div class="hero-cta">
+          <a class="btn" href="#walkthrough">Follow one product end to end</a>
+          <a class="btn btn-ghost" href="#outcomes">See what it produces</a>
+        </div>
+
+        <div class="map" aria-label="The phases of Compasso">
+          <div class="map-group">
+            <p class="map-label">Once per product · refined at every sprint close</p>
+            <ol class="map-steps">
+              <li><a href="#p-ideas"><b>Ideas</b><span>notes, issues, a prototype</span></a></li>
+              <li><a href="#p-discover"><b>Discover</b><span>brief.md</span></a></li>
+              <li><a href="#p-backlog"><b>Backlog</b><span>features + MVP line</span></a></li>
+              <li><a href="#p-architect"><b>Architect</b><span>architecture.yaml</span></a></li>
+              <li><a href="#p-roadmap"><b>Roadmap</b><span>sprints, one goal each</span></a></li>
+            </ol>
+          </div>
+          <div class="map-group map-loop">
+            <p class="map-label">Every sprint</p>
+            <ol class="map-steps">
+              <li><a href="#p-plan"><b>Plan</b><span>one-day stories</span></a></li>
+              <li><a href="#p-build"><b>Build</b><span>tests → code → review → PR</span></a></li>
+              <li><a href="#p-close"><b>Close</b><span>report, test guide</span></a></li>
+            </ol>
+            <p class="map-back"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.3-5.7M20 4v4h-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg> next sprint, with the roadmap re-placed at real velocity</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Three disciplines -->
+    <section class="band">
+      <div class="wrap three">
+        <div>
+          <h2 class="h3">Spec-driven planning</h2>
+          <p>Every story is written before it is built: acceptance in Given/When/Then and the commands that verify it. A script checks sizes, dependencies and capacity before anything reaches the tracker.</p>
+        </div>
+        <div>
+          <h2 class="h3">Test-driven building</h2>
+          <p>A tester agent writes failing tests first. The builder makes them pass with the smallest change and can never edit a test: the files are hashed.</p>
+        </div>
+        <div>
+          <h2 class="h3">Sprint-paced delivery</h2>
+          <p>Only the next sprint gets stories. Each close measures what was done and re-places what is ahead, MVP first. The tracker always shows the truth.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Walkthrough -->
+    <section id="walkthrough" class="walk">
+      <div class="wrap">
+        <header class="sec-head">
+          <p class="eyebrow">Walkthrough</p>
+          <h2>One product, from ideas to its first sprint</h2>
+          <p>Meet <b>Clinic Booking</b>, a sample: a physiotherapy clinic with 6 therapists books every appointment by phone. Everything below was produced by Compasso's own scripts from the sample's files. Where a script stopped, you see it stop.</p>
+        </header>
+
+        <div class="walk-grid">
+          <nav class="toc" aria-label="Phases">
+            <ol>
+              <li><a href="#p-ideas"><i>1</i>Ideas</a></li>
+              <li><a href="#p-discover"><i>2</i>Discover</a></li>
+              <li><a href="#p-backlog"><i>3</i>Backlog</a></li>
+              <li><a href="#p-architect"><i>4</i>Architect</a></li>
+              <li><a href="#p-roadmap"><i>5</i>Roadmap</a></li>
+              <li><a href="#p-plan"><i>6</i>Plan</a></li>
+              <li><a href="#p-build"><i>7</i>Build</a></li>
+              <li><a href="#p-close"><i>8</i>Close</a></li>
+            </ol>
+            <a class="toc-side" href="#p-present">Present, at any point</a>
+          </nav>
+
+          <div class="phases">
+
+            <!-- 1 -->
+            <article class="phase" id="p-ideas">
+              <header class="ph-head">
+                <span class="ph-num">1</span>
+                <div><h3>Start from what you have</h3><code class="cmd">/compasso:start</code></div>
+              </header>
+              <div class="ph-body">
+                <div class="ph-text">
+                  <p>No sprint goal needed. Bring loose notes, a document, issues already on the tracker, or a running prototype. <code>/compasso:start</code> says where the product stands and runs the next step.</p>
+                  <p>The clinic brings an interview with the owner and reception, three issues the owner opened, and a clickable prototype of the booking screens.</p>
+                  <p class="more">Other starting points: <a href="https://github.com/tasb/compasso/blob/main/docs/guides/brownfield.md">an existing codebase</a>, <a href="https://github.com/tasb/compasso/blob/main/docs/guides/prototype.md">a prototype</a>, <a href="https://github.com/tasb/compasso/blob/main/docs/guides/bug-or-small-change.md">one bug or small change</a>.</p>
+                </div>
+                <div class="ph-out">
+                  <figure class="pane">
+                    <figcaption>notes.md</figcaption>
+<pre>Interview, owner + reception
+- ~70 appointments a day, all by phone
+- reception: 3h a day on calls
+- 1 in 8 patients just doesn't show up
+- "we want online booking before the
+  January campaign"</pre>
+                  </figure>
+                  <figure class="pane">
+                    <figcaption>github.com/example/clinic-booking · Issues</figcaption>
+                    <ul class="issues">
+                      <li><span class="dot"></span>Patients should book online <em>#1</em></li>
+                      <li><span class="dot"></span>Remind patients the day before <em>#2</em></li>
+                      <li><span class="dot"></span>Waiting list for full days <em>#3</em></li>
+                    </ul>
+                  </figure>
+                </div>
+              </div>
+            </article>
+
+            <!-- 2 -->
+            <article class="phase" id="p-discover">
+              <header class="ph-head">
+                <span class="ph-num">2</span>
+                <div><h3>Discover: the product brief</h3><code class="cmd">/compasso:discover</code></div>
+              </header>
+              <div class="ph-body">
+                <div class="ph-text">
+                  <p>The planner asks questions in the conversation, then writes the brief: problem, users, measurable outcomes, what the MVP must prove, constraints and risks.</p>
+                  <p>Security reads it first and gives its view of the data and access involved. Here it flagged that the appointment reason may hold health details.</p>
+                  <div class="you"><b>You decide</b> the answers and approve the brief. It reaches the default branch through a pull request, with a decision record.</div>
+                </div>
+                <div class="ph-out">
+                  <figure class="pane">
+                    <figcaption>.compasso/product/brief.md</figcaption>
+<pre><span class="h">## Outcomes</span>
+- At least 60% of appointments booked online
+  within 3 months.
+- Missed appointments down from 12% to under 5%.
+- Reception time on the phone cut by half.
+
+<span class="h">## The MVP must prove</span>
+- Patients book a real free slot online, without
+  calling, and never into a double booking.
+- A reminder email the day before reduces
+  missed appointments.</pre>
+                  </figure>
+                  <figure class="pane">
+                    <figcaption>.compasso/records/product/discover.md</figcaption>
+<pre><span class="h">## Findings</span>
+- security: The appointment reason is free text
+  and may hold health details
+  <span class="ok">→ Optional, staff-only, every read logged</span>
+- security: Booking without a confirmed email lets
+  anyone fill the calendar
+  <span class="ok">→ A held booking expires after 15 minutes</span>
+
+<span class="h">## Decisions</span>
+- Email reminders in the MVP, SMS after it (@rita)
+- Data stays in an EU region <span class="dim">(assumed)</span></pre>
+                  </figure>
+                </div>
+              </div>
+            </article>
+
+            <!-- 3 -->
+            <article class="phase" id="p-backlog">
+              <header class="ph-head">
+                <span class="ph-num">3</span>
+                <div><h3>Backlog: features and the MVP line</h3><code class="cmd">/compasso:backlog</code></div>
+              </header>
+              <div class="ph-body">
+                <div class="ph-text">
+                  <p>The brief becomes features of at most half a sprint, with rough hours, dependencies and an explicit MVP line. A new repository starts with a walking skeleton, F-0.</p>
+                  <p>A script checks every feature is complete and sized, that dependencies exist and form no cycle, and that the MVP depends only on MVP features. Features become tracker issues in no sprint.</p>
+                </div>
+                <div class="ph-out">
+                  <figure class="pane term">
+                    <figcaption>backlog-check</figcaption>
+<pre><span class="note">note</span>   F-1 is sensitive: security writes its abuse cases when it is planned
+<span class="note">note</span>   F-2 is sensitive: security writes its abuse cases when it is planned
+<span class="note">note</span>   F-3 is sensitive: security writes its abuse cases when it is planned
+MVP: 6 of 9 features, 136h (about 2 sprint(s) at 80h)
+Everything: 200h</pre>
+                  </figure>
+                  <div class="table-wrap">
+                    <table class="feat">
+                      <thead><tr><th>Feature</th><th>Hours</th><th>After</th></tr></thead>
+                      <tbody>
+                        <tr><td><b>F-0</b> Walking skeleton</td><td>16</td><td>–</td></tr>
+                        <tr><td><b>F-1</b> Staff sign-in and working hours</td><td>24</td><td>F-0</td></tr>
+                        <tr><td><b>F-2</b> Book an appointment</td><td>32</td><td>F-1</td></tr>
+                        <tr><td><b>F-3</b> Staff calendar</td><td>24</td><td>F-2</td></tr>
+                        <tr><td><b>F-4</b> Email reminders</td><td>16</td><td>F-2</td></tr>
+                        <tr><td><b>F-5</b> Cancel and reschedule</td><td>24</td><td>F-2</td></tr>
+                        <tr class="mvp-line"><td colspan="3">MVP line</td></tr>
+                        <tr class="post"><td><b>F-6</b> SMS reminders</td><td>16</td><td>F-4</td></tr>
+                        <tr class="post"><td><b>F-7</b> Waiting list</td><td>24</td><td>F-5</td></tr>
+                        <tr class="post"><td><b>F-8</b> Owner's monthly report</td><td>24</td><td>F-3</td></tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </article>
+
+            <!-- 4 -->
+            <article class="phase" id="p-architect">
+              <header class="ph-head">
+                <span class="ph-num">4</span>
+                <div><h3>Architect: the technical solution</h3><code class="cmd">/compasso:architect</code></div>
+              </header>
+              <div class="ph-body">
+                <div class="ph-text">
+                  <p>Stack, components (each serving backlog features), integrations, data and its retention, observability, environments, and every decision with the alternatives it beat.</p>
+                  <div class="gate"><b>Gate</b> The first draft of this sample stored patient data with no security control naming it. The check refused it; one line fixed it.</div>
+                  <div class="you"><b>You decide</b> after security's review: approve, or send it back.</div>
+                </div>
+                <div class="ph-out">
+                  <figure class="pane term">
+                    <figcaption>architecture-check</figcaption>
+<pre><span class="err">ERROR</span>  personal data is stored but no security control covers it
+<span class="p">$</span> <span class="dim"># concern: Personal and health data of patients</span>
+architecture-check: <span class="ok">valid</span> (4 components, 2 decisions)</pre>
+                  </figure>
+                  <figure class="pane">
+                    <figcaption>.compasso/product/architecture.yaml</figcaption>
+<pre><span class="k">decisions:</span>
+  - <span class="k">title:</span> Double booking
+    <span class="k">choice:</span> A unique constraint in Postgres
+    <span class="k">alternatives:</span> [A lock in the app]
+    <span class="k">why:</span> The database guarantees it even when
+         two requests arrive together
+<span class="k">security:</span>
+  - <span class="k">concern:</span> Personal and health data of patients
+    <span class="k">control:</span> Stored in the EU, encrypted at rest;
+      the reason visible to staff only; every
+      staff read logged (GDPR)</pre>
+                  </figure>
+                </div>
+              </div>
+            </article>
+
+            <!-- 5 -->
+            <article class="phase" id="p-roadmap">
+              <header class="ph-head">
+                <span class="ph-num">5</span>
+                <div><h3>Roadmap: features into sprints</h3><code class="cmd">/compasso:roadmap</code></div>
+              </header>
+              <div class="ph-body">
+                <div class="ph-text">
+                  <p>Features are placed by dependency and capacity, MVP first, one goal per sprint. The sprint that completes the MVP is marked; work after the line never enters it.</p>
+                  <p>Later sprints stay as features. They are re-placed at every sprint close with the velocity the team really reached.</p>
+                </div>
+                <div class="ph-out">
+                  <figure class="pane term">
+                    <figcaption>roadmap.sh propose</figcaption>
+<pre><b>S1</b> · 72h of 80
+  F-0 Walking skeleton · 16h
+  F-1 Staff sign-in and working hours · 24h
+  F-2 Book an appointment · 32h
+<b>S2 <span class="ok">(MVP)</span></b> · 64h of 80
+  F-3 Staff calendar · 24h
+  F-4 Email reminders · 16h
+  F-5 Cancel and reschedule · 24h
+<b>S3</b> · 64h of 80
+  F-6 SMS reminders · 16h · <span class="dim">after MVP</span>
+  F-7 Waiting list · 24h · <span class="dim">after MVP</span>
+  F-8 Owner's monthly report · 24h · <span class="dim">after MVP</span></pre>
+                  </figure>
+                </div>
+              </div>
+            </article>
+
+            <!-- 6 -->
+            <article class="phase" id="p-plan">
+              <header class="ph-head">
+                <span class="ph-num">6</span>
+                <div><h3>Plan: the next sprint in one-day stories</h3><code class="cmd">/compasso:plan</code></div>
+              </header>
+              <div class="ph-body">
+                <div class="ph-text">
+                  <p>The planner splits the sprint goal into an epic, features and stories of at most 8 hours. Each story has acceptance, the commands that verify it, the paths it touches, its dependencies and its owner.</p>
+                  <p>Anything outside the plan a story waits for becomes a <b>blocker</b>, assigned to a person with step-by-step instructions: here, the email provider's token.</p>
+                  <div class="gate"><b>Gate</b> <code>plan-check</code> refused the first plan: two stories without unit tests. Then it computes the waves that can run in parallel and the critical path.</div>
+                  <div class="you"><b>You decide</b> after security reviews the plan. It is merged as a pull request and pushed to the tracker: milestone, epic, features, sub-issues, estimates.</div>
+                </div>
+                <div class="ph-out">
+                  <figure class="pane term">
+                    <figcaption>plan-check · first run</figcaption>
+<pre><span class="err">Errors:</span>
+  - S-2: tests must include unit
+  - S-9: tests must include unit</pre>
+                  </figure>
+                  <figure class="pane term">
+                    <figcaption>plan-check · after the fix</figcaption>
+<pre>Total: 50h of 80h capacity
+  F-0: 10h (max 40)
+  F-1: 14h (max 40)
+  F-2: 26h (max 40)
+<b>Waves:</b>
+  1. S-1
+  2. S-2, S-3
+  3. S-4
+  4. S-5, S-6
+  5. S-7
+  6. S-8, S-9
+<b>Critical path:</b> 34h (S-1 → S-3 → S-4 → S-6 → S-7 → S-9)
+Overlapping paths (run serially):
+  - S-1 / S-7</pre>
+                  </figure>
+                  <figure class="pane">
+                    <figcaption>.compasso/plan.yaml · one story</figcaption>
+<pre><span class="k">key:</span> S-7
+<span class="k">title:</span> Book a slot
+<span class="k">as:</span> a patient
+<span class="k">want:</span> to book a free slot with my name and email
+<span class="k">so_that:</span> my appointment is held for me
+<span class="k">acceptance:</span>
+  - Given a free slot, When I book it,
+    Then it is held for 15 minutes until I confirm
+  - Given two bookings of the same slot at once,
+    When both are saved, Then one succeeds and the
+    other is told the slot was just taken
+<span class="k">verify:</span> ["npm test -- booking"]
+<span class="k">tests:</span> [unit, e2e]
+<span class="k">touches:</span> ["app/api/bookings/**", "db/migrations/**"]
+<span class="k">depends_on:</span> [S-6]
+<span class="k">estimate_h:</span> 8</pre>
+                  </figure>
+                </div>
+              </div>
+            </article>
+
+            <!-- 7 -->
+            <article class="phase" id="p-build">
+              <header class="ph-head">
+                <span class="ph-num">7</span>
+                <div><h3>Build: every story, the same loop</h3><code class="cmd">/compasso:sprint</code></div>
+              </header>
+              <div class="ph-body ph-wide">
+                <div class="ph-text">
+                  <p>The sprint builds everything that can run now, in dependency order, side by side in separate worktrees when their paths don't overlap. A story waits until what it depends on is merged. Each story goes through the same seven steps. Here is S-7, <i>Book a slot</i>:</p>
+                </div>
+                <ol class="run">
+                  <li>
+                    <span class="who">tester</span>
+                    <div><b>Failing tests first.</b> Unit and e2e from the acceptance, including two real transactions booking the same slot. The test files are hashed.
+<pre class="mini"><span class="err">✗</span> holds a free slot for 15 minutes
+<span class="err">✗</span> a second booking of the same slot gets 409
+<span class="err">✗</span> a held slot is not offered
+<span class="err">3 failing</span></pre></div>
+                  </li>
+                  <li><span class="who">builder</span><div><b>The smallest change that passes.</b> A migration with a unique index on (therapist, start). The builder may never edit a test; a changed hash stops the run.</div></li>
+                  <li><span class="who">verify</span><div><b>Verify gate.</b> Tests, lint, typecheck, build and the story's own <code>npm test -- booking</code>. All pass, or nothing goes to review.</div></li>
+                  <li><span class="who">coverage</span><div><b>Changed-line coverage:</b> 91% (minimum 80%). Below it is a warning, never a block.</div></li>
+                  <li class="loop-step">
+                    <span class="who">review</span>
+                    <div><b>Review and security review, with a fix loop.</b> Round 1: security found the 409 response leaked the other patient's booking id; the reviewer found local time in the hold expiry. Each fix goes tests-first. Round 2: clean. At most 3 rounds, then a person takes over.</div>
+                  </li>
+                  <li><span class="who">record</span><div><b>Decision record and metrics</b> committed with the story: findings, decisions, takeaways, tokens and minutes per agent.</div></li>
+                  <li><span class="who">ship</span><div><b>The pull request</b>, closing the issue. A person merges by default; with risk-based approval, low-risk changes merge on their own. Nothing merges with an open security finding.</div></li>
+                </ol>
+                <div class="ph-out ph-out-2">
+                  <figure class="pane">
+                    <figcaption>Pull request #31 · Book a slot</figcaption>
+<pre>Closes #19
+
+<span class="h">## Changes</span>
+- A free slot is held for 15 minutes on booking
+- A second booking of the same slot gets 409
+  "This time was just taken"
+- Held and booked slots are no longer offered
+
+<span class="h">## How to test</span>
+1. `npm test -- booking`
+
+<span class="h">## Review</span>
+- Reviewer: 1 finding fixed
+- Security: 1 major fixed (round 2): the 409 no
+  longer includes another patient's booking id
+- Coverage: 91% of changed lines (min 80%)</pre>
+                  </figure>
+                  <figure class="pane">
+                    <figcaption>.compasso/records/S1/S-7.md</figcaption>
+<pre><span class="h"># S-7 · Book a slot · 2026-11-06</span>
+Run by @ana · Pull request #31
+
+<span class="h">## Findings</span>
+- security: major: the 409 response included the
+  other patient's booking id
+  <span class="ok">→ fixed in round 2: the response says only
+    that the slot was taken</span>
+- reviewer: minor: hold expiry used the server's
+  local time <span class="ok">→ fixed: UTC everywhere</span>
+
+<span class="h">## Takeaways</span>
+- Test concurrent bookings with two real
+  transactions, not mocks</pre>
+                  </figure>
+                </div>
+              </div>
+            </article>
+
+            <!-- 8 -->
+            <article class="phase" id="p-close">
+              <header class="ph-head">
+                <span class="ph-num">8</span>
+                <div><h3>Close: what was done, and what is ahead</h3><code class="cmd">/compasso:sprint</code></div>
+              </header>
+              <div class="ph-body">
+                <div class="ph-text">
+                  <p>When a feature's stories are merged, the tester writes e2e tests for its acceptance; failures become bugs under the feature. When every feature is done, the sprint closes:</p>
+                  <ol class="plain">
+                    <li>a regression pass and a security pass over everything the sprint changed;</li>
+                    <li>the <a href="examples/test-guide.html">test guide</a> for business testers, whose results come back as bugs;</li>
+                    <li>the <a href="examples/report.html">sprint report</a>: delivery, flow and waiting, quality, agent effort;</li>
+                    <li>the roadmap re-placed with the velocity reached, then the next plan.</li>
+                  </ol>
+                  <p>Sprint 1 delivered 50 hours of stories. At that pace the MVP needs one more sprint than planned, and Compasso says so on day one of sprint 2, not at the deadline.</p>
+                  <div class="you"><b>You decide</b> the capacity to plan with (the measured average is proposed), and the next sprint's goal.</div>
+                </div>
+                <div class="ph-out">
+                  <figure class="pane term">
+                    <figcaption>roadmap.sh propose --start 2 --capacity 50</figcaption>
+<pre><b>S2</b> · 40h of 50
+  F-3 Staff calendar · 24h
+  F-4 Email reminders · 16h
+<b>S3 <span class="ok">(MVP)</span></b> · 24h of 50
+  <span class="moved">F-5 Cancel and reschedule · 24h</span>
+<b>S4</b> · 40h of 50
+  F-6 SMS reminders · 16h · <span class="dim">after MVP</span>
+  F-7 Waiting list · 24h · <span class="dim">after MVP</span>
+<b>S5</b> · 24h of 50
+  F-8 Owner's monthly report · 24h · <span class="dim">after MVP</span></pre>
+                  </figure>
+                  <a class="shot" href="examples/report.html">
+                    <img src="examples/img/report.png" alt="The sprint 1 report: 50 hours done, 11 of 11 stories, burn-down, flow and waiting, quality and agent effort" loading="lazy" width="720" height="506">
+                    <span>Open the sprint 1 report</span>
+                  </a>
+                </div>
+              </div>
+            </article>
+
+            <!-- Present -->
+            <article class="phase phase-side" id="p-present">
+              <header class="ph-head">
+                <span class="ph-num ph-any">∗</span>
+                <div><h3>Present, at any point</h3><code class="cmd">/compasso:present</code></div>
+              </header>
+              <div class="ph-body">
+                <div class="ph-text">
+                  <p>One self-contained HTML page of the whole solution for the people who fund, use or approve it: the problem and goals, the functional and technical solution, observability, security, the decisions, the sprints and the next sprint's user stories with links to the tracker. Regenerate it whenever the plan changes.</p>
+                  <p><a class="btn btn-small" href="examples/presentation.html">Open the Clinic Booking presentation</a></p>
+                </div>
+                <div class="ph-out">
+                  <a class="shot" href="examples/presentation.html">
+                    <img src="examples/img/presentation.png" alt="The Clinic Booking solution presentation: problem and goals, users, outcomes, the MVP" loading="lazy" width="720" height="506">
+                    <span>Open the presentation</span>
+                  </a>
+                </div>
+              </div>
+            </article>
+
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Loops -->
+    <section id="loops" class="loops">
+      <div class="wrap">
+        <header class="sec-head">
+          <p class="eyebrow">Loops</p>
+          <h2>Two loops keep the work moving</h2>
+          <p>The sprint loop is the beat of the product. The team loop is how several agents and the people around them share it without stepping on each other.</p>
+        </header>
+
+        <div class="loop-grid">
+          <div class="loop-card">
+            <h3>The sprint loop</h3>
+            <svg class="cycle" viewBox="0 0 560 560" role="img" aria-labelledby="cyc-t cyc-d">
+              <title id="cyc-t">The sprint loop</title>
+              <desc id="cyc-d">Plan, build stories, finish features, close the sprint, refine the roadmap, and plan again. Inside the build, every story goes from failing tests to code, verify, review and a pull request.</desc>
+              <circle class="ring" cx="280" cy="280" r="200"/>
+              <g class="arrow">
+                <path d="M-7,-6 L5,0 L-7,6" transform="translate(397.6 118.2) rotate(36)"/>
+                <path d="M-7,-6 L5,0 L-7,6" transform="translate(470.2 341.8) rotate(108)"/>
+                <path d="M-7,-6 L5,0 L-7,6" transform="translate(280 480) rotate(180)"/>
+                <path d="M-7,-6 L5,0 L-7,6" transform="translate(89.8 341.8) rotate(252)"/>
+                <path d="M-7,-6 L5,0 L-7,6" transform="translate(162.4 118.2) rotate(324)"/>
+              </g>
+              <g class="node"><rect x="190" y="50" width="180" height="60" rx="10"/><text x="280" y="76">Plan</text><text class="sub" x="280" y="96">one-day stories, checked</text></g>
+              <g class="node node-hot"><rect x="380" y="188" width="170" height="60" rx="10"/><text x="465" y="214">Build stories</text><text class="sub" x="465" y="234">in parallel, by dependency</text></g>
+              <g class="node"><rect x="313" y="412" width="170" height="60" rx="10"/><text x="398" y="438">Finish features</text><text class="sub" x="398" y="458">e2e on the acceptance</text></g>
+              <g class="node"><rect x="77" y="412" width="170" height="60" rx="10"/><text x="162" y="438">Close</text><text class="sub" x="162" y="458">report · test guide</text></g>
+              <g class="node"><rect x="10" y="188" width="170" height="60" rx="10"/><text x="95" y="214">Refine roadmap</text><text class="sub" x="95" y="234">at real velocity</text></g>
+              <g class="inner">
+                <text class="inner-t" x="280" y="246">each story</text>
+                <text x="280" y="276">tests ✗ → code → verify</text>
+                <text x="280" y="302">→ review ⟲ fix → PR</text>
+                <text class="sub" x="280" y="330">at most 3 review rounds</text>
+              </g>
+            </svg>
+            <ol class="cycle-list" aria-hidden="true">
+              <li><b>Plan</b> one-day stories, checked</li>
+              <li class="hot"><b>Build stories</b> in parallel, by dependency; each one: tests ✗ → code → verify → review ⟲ fix → PR</li>
+              <li><b>Finish features</b> e2e on the acceptance</li>
+              <li><b>Close</b> report · test guide</li>
+              <li><b>Refine roadmap</b> at real velocity, then plan again</li>
+            </ol>
+            <ul class="facts">
+              <li>Only the next sprint has stories; the rest stays as features.</li>
+              <li>A story never builds on another's unmerged branch.</li>
+              <li>Bugs from e2e and testers join the sprint as work, not as surprises.</li>
+              <li>After the MVP sprint, <code>/compasso:harden</code> is offered: mutation, property-based, flaky and test-smell checks.</li>
+            </ul>
+          </div>
+
+          <div class="loop-card">
+            <h3>The team loop</h3>
+            <p class="loop-intro">A tech lead agent and developer agents, each in its own long-running session with its own tracker account, polling on a schedule. People answer questions and approve what needs a person.</p>
+            <ol class="lanes">
+              <li class="ev"><span class="lane l1">Tech lead</span><p>Plans sprint 2. Every story names its developer: <code>dev: ana</code>, <code>dev: ben</code>.</p></li>
+              <li class="ev"><span class="lane l3">You</span><p>Approve the plan and who gets what.</p></li>
+              <li class="ev"><span class="lane l2">ana · every 60 min</span><p>Claims S-10 with a comment, so no other session builds it. Builds, opens pull request #41 with its findings, stops.</p></li>
+              <li class="ev"><span class="lane l2">ben · every 60 min</span><p>Can't go on with S-12: writes one question of at most 250 characters, labels it <code>needs::lead</code>, moves to its next story.</p></li>
+              <li class="ev"><span class="lane l1">Tech lead · every 30 min</span><p>Shows the question with a proposed answer, the bugs with no developer, and each developer's load.</p></li>
+              <li class="ev"><span class="lane l3">You</span><p>Decide the answer. Ben picks it up at its next poll.</p></li>
+              <li class="ev"><span class="lane l1">Tech lead · every 15 min</span><p>Reads #41: up to date, pipeline green, risk low. The approver agent checks it; it merges. A pull request that conflicts or fails goes back to its developer.</p></li>
+              <li class="ev"><span class="lane l3">You</span><p>Approve or request changes on what got <code>needs::approval</code>: in production, migrations, sensitive paths, API contracts, low coverage.</p></li>
+            </ol>
+            <figure class="pane thread">
+              <figcaption>Issue #24 · S-12 Move an appointment</figcaption>
+              <div class="cmt"><b>ben</b> <span class="lbl">needs::lead</span><p>Moving within 24h is refused by F-5. Should reception be allowed to move inside 24h on a patient's call?</p></div>
+              <div class="cmt"><b>tech lead</b> <span class="dim">proposed</span><p>Yes for reception, never for patients: reception handles the call and the rule stays for self-service.</p></div>
+              <div class="cmt"><b>rita</b><p>Agreed.</p></div>
+            </figure>
+            <p class="more">How to set it up: <a href="https://github.com/tasb/compasso/blob/main/docs/guides/team.md">a team of agents</a>.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Outcomes -->
+    <section id="outcomes" class="outcomes">
+      <div class="wrap">
+        <header class="sec-head">
+          <p class="eyebrow">Outcomes</p>
+          <h2>What you get, for people and for the repository</h2>
+          <p>Three self-contained HTML pages, generated from Clinic Booking by Compasso's scripts. Open them: they are the real output.</p>
+        </header>
+        <div class="cards3">
+          <a class="ocard" href="examples/presentation.html">
+            <img src="examples/img/presentation.png" alt="" loading="lazy" width="720" height="506">
+            <div><h3>Solution presentation</h3><p>For whoever funds, uses or approves the product: problem, solution, decisions, sprints and next stories.</p><span class="go">Open →</span></div>
+          </a>
+          <a class="ocard" href="examples/report.html">
+            <img src="examples/img/report.png" alt="" loading="lazy" width="720" height="506">
+            <div><h3>Sprint report</h3><p>For the team: burn-down, where each story waited, findings by severity, agent tokens and time against estimates.</p><span class="go">Open →</span></div>
+          </a>
+          <a class="ocard" href="examples/test-guide.html">
+            <img src="examples/img/test-guide.png" alt="" loading="lazy" width="720" height="506">
+            <div><h3>Test guide</h3><p>For business testers: what's new, how to try it, what to expect. No issue numbers or code. Results download as a file.</p><span class="go">Open →</span></div>
+          </a>
+        </div>
+
+        <h3 class="sub-h">And in your repository, reviewed like code</h3>
+        <div class="table-wrap">
+          <table class="files">
+            <tbody>
+              <tr><td><code>.compasso/product/brief.md</code></td><td>The problem, users, outcomes, what the MVP must prove, risks</td></tr>
+              <tr><td><code>.compasso/backlog.yaml</code></td><td>Features with hours, dependencies and the MVP line</td></tr>
+              <tr><td><code>.compasso/product/architecture.yaml</code></td><td>Stack, components, data, observability, security, decisions</td></tr>
+              <tr><td><code>.compasso/roadmap.yaml</code></td><td>Features placed into sprints, one goal each</td></tr>
+              <tr><td><code>.compasso/plan.yaml</code></td><td>The sprint plan, the source for everything pushed to the tracker</td></tr>
+              <tr><td><code>.compasso/records/</code></td><td>A decision record per plan, feature and story</td></tr>
+              <tr><td><code>.compasso/metrics/</code></td><td>Tokens, time, review rounds and failures per story</td></tr>
+              <tr><td><code>docs/learnings/</code></td><td>Lessons tagged by path and role, given only to the agents they apply to</td></tr>
+              <tr><td><code>.github/</code> or <code>.gitlab/</code></td><td>The CI pipeline with the gates, and issue templates</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="more">Browse the sample's files: <a href="https://github.com/tasb/compasso/tree/main/site/examples/clinic/.compasso">site/examples/clinic/.compasso</a>.</p>
+      </div>
+    </section>
+
+    <!-- Gates -->
+    <section id="gates" class="gates">
+      <div class="wrap">
+        <header class="sec-head">
+          <p class="eyebrow">Gates</p>
+          <h2>Gates are scripts that stop, not advice</h2>
+          <p>A gate stops the flow. A check reports and never stops it. Every gate runs the same way locally and in CI.</p>
+        </header>
+        <ul class="gate-grid">
+          <li><b>Tracker</b>Login, access and project checked before every command.</li>
+          <li><b>Plan check</b>Sizes, dependencies, cycles and capacity, before anything is pushed.</li>
+          <li><b>Story contract</b>No acceptance or no Verify: the story goes back to the planner.</li>
+          <li><b>Verify commands approved</b>Tracker text runs only after a person approved that exact command.</li>
+          <li><b>Test immutability</b>Tests are hashed; the builder can never change them.</li>
+          <li><b>Verify</b>Tests, lint, typecheck, build and e2e, before review and in CI.</li>
+          <li class="hot"><b>Security review</b>On every plan, pull request and sprint. Never skipped; only security closes its findings.</li>
+          <li><b>Scan gate</b>A high or critical SAST finding, or any secret, blocks the pull request.</li>
+          <li><b>Merge approval</b>A person by default; by risk or by an approver agent when you choose.</li>
+          <li><b>Persona</b>In a team, each checkout only does what its role may do.</li>
+          <li class="check"><b>Coverage · check</b>Changed-line coverage under 80% warns, never blocks.</li>
+          <li class="check"><b>Budget</b>Each role has a run limit per story; when it runs out, a person takes over.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- Install -->
+    <section id="install" class="install">
+      <div class="wrap install-grid">
+        <div>
+          <p class="eyebrow">Install</p>
+          <h2>Start with your next idea</h2>
+          <p>Install the plugin, run <code>/compasso:setup</code> once in your product's repository to connect GitLab or GitHub, then <code>/compasso:start</code>.</p>
+          <p class="more">Needs bash 3.2 or later, git, jq, yq and the <code>glab</code> or <code>gh</code> CLI. Writes in English, Portuguese (Portugal) or Portuguese (Brazil).</p>
+        </div>
+        <div class="tabs-box">
+          <div class="tabs" role="tablist" aria-label="Harness">
+            <button role="tab" id="t-cc" aria-controls="p-cc" aria-selected="true" tabindex="0" type="button">Claude Code</button>
+            <button role="tab" id="t-cx" aria-controls="p-cx" aria-selected="false" tabindex="-1" type="button">Codex</button>
+          </div>
+          <div class="pane term code" role="tabpanel" id="p-cc" aria-labelledby="t-cc">
+<pre><span class="p">$</span> claude plugin marketplace add tasb/compasso
+<span class="p">$</span> claude plugin install compasso@compasso</pre>
+            <button class="copy" type="button" data-copy="claude plugin marketplace add tasb/compasso&#10;claude plugin install compasso@compasso">Copy</button>
+          </div>
+          <div class="pane term code" role="tabpanel" id="p-cx" aria-labelledby="t-cx" hidden>
+<pre><span class="p">$</span> git clone https://github.com/tasb/compasso &amp;&amp; cd compasso
+<span class="p">$</span> bin/install-codex.sh
+<span class="p">$</span> ~/.compasso/engine/bin/install-codex.sh --repo /path/to/project</pre>
+            <button class="copy" type="button" data-copy="git clone https://github.com/tasb/compasso &amp;&amp; cd compasso&#10;bin/install-codex.sh&#10;~/.compasso/engine/bin/install-codex.sh --repo /path/to/project">Copy</button>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <div class="wrap foot-in">
+      <p><b>Compasso</b> means both the drawing compass and the musical bar. Created by Tiago Bernardo, the faster successor of Harmonia. MIT licensed.</p>
+      <nav aria-label="Project links">
+        <a href="https://github.com/tasb/compasso">GitHub</a>
+        <a href="https://github.com/tasb/compasso/tree/main/docs/guides">Guides</a>
+        <a href="https://github.com/tasb/compasso/blob/main/CHANGELOG.md">Changelog</a>
+        <a href="https://github.com/tasb/compasso/blob/main/docs/SPEC.md">Design</a>
+        <a href="https://github.com/tasb/compasso/blob/main/CONTRIBUTING.md">Contributing</a>
+        <a href="https://github.com/tasb/compasso/blob/main/SECURITY.md">Security</a>
+      </nav>
+    </div>
+  </footer>
+
+  <script src="main.js"></script>
+</body>
+</html>

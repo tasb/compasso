@@ -1,0 +1,36 @@
+{
+  "id": "S1",
+  "language": "en",
+  "title": "Sprint 1 · Test guide",
+  "goal": "Patients book a free slot online, set by the therapists' own hours",
+  "dates": { "start": "2 Nov 2026", "end": "13 Nov 2026" },
+  "where": "https://staging.clinic.example.com",
+  "features": [
+    {
+      "key": "F-1", "iid": 3, "title": "Staff sign-in and working hours",
+      "whats_new": "Therapists sign in with a link sent to their email and set the hours they take appointments. Reception can close the clinic on holidays.",
+      "why": "Patients can only book when a therapist really works.",
+      "before": ["Use the staff mailbox at https://mail.staging.clinic.example.com (login in the team vault).", "The therapist \"Joana Reis\" exists, with no working hours yet."],
+      "scenarios": [
+        { "id": "F-1.1", "title": "Sign in with a link", "steps": ["Open staging.clinic.example.com/staff.", "Enter joana@clinic.example.com and choose Send link.", "Open the email and choose Sign in."], "expected": "You are signed in and see \"Working hours\"." },
+        { "id": "F-1.2", "title": "Set Monday morning", "steps": ["In Working hours, set Monday from 9:00 to 13:00.", "Choose Save."], "expected": "Monday shows 8 slots of 30 minutes." },
+        { "id": "F-1.3", "title": "Close a day", "steps": ["Sign in as reception@clinic.example.com.", "In Closed days, add 25 December 2026."], "expected": "25 December shows as closed in the calendar." }
+      ],
+      "not_included": ["Different slot lengths per therapist come later."]
+    },
+    {
+      "key": "F-2", "iid": 4, "title": "Book an appointment",
+      "whats_new": "Patients book an appointment from their phone: they pick a therapist, a day and a free time, and confirm by email.",
+      "why": "Patients no longer need to call during opening hours.",
+      "before": ["Use a phone, or a browser narrowed to a phone's width.", "Joana Reis works Monday 9:00-13:00 (from F-1.2)."],
+      "scenarios": [
+        { "id": "F-2.1", "title": "Book a free time", "steps": ["Open staging.clinic.example.com.", "Choose Joana Reis, next Monday, 10:00.", "Enter your name and the test mailbox address, and choose Book.", "Open the confirmation email and choose Confirm."], "expected": "You see \"Your appointment is confirmed\" for Monday at 10:00." },
+        { "id": "F-2.2", "title": "A taken time is not offered", "steps": ["Open Joana Reis, next Monday, again."], "expected": "10:00 is not in the list; the other 7 times are." },
+        { "id": "F-2.3", "title": "Not confirmed in time", "steps": ["Book 11:00 but do not open the email.", "Wait 15 minutes and look at Monday again."], "expected": "11:00 is offered again." }
+      ],
+      "not_included": ["Cancelling or moving an appointment comes in sprint 2.", "Reminders the day before come in sprint 2."],
+      "known_issues": ["The confirmation email can take up to a minute on staging."]
+    }
+  ],
+  "verified_automatically": ["Two patients booking the same time at once: only one booking is kept", "The health page after every deploy"]
+}

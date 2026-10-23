@@ -1,0 +1,30 @@
+summary: One Next.js app on managed containers in the EU, with Postgres for appointments and an email provider for confirmations and reminders, observed through OpenTelemetry.
+stack:
+  - {layer: Frontend, choice: Next.js + React, why: Server-rendered pages load fast on patients' phones; one language end to end}
+  - {layer: Backend, choice: Next.js route handlers + a worker for jobs, why: "One deployable; the reminder job runs in the same codebase"}
+  - {layer: Database, choice: PostgreSQL, why: "A unique constraint on (therapist, slot) makes double booking impossible"}
+components:
+  - {name: Patient web, responsibility: "Free slots, booking, cancel and move", technology: Next.js, features: [F-0, F-2, F-5, F-7], talks_to: [API], data: []}
+  - {name: Staff web, responsibility: "Sign-in, working hours, calendar, reports", technology: Next.js, features: [F-1, F-3, F-8], talks_to: [API], data: []}
+  - {name: API, responsibility: "Slots, appointments, staff and patients", technology: Next.js route handlers, features: [F-0, F-1, F-2, F-3, F-5, F-7, F-8], talks_to: [Notifier], data: [Appointment, Patient, Staff]}
+  - {name: Notifier, responsibility: "Confirmation, reminder and waiting-list messages", technology: Worker + Postmark, features: [F-2, F-4, F-6, F-7], talks_to: [], data: []}
+integrations:
+  - {name: Postmark, direction: out, protocol: HTTPS, auth: Server token in the secret store, owner: Clinic owner}
+data:
+  - {entity: Appointment, owner: API, personal: true, retention: 5 years (clinical records rule)}
+  - {entity: Patient, owner: API, personal: true, retention: Until the patient asks to be deleted}
+  - {entity: Staff, owner: API, personal: true, retention: While employed}
+observability:
+  logs: JSON logs with no patient data, 30 days
+  traces: OpenTelemetry from the web through the API to the notifier
+  metrics: [{name: booking_conversion, why: "The MVP must prove patients book online"}, {name: reminder_delivery_rate, why: Reminders are what cuts missed appointments}]
+  dashboards: [{name: Bookings today, shows: "Bookings, cancellations and failed emails per hour", screen: ""}]
+  alerts: [{name: Reminders failing, condition: "delivery rate below 95% for 30 minutes", severity: page}]
+security:
+  - {concern: Personal and health data of patients, control: "Stored in the EU, encrypted at rest; the appointment reason visible to staff only; every staff read logged (GDPR)"}
+  - {concern: Staff accounts, control: "Passwordless sign-in by email link; sessions expire after 8 hours"}
+deployment: {environments: [dev, staging, production], hosting: Managed containers in an EU region, ci: GitHub Actions}
+decisions:
+  - {title: One deployable, choice: A modular monolith, alternatives: [A separate booking service], why: "A team of two agents and one person ships the MVP faster with one app"}
+  - {title: Double booking, choice: A unique constraint in Postgres, alternatives: [A lock in the app], why: "The database guarantees it even when two requests arrive together"}
+risks: ["Postmark's sending limit during the January campaign"]

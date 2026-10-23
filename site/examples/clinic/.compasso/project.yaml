@@ -1,0 +1,129 @@
+# Compasso project configuration. Written by /compasso:setup; commit it.
+version: 1
+tracker:
+  provider: github # gitlab | github
+  host: github.com # gitlab.com, github.com, or your own server
+  project: "example/clinic-booking" # GitLab: namespace/project; GitHub: owner/repo
+  tier: auto # GitLab only: auto | free | premium (set explicitly on self-managed)
+  github: # GitHub only
+    project: 0 # the GitHub Project (its number) that holds sprints, estimates and status; 0 for none
+    fields: # the Project's fields, by name
+      estimate: Estimate (h)
+      iteration: Iteration
+      status: Status
+    status: # the Status option for each Compasso state
+      new: Todo
+      building: In progress
+      in-review: In review
+      done: Done
+language: en # what Compasso writes for people, on the tracker and in the repository:
+# en | pt-PT | pt-BR (templates/locales/). Labels stay in English.
+
+sprint:
+  weeks: 2
+  hours_per_day: 8
+  capacity_hours: 80 # team hours available per sprint, humans and agents
+  parallel: 2 # stories built at the same time by the sprint flow
+limits:
+  story_max_hours: 8 # hard limit: one working day
+  story_target_hours: 4 # what the planner aims for
+  # A feature may take at most half a sprint; derived from sprint, not configured.
+  agent_runs: # strict orchestration: how many times each role may run, or be continued,
+    tester: 9 # in one flow run (a story, a plan, a review...); bin/budget.sh refuses the next one
+    builder: 10
+    reviewer: 6
+    security: 4
+    approver: 1
+    shipper: 2
+    mutator: 2
+    finops: 2
+    total: 30 # every role together
+    mvp_total: 40 # in stage: mvp only this applies, to every role together
+commands: # the repo's own commands; empty means "not applicable"
+  test: ""
+  lint: ""
+  typecheck: ""
+  build: ""
+  e2e: ""
+testing: {} # per language and area (unit, api, e2e, coverage, property): what the project
+# uses, or Compasso's default where it had nothing; written by bin/test-stack.sh write
+test_paths: # what counts as a test file: the builder may not add, change or remove these
+  - "tests/**"
+  - "test/**"
+  - "e2e/**"
+  - "**/*.test.*"
+  - "**/*.spec.*"
+  - "**/*_test.*"
+  - "**/test_*.py"
+coverage: # line coverage of changed lines; below the threshold is a warning, never a block
+  command: "" # the repo's own command; empty means "not measured"
+  report: "" # the Cobertura or LCOV file the command writes
+  min_changed: 80 # default %; an Epic, Feature or Story can override with a "**Coverage:** N%" line
+  paths: [] # product-code globs; a changed file here missing from the report counts as uncovered
+ci:
+  image: "" # the image with the repo's toolchain, for the merge request pipeline
+test_guide: # the HTML guide business testers get at the end of a sprint
+  where: "" # where testers test: a URL, or how to reach the environment
+metrics: # the sprint report
+  prices: {} # optional: price per million tokens per model, e.g. { opus: 30, sonnet: 6, haiku: 2 }
+  currency: USD
+harden: # optional hardening, after the MVP (/compasso:harden)
+  flaky_runs: 5 # code set: how many times the suite runs to find flaky tests
+  environment: # live set: a running test environment - never production
+    url: "" # its base URL
+    openapi: "" # the OpenAPI schema (a URL, or a path in the repo) for API fuzzing
+    disposable: false # true: fuzzing may send requests that create or change data
+    pages: [] # UI paths to check for accessibility, e.g. ["/", "/billing"]
+    endpoints: [] # GET paths for the performance smoke test, e.g. ["/invoices"]
+  limits:
+    p95_ms: 500 # performance: 95% of requests faster than this
+    error_rate: 0.01 # performance: at most this share of requests failing
+  images: # the Docker images the live checks run in; update them here
+    zap: ghcr.io/zaproxy/zaproxy:stable
+    fuzz: schemathesis/schemathesis:stable
+    perf: grafana/k6:latest
+    a11y: mcr.microsoft.com/playwright:v1.55.0-noble
+approvals:
+  plan: human # human | auto  (auto still requires a clean security review of the plan)
+  merge: human # human | agent | risk: low-risk changes merge automatically, the rest wait for a person
+  # (an agent never merges with an open security finding)
+stage: mvp # mvp | production: in mvp only a cost increase needs a person (bin/risk.sh); no stage is production
+trust: # who approves a story's Verify commands before they run (bin/trust.sh)
+  mvp_approval: false # in mvp: false runs them without approval; true asks as in production, where a person
+  # approves each one, except those the plan on the default branch lists for that story
+risk: # what makes a change need a person (approvals.merge: risk, or the tech lead), abuse cases and a mutation check
+  sensitive_paths: [] # globs where a change needs a person in production, e.g. ["src/auth/**", "src/billing/payments/**"]
+  max_changed_lines: 200 # more product lines than this needs a person in production
+  product_paths: ["src/**"] # the product's code: only its lines count against max_changed_lines
+  infra_paths: ["**/*.tf", "**/*.tfvars", "**/k8s/**", "**/kubernetes/**", "**/helm/**", "**/charts/**", "**/cloudformation/**", "**/cdk/**", "**/Pulumi*.yaml", "**/docker-compose*.yml", "**/docker-compose*.yaml", "**/serverless.yml"]
+  production_paths: ["**/migrations/**", "**/db/migrate/**", "**/alembic/**", "**/openapi*.yaml", "**/openapi*.yml", "**/openapi*.json", "**/swagger*.yaml", "**/swagger*.json", "**/*.proto", "**/*.graphql"]
+team: # several agents on one project, each with a persona (bin/persona.sh)
+  enabled: false # true: a tech lead assigns every story to a named developer (dev::<name>);
+  # an agent with no persona only reads. Set by the tech lead's setup
+  poll_minutes: 60 # how often a developer reads the tracker for new work and messages
+  lead_poll_minutes: 30 # how often the tech lead reads it: questions, queues (/compasso:work --flow)
+  lead_merge_minutes: 15 # how often the tech lead merges what is in review (/compasso:work --merge)
+  queue: {target: 15, min: 5} # in mvp the tech lead tops up a developer's backlog below min to target
+  agents: [] # the agents' tracker logins: their approvals never count as a person's
+harnesses: [claude] # claude and/or codex
+models:
+  claude:
+    planner: {model: opus}
+    tester: {model: sonnet}
+    builder: {model: sonnet}
+    reviewer: {model: sonnet}
+    security: {model: opus}
+    approver: {model: opus}
+    shipper: {model: haiku}
+    mutator: {model: sonnet}
+    finops: {model: sonnet}
+  codex:
+    planner: {model: gpt-6-astra, effort: high}
+    tester: {model: gpt-6-sol, effort: medium}
+    builder: {model: gpt-6-sol, effort: medium}
+    reviewer: {model: gpt-6-sol, effort: high}
+    security: {model: gpt-6-astra, effort: high}
+    approver: {model: gpt-6-astra, effort: high}
+    shipper: {model: gpt-6-luna, effort: low}
+    mutator: {model: gpt-6-sol, effort: medium}
+    finops: {model: gpt-6-sol, effort: medium}

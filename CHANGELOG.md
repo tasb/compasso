@@ -2,6 +2,12 @@
 
 Versions follow `version` in `.claude-plugin/plugin.json`. Claude Code updates an installed plugin only when this version changes, so every change users should receive ships in a new version.
 
+## 3.1.2 (2026-10-23)
+
+Upgrade notes for the agent: [docs/releases/3.1.2.md](docs/releases/3.1.2.md).
+
+- **The presentation's menu no longer scrolls sideways on a wide screen.** The links wrap onto a second row when they do not fit, the light/dark button stays at the right of the first row, and sections leave room for a two-row menu. On a phone the menu is still one row you swipe.
+
 ## 3.1.1 (2026-10-22)
 
 Upgrade notes for the agent: [docs/releases/3.1.1.md](docs/releases/3.1.1.md).

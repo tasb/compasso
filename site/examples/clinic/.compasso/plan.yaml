@@ -1,0 +1,50 @@
+epic:
+  key: E-1
+  goal: "Patients book a free slot online, set by the therapists' own hours"
+  sprint: {number: 1, start: "2026-11-02", end: "2026-11-13"}
+  risks: ["Postmark account approval can take 2 days"]
+  gitlab: {milestone: 1, issue: 11}
+blockers:
+  - key: B-1
+    title: Postmark server token for staging
+    assignee: rita
+    steps:
+      - Create a Postmark server called clinic-booking-staging
+      - Verify the sending domain clinic.example.com (two DNS records)
+      - Store the server token as the repository secret POSTMARK_TOKEN
+      - Close this issue
+    gitlab: 12
+features:
+  - key: F-0
+    title: Walking skeleton
+    goal: "The app, its database and CI running end to end, deployed to staging"
+    scope: [Next.js app, Postgres, CI pipeline, staging deploy]
+    acceptance: ["Given a push to main, When the pipeline passes, Then staging serves the health page"]
+    dev: ana
+    gitlab: 2
+    stories:
+      - {key: S-1, title: App and database skeleton, as: a developer, want: "the app, Postgres and migrations running locally and in CI", so_that: every story starts from a green pipeline, acceptance: ["Given a fresh checkout, When I run npm test, Then the health test passes against Postgres"], verify: ["npm test -- health"], tests: [unit], touches: [app/health/**, db/**, package.json], depends_on: [], owner: agent, estimate_h: 4, gitlab: 13}
+      - {key: S-2, title: Deploy to staging, as: a developer, want: every merge to main deployed to staging, so_that: testers always see the latest build, acceptance: ["Given a merge to main, When the pipeline passes, Then GET staging/health returns 200"], verify: ["npm run test:e2e -- health"], tests: [unit, e2e], touches: [".github/**", "deploy/**"], depends_on: [S-1], owner: agent, estimate_h: 6, gitlab: 14}
+  - key: F-1
+    title: Staff sign-in and working hours
+    goal: Staff sign in and each therapist sets the hours they take appointments
+    scope: [Staff sign-in, Working hours per therapist, Closed days]
+    acceptance: ["Given a therapist, When they set Monday 9:00-13:00, Then patients see Monday morning slots for them", "Given a closed day, When a patient looks at that day, Then no slot is offered"]
+    dev: ben
+    gitlab: 3
+    stories:
+      - {key: S-3, title: Staff sign-in by email link, as: a therapist, want: to sign in with a link sent to my email, so_that: I never manage a password, acceptance: ["Given a staff email, When I ask for a link and open it within 15 minutes, Then I am signed in for 8 hours", "Given an unknown email, When I ask for a link, Then the page says the same and no email is sent"], verify: ["npm test -- auth"], tests: [unit, e2e], touches: ["app/staff/auth/**", "lib/auth/**"], depends_on: [S-1], owner: agent, estimate_h: 4, gitlab: 15}
+      - {key: S-4, title: Working hours per therapist, as: a therapist, want: to set the hours I take appointments each weekday, so_that: patients only book when I work, acceptance: ["Given Monday 9:00-13:00, When I save, Then Monday has 8 slots of 30 minutes"], verify: ["npm test -- hours"], tests: [unit, e2e], touches: [app/staff/hours/**, lib/slots/hours.ts], depends_on: [S-3], owner: agent, estimate_h: 6, gitlab: 16}
+      - {key: S-5, title: Closed days, as: reception, want: to mark days the clinic is closed, so_that: nobody books a holiday, acceptance: ["Given 25 December closed, When slots are listed for that day, Then there are none"], verify: ["npm test -- closed-days"], tests: [unit], touches: ["app/staff/closed/**", "lib/slots/closed.ts"], depends_on: [S-4], owner: agent, estimate_h: 4, gitlab: 17}
+  - key: F-2
+    title: Book an appointment
+    goal: "A patient books a free slot from a phone, confirming their email"
+    scope: [Free slots by therapist and day, Booking form, Email confirmation, No double booking]
+    acceptance: ["Given a free slot, When a patient books it and confirms the email, Then the slot is taken and both sides see it", "Given two patients booking the same slot at once, When both submit, Then only one booking exists"]
+    dev: ana
+    gitlab: 4
+    stories:
+      - {key: S-6, title: Free slots API, as: a patient, want: to see the free slots of a therapist on a day, so_that: I pick one that suits me, acceptance: ["Given Monday 9:00-13:00 and one booking at 10:00, When GET /api/slots?therapist=1&day=2026-11-09, Then 7 slots, 10:00 not among them"], verify: ["npm test -- slots"], tests: [unit], touches: [app/api/slots/**, lib/slots/free.ts], depends_on: [S-4], owner: agent, estimate_h: 4, gitlab: 18}
+      - {key: S-7, title: Book a slot, as: a patient, want: to book a free slot with my name and email, so_that: my appointment is held for me, acceptance: ["Given a free slot, When I book it, Then it is held for 15 minutes until I confirm", "Given two bookings of the same slot at once, When both are saved, Then one succeeds and the other is told the slot was just taken"], verify: ["npm test -- booking"], tests: [unit, e2e], touches: ["app/api/bookings/**", "db/migrations/**"], depends_on: [S-6], owner: agent, estimate_h: 8, gitlab: 19}
+      - {key: S-8, title: Confirm by email, as: a patient, want: a confirmation email with a link, so_that: the clinic knows my email is real, acceptance: ["Given a held booking, When I open the link in the email, Then the booking is confirmed and the slot is taken"], verify: ["npm test -- confirm"], tests: [unit], touches: ["app/api/confirm/**", "lib/notify/**"], depends_on: [S-7], owner: agent, estimate_h: 6, blocked_by: [B-1], gitlab: 20}
+      - {key: S-9, title: Booking screens on a phone, as: a patient, want: "to pick a therapist, a day and a slot on my phone", so_that: I book in under a minute, acceptance: ["Given a 390px screen, When I book from the first page, Then it takes at most 4 taps and no horizontal scroll"], verify: ["npm run test:e2e -- booking"], tests: [unit, e2e], touches: ["app/(patient)/**"], depends_on: [S-7], owner: agent, estimate_h: 8, gitlab: 21}

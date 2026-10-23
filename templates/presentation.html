@@ -21,12 +21,13 @@
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
 nav { position: sticky; top: 0; z-index: 5; background: var(--surface); border-bottom: 1px solid var(--line); }
-nav .in { max-width: 1100px; margin: 0 auto; padding: 10px 16px; display: flex; gap: 6px; overflow-x: auto; align-items: center; }
-nav a { color: var(--muted); text-decoration: none; font-size: 14px; padding: 4px 10px; border-radius: 999px; white-space: nowrap; }
+nav .in { position: relative; max-width: 1100px; margin: 0 auto; padding: 10px 64px 10px 16px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+nav a { color: var(--muted); text-decoration: none; font-size: 14px; padding: 4px 8px; border-radius: 999px; white-space: nowrap; }
 nav a:hover, nav a:focus { background: var(--accent-soft); color: var(--accent); outline: none; }
-nav button { margin-left: auto; border: 1px solid var(--line); background: var(--surface); color: var(--muted); border-radius: 999px; padding: 4px 10px; font: inherit; font-size: 13px; cursor: pointer; }
+nav button { position: absolute; top: 10px; right: 16px; border: 1px solid var(--line); background: var(--surface); color: var(--muted); border-radius: 999px; padding: 4px 10px; font: inherit; font-size: 13px; cursor: pointer; }
+@media (max-width: 699px) { nav .in { flex-wrap: nowrap; overflow-x: auto; padding-right: 16px; } nav button { position: static; margin-left: auto; } }
 main { max-width: 1100px; margin: 0 auto; padding: 0 16px 64px; }
-section { padding: 40px 0 8px; scroll-margin-top: 56px; }
+section { padding: 40px 0 8px; scroll-margin-top: 96px; }
 h1 { font-size: 40px; line-height: 1.15; margin: 0 0 8px; letter-spacing: -.01em; }
 h2 { font-size: 26px; margin: 0 0 16px; letter-spacing: -.01em; }
 h3 { font-size: 17px; margin: 0 0 6px; }

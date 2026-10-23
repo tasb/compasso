@@ -62,3 +62,19 @@ present() { "$ROOT/bin/present.sh" --repo "$REPO" --out "$OUT" --data-out "$D" "
   [ "$(jq '[.features[].goal | length] | add' "$D")" -eq 1200000 ]
   grep -q '<title>Shop · Solution</title>' "$OUT"
 }
+
+@test "the menu wraps on a wide screen and scrolls only on a phone, and a two-row menu never hides a section's heading" {
+  present >/dev/null
+  # the rule outside any @media, and the one inside the phone query
+  base="$(grep -E '^nav \.in \{' "$OUT")"
+  phone="$(grep -E '^@media \(max-width: 699px\) \{ nav \.in \{' "$OUT")"
+  [[ "$base" == *"flex-wrap: wrap"* ]] || false
+  [[ "$base" != *"overflow-x"* ]] || false
+  [[ "$phone" == *"flex-wrap: nowrap"* ]] || false
+  [[ "$phone" == *"overflow-x: auto"* ]] || false
+  # the theme button stays on the first row, at its right; on a phone it scrolls with the links
+  [[ "$(grep -E "^nav button \\{" "$OUT")" == *"position: absolute"* ]] || false
+  [[ "$phone" == *"nav button { position: static"* ]] || false
+  margin="$(grep -oE '^section \{[^}]*scroll-margin-top: [0-9]+px' "$OUT" | grep -oE '[0-9]+px$' | tr -d px)"
+  [ "$margin" -ge 96 ]
+}
