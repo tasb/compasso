@@ -9,6 +9,8 @@
 #   compasso-coverage  the coverage command, then diff-cover on changed lines (warning: exit 3 allowed)
 #   GitLab SAST and Secret Detection                                         (security scans, every tier)
 #   compasso-scan-gate  fails on any high or critical scan finding           (gate)
+# In stage mvp only verify and the scans run on each merge request: e2e and coverage come back when the
+# stage is production and this runs again (setup does).
 # The product repo includes the file from its .gitlab-ci.yml.
 # A GitHub project (tracker.provider: github) gets ci-github.sh's workflow instead.
 # Exit: 0 written | 1 config problem
@@ -31,6 +33,7 @@ cfg() { "$BIN/config.sh" get --repo "$REPO" "$1"; }
 image="$(cfg .ci.image)"
 [ -n "$image" ] || { echo "ci: set ci.image in .compasso/project.yaml to the image that has the repo's toolchain" >&2; exit 1; }
 yq_str() { v="$1" yq -n 'strenv(v)' ; }   # a YAML-safe scalar for any command string
+full=1; [ "$(cfg .stage)" = mvp ] && full=0   # mvp: no e2e or coverage job on each merge request
 
 script_lines=""
 for k in test lint typecheck build; do
@@ -93,7 +96,7 @@ compasso-verify:
 $script_lines
 EOF
   c="$(cfg .commands.e2e)"
-  if [ -n "$c" ]; then
+  if [ -n "$c" ] && [ "$full" = 1 ]; then
     cat <<EOF
 compasso-e2e:
   extends: .compasso-mr
@@ -105,7 +108,7 @@ compasso-e2e:
 EOF
   fi
   c="$(cfg .coverage.command)"
-  if [ -n "$c" ]; then
+  if [ -n "$c" ] && [ "$full" = 1 ]; then
     report="$(cfg .coverage.report)"
     visual=""
     case "$report" in *.xml) visual="    reports:

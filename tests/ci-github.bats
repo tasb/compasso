@@ -35,6 +35,15 @@ job() { yq -r "$1" "$OUT"; }
   job '.jobs.compasso-coverage-check.steps[-1].run' | grep -q '::warning'
 }
 
+@test "in mvp each pull request runs verify and the scans only: no e2e, no coverage; production brings them back" {
+  cfg_set '.stage = "mvp" | .commands.e2e = "npx playwright test" | .coverage.command = "npm run cov" | .coverage.report = "coverage/cobertura.xml"'
+  ci --scans compasso >/dev/null
+  [ "$(job '.jobs | keys | join(",")')" = "compasso-verify,compasso-scan-gate" ]
+  cfg_set '.stage = "production"'
+  ci --scans compasso >/dev/null
+  [ "$(job '.jobs | keys | join(",")')" = "compasso-verify,compasso-e2e,compasso-coverage,compasso-coverage-check,compasso-scan-gate" ]
+}
+
 @test "with GitHub's scans there is no Compasso scan gate; without them there is" {
   ci --scans github >/dev/null
   [ "$(job '.jobs.compasso-scan-gate')" = null ]

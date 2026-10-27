@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # The verify gate: the repo's own commands, then the story's Verify commands,
-# then e2e when the story asks for it. Every command must pass.
+# then e2e when the story asks for it. Every command must pass; one that already ran runs once.
 #
 #   verify.sh --repo R --run DIR [--story F]
 #
@@ -54,6 +54,8 @@ fi
 n=0 failed=0 results='[]'
 while IFS=$'\t' read -r label cmd; do
   [ -n "$cmd" ] || continue
+  ran="$(jq -r --arg c "$cmd" '[.[] | select(.command == $c)][0].label // empty' <<<"$results")"
+  if [ -n "$ran" ]; then echo "SKIP  [$label] $cmd - it already ran as [$ran]"; continue; fi
   n=$((n + 1))
   if ( cd "$REPO" && bash -c "$cmd" ) > "$RUN/verify-$n.log" 2>&1; then
     status=pass; echo "PASS  [$label] $cmd"

@@ -36,4 +36,4 @@ Harden one delivered feature, or every feature of an epic. It runs only when a p
 
 9. **Report.** `bash ${CLAUDE_PLUGIN_ROOT}/bin/harden-report.sh --results RUN/results --set <set> --feature <feature> > RUN/report.md`, then `tracker.sh comment --iid <feature> --body-file RUN/report.md`.
 
-10. **Hand back:** per check what ran, what it found, and the new stories. The next `/compasso:plan` offers them.
+10. **Hand back:** per check what ran, what it found, and the new stories, plus the feature's open `compasso::after-mvp` issues (the minor review findings left for after the MVP; `tracker.sh sprint-sync --parent <feature>`). The next `/compasso:plan` offers them.

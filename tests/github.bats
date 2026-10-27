@@ -293,6 +293,28 @@ story_fixture() {
   [ "$(gh_ mr-checks --mr 31 | jq -r .conflicts)" = true ]
 }
 
+@test "main-pipeline: the newest default-branch commit whose runs all finished; when it failed, the pull request that broke it" {
+  [ "$(gh_ main-pipeline | jq -c .)" = '{"pipeline":"none","sha":null,"web_url":null,"broken_by":null}' ]
+  grep -q 'GET repos/acme/app/actions/runs?branch=main&event=push' "$FAKE_GH/calls.log"
+  run_() { jq -c -n --arg s "$1" --arg st "$2" --arg c "$3" '{head_sha: $s, status: $st, conclusion: (if $c == "" then null else $c end), html_url: "u-\($s)-\($c)"}'; }
+  { run_ c4 in_progress ""; run_ c4 completed failure; run_ c3 completed cancelled; run_ c2 completed success; run_ c2 completed failure
+    run_ c1 completed failure; run_ c0 completed success; } | jq -s '{workflow_runs: .}' > "$FAKE_GH/runs.json"
+  mkdir -p "$FAKE_GH/commit-pulls"; echo '[{"number":29,"merged_at":"2026-10-26T09:00:00Z"}]' > "$FAKE_GH/commit-pulls/c1.json"
+  echo '{"number":29,"title":"List API","state":"MERGED","url":"w","isDraft":false,"headRefName":"story/8-list","baseRefName":"main","author":{"login":"rui"},"closingIssuesReferences":{"nodes":[{"number":8}]}}' > "$FAKE_GH/pr-29.json"
+  # c4 still runs, c3 was only cancelled: c2 is the newest, and c1 the oldest of the newest failures
+  [ "$(gh_ main-pipeline | jq -c .)" = '{"pipeline":"failed","sha":"c2","web_url":"u-c2-failure","broken_by":{"sha":"c1","mr":29,"closes":[8]}}' ]
+  { run_ c5 completed success; run_ c2 completed failure; } | jq -s '{workflow_runs: .}' > "$FAKE_GH/runs.json"
+  [ "$(gh_ main-pipeline | jq -c '[.pipeline, .sha, .broken_by]')" = '["success","c5",null]' ]
+}
+
+@test "disarm: turns off auto-merge on every open pull request to the default branch that has it" {
+  echo '[{"number":31,"auto_merge":{"merge_method":"merge"}},{"number":32,"auto_merge":null}]' > "$FAKE_GH/pr-query.json"
+  [ "$(gh_ disarm | jq -c .)" = '[31]' ]
+  grep -q 'GET repos/acme/app/pulls?state=open&base=main' "$FAKE_GH/calls.log"
+  grep -q '^PR merge 31 --repo github.com/acme/app --disable-auto' "$FAKE_GH/calls.log"
+  ! grep -q '^PR merge 32' "$FAKE_GH/calls.log"
+}
+
 @test "mr-update: brings the pull request's branch up to date with its base" {
   run gh_ mr-update --mr 31
   [ "$status" -eq 0 ]

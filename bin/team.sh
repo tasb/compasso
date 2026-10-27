@@ -16,7 +16,8 @@
 #                                               sprint's open work that has a developer and no status yet
 #   team.sh working  --repo R start --iid N | stop [--iid N]  mark this checkout as busy with a story, so the poll is skipped
 #
-# The tech lead merges (stage and risk: bin/risk.sh). On a story whose merge request is open:
+# The tech lead merges (stage and risk: bin/risk.sh); in mvp the story's developer too, a change no person must approve.
+# On a story whose merge request is open:
 #   team.sh review   --repo R --iid N           read its reports, work out the risk from its branch, and whether a
 #                                               person approved; whether it is behind its target, its pipeline and
 #                                               conflicts -> JSON (the files in .compasso/runs/lead-<mr>-<change>: each
@@ -24,10 +25,17 @@
 #                                               changes nothing keeps it)
 #   team.sh ask      --repo R --iid N           a person must approve: needs::approval and the reasons, on the merge request
 #   team.sh update   --repo R --iid N           bring its branch up to date with its target (a rebase on GitLab)
-#   team.sh merge    --repo R --iid N           merge it, when every check holds, it is up to date with its target,
-#                                               its pipeline did not fail and is not running, and nothing waits for a person
+#   team.sh merge    --repo R --iid N           merge it, when every check holds, its pipeline did not fail, it has no
+#                                               conflicts and nothing waits for a person. In production it must also be up
+#                                               to date with its target and its pipeline finished. In mvp it merges when its
+#                                               pipeline passes, unless main is red: then only the fix for main merges
 #   team.sh return   --repo R --iid N --body-file F   back to its developer (compasso::backlog), with a message;
 #                                               the fix goes on the same merge request
+#   team.sh main     --repo R                   tech lead: whether main is red; when it is, auto-merge is turned off on every
+#                                               merge request that had it -> JSON {red, pipeline, sha, web_url,
+#                                               broken_by: {sha, mr, stories, dev}, fix, disarmed}
+#   team.sh fix-main --repo R --title T --body-file F [--parent N]   tech lead: file the fix for a red main, once, as a
+#                                               blocker bug (compasso::fix-main) under the story that broke it -> its iid
 # A person approves with the tracker's own review: Approve, or (GitHub) Request changes, or (GitLab, where
 # Request changes is not on every tier) a comment saying what to change. Only what a project member whose
 # login is not in team.agents does after the tech lead asked counts.
@@ -41,7 +49,7 @@ case "${1:-}" in -h|--help) sed -n '2,/^set -u/s/^# \{0,1\}//p' "$0"; exit 0 ;; 
 
 BIN="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CMD="${1:-}"; shift || true
-REPO="." IID="" DEV="" TO="" BODY="" JOIN="" MILESTONE="" JSON=0 SUB=""
+REPO="." IID="" DEV="" TO="" BODY="" JOIN="" MILESTONE="" JSON=0 SUB="" TITLE="" PARENT=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --repo) REPO="$2"; shift 2 ;;
@@ -51,6 +59,8 @@ while [ $# -gt 0 ]; do
     --body-file) BODY="$2"; shift 2 ;;
     --join) JOIN="$2"; shift 2 ;;
     --milestone) MILESTONE="$2"; shift 2 ;;
+    --title) TITLE="$2"; shift 2 ;;
+    --parent) PARENT="$2"; shift 2 ;;
     --json) JSON=1; shift ;;
     start|stop) SUB="$1"; shift ;;
     *) echo "team: unknown argument '$1'" >&2; exit 2 ;;
@@ -76,6 +86,11 @@ refuse() { echo "team: $1" >&2; exit 6; }
 need_team() { [ "$TEAM" = true ] || refuse "this project has no team (team.enabled is false in .compasso/project.yaml)"; }
 need_lead() { need_team; [ "$PERSONA" = tech-lead ] || refuse "only the tech lead may $1; this checkout is $PERSONA${NAME:+ $NAME}"; }
 valid_name() { [[ "$1" =~ ^[a-z][a-z0-9-]{0,19}$ ]] && case "$1" in default|lead|none) false ;; esac; }
+stage() { local s; s="$("$BIN/config.sh" get --repo "$REPO" .stage)"; echo "${s:-production}"; }
+open_fix() { # the fix for main filed by fix-main, while it is open -> its iid, or null
+  local i; i="$(jq -r '.iid // empty' "$MAIN/.compasso/runs/fix-main.json" 2>/dev/null)"
+  if [ -n "$i" ] && [ "$(adapter story --iid "$i" | jq -r .state)" != closed ]; then echo "$i"; else echo null; fi
+}
 devs() { adapter labels | jq -c '[.[] | select(startswith("dev::")) | sub("dev::"; "")]'; }
 say() { jq -rn -L "$BIN" --argjson L "$("$BIN/locale.sh" --repo "$REPO")" --arg n "$2" 'include "i18n"; tf($k; {name: $n})' --arg k "$1"; }
 post() { # marker text: one comment on the story
@@ -115,7 +130,7 @@ review_json() { # the tech lead's view of a story's open merge request -> JSON
   infra="$("$BIN/risk.sh" --repo "$MAIN" --run "$dir" --base "origin/$target" --head "origin/$branch" --infra | jq -R . | jq -s -c .)" || exit 1
   gate=missing
   if [ "$(jq -r .findings <<<"$rep")" = true ]; then
-    if "$BIN/review-gate.sh" --findings "$dir/findings.json" --for merge >/dev/null; then gate=clear; else gate=blocked; fi
+    if "$BIN/review-gate.sh" --findings "$dir/findings.json" --for merge --repo "$REPO" >/dev/null; then gate=clear; else gate=blocked; fi
   fi
   "$BIN/risk.sh" --repo "$MAIN" --run "$dir" --base "origin/$target" --head "origin/$branch" --out "$dir/risk.json" >/dev/null
   [ -f "$dir/risk.json" ] || { echo "team: could not work out the risk of $mr" >&2; exit 1; }
@@ -133,7 +148,7 @@ review_json() { # the tech lead's view of a story's open merge request -> JSON
     | ([$after[] | select(.kind == "changes_requested" or ($p == "gitlab" and .kind == "comment"))] | last) as $rej
     | {iid: ($m.iid), mr: $m.iid, branch: $m.source_branch, target: $m.target_branch, web_url: $m.web_url, dir: $dir, head: $head,
        behind: $behind, pipeline: $checks.pipeline, conflicts: $checks.conflicts,
-       reports: $rep, gate: $gate, infra: $infra, risk: ($risk[0] | {level, reasons}), approved_by: $approved,
+       reports: $rep, gate: $gate, infra: $infra, risk: ($risk[0] | {level, reasons, warnings: (.warnings // [])}), approved_by: $approved,
        rejection: (if $rej then {by: $rej.by, text: $rej.body} else null end),
        approval: (if $risk[0].level == "low" then "not-needed" elif ($approved | length) > 0 then "approved"
                   elif $rej then "rejected" elif $ask != null then "asked" else "needed" end)}
@@ -269,8 +284,8 @@ case "$CMD" in
           | {dev: $d, backlog: $b.backlog, ready: $b.ready, room: ([$target - $b.ready, 0] | max), below_min: ($b.ready < $min)})),
         queue_target: $target, queue_min: $min,
         blocked: [.blocked[] | {iid, title, dev, by}],
-        human: [.human[] | {iid, title}]}
-        | .nothing = ((.questions + .review + .unassigned) | length == 0)' <<<"$sync")"
+        human: [.human[] | {iid, title}], not_ready: .team.not_ready}
+        | .nothing = ((.questions + .review + .unassigned + .not_ready) | length == 0)' <<<"$sync")"
       # each question with its last message, as data
       for IID in $(jq -r '.questions[].iid' <<<"$out"); do
         last="$("$0" messages --repo "$REPO" --iid "$IID" | jq -c '[.[] | select(.to == "lead")] | last // null')" || last=null
@@ -291,6 +306,8 @@ case "$CMD" in
         (.questions[] | "Question on #\(.iid) \(.title) (\(.dev // "no developer")): \(.message.text // "no message")"),
         (if (.review | length) > 0 then "To review: " + (.review | map("#\(.iid) \(.title) (\(.dev // "no developer"))") | join("; ")) else empty end),
         (if (.unassigned | length) > 0 then "No developer: " + (.unassigned | map("#\(.iid) \(.kind) \(.title)" + (if .unblocked then " (its blocker closed)" else "" end)) | join("; ")) else empty end),
+        (if (.not_ready | length) > 0 then "Not ready (fix the story first): " + (.not_ready | map(.dev as $dev | "#\(.iid) \(.title) ("
+          + (.missing | map(if . == "developer" then "developer \($dev)" else . end) | join(", ")) + ")") | join("; ")) else empty end),
         (if (.human | length) > 0 then "For a person: " + (.human | map("#\(.iid) \(.title)") | join("; ")) else empty end),
         (if (.blocked | length) > 0 then "Blocked: " + (.blocked | map("#\(.iid) by " + (.by | map("#\(.iid)") | join(", "))) | join("; ")) else empty end),
         (if (.load | length) > 0 then "Load: " + (.load | map("\(.dev) \(.open) open, \(.hours)h") | join("; ")) else empty end),
@@ -318,26 +335,62 @@ case "$CMD" in
       { rm -f "$f"; echo "team: could not ask for approval on $mr" >&2; exit 1; }
     rm -f "$f"; echo "team: a person approves $mr; the next poll merges it once approved" ;;
   merge)
-    need_lead "merge"; need IID
+    need_team; need IID
+    stage="$(stage)"
+    if [ "$PERSONA" != tech-lead ]; then
+      [ "$PERSONA" = developer ] && [ "$stage" = mvp ] || refuse "only the tech lead may merge (in mvp also the story's developer); this checkout is $PERSONA${NAME:+ $NAME}"
+      dev="$(adapter story --iid "$IID" | jq -r '.dev // ""')" || exit 1
+      [ "$dev" = "$NAME" ] || refuse "#$IID is ${dev:-nobody}'s to merge, not $NAME's"
+    fi
     v="$(review_json)" || exit 1
     mr="$(jq -r .mr <<<"$v")"; dir="$(jq -r .dir <<<"$v")"
+    [ "$PERSONA" = tech-lead ] || [ "$(jq -r .approval <<<"$v")" = not-needed ] ||
+      refuse "$mr needs a person's approval ($(jq -r '.risk.reasons | join("; ")' <<<"$v")) - the tech lead merges it"
     [ "$(jq -r .reports.findings <<<"$v")" = true ] || { echo "team: $mr has no findings report - its developer posts one (mr-report.sh post)" >&2; exit 1; }
     [ "$(jq '.infra | length' <<<"$v")" -eq 0 ] || [ "$(jq -r .reports.cost <<<"$v")" = true ] ||
       { echo "team: $mr changes infrastructure and has no cost report - its developer runs the finops role" >&2; exit 1; }
-    # main stays green: only what was tested on top of its target merges
     target="$(jq -r .target <<<"$v")"
     [ "$(jq -r .conflicts <<<"$v")" = false ] || { echo "team: $mr conflicts with $target - its developer rebases it" >&2; exit 1; }
-    [ "$(jq -r .behind <<<"$v")" = false ] || { echo "team: $mr is behind $target - bring it up to date (team.sh update); it merges once its pipeline passes" >&2; exit 1; }
-    case "$(jq -r .pipeline <<<"$v")" in
-      failed) echo "team: $mr is not merged: pipeline failed - send it back to its developer" >&2; exit 1 ;;
-      running) echo "team: $mr is not merged yet: pipeline running - the next poll merges it" >&2; exit 1 ;;
-    esac
+    [ "$(jq -r .pipeline <<<"$v")" != failed ] || { echo "team: $mr is not merged: pipeline failed - send it back to its developer" >&2; exit 1; }
+    if [ "$stage" = mvp ]; then
+      # merges when its pipeline passes, behind or not; while main is red only its fix does (team.sh main)
+      if [ "$(adapter main-pipeline | jq -r .pipeline)" = failed ] &&
+         ! adapter story --iid "$IID" | jq -e '.labels | index("compasso::fix-main")' >/dev/null; then
+        echo "team: $mr waits: main is red - only its fix merges until main passes again" >&2; exit 1
+      fi
+    else
+      # main stays green: only what was tested on top of its target merges
+      [ "$(jq -r .behind <<<"$v")" = false ] || { echo "team: $mr is behind $target - bring it up to date (team.sh update); it merges once its pipeline passes" >&2; exit 1; }
+      [ "$(jq -r .pipeline <<<"$v")" != running ] || { echo "team: $mr is not merged yet: pipeline running - the next poll merges it" >&2; exit 1; }
+    fi
     case "$(jq -r .approval <<<"$v")" in
       not-needed) adapter merge --mr "$mr" --body-file "$dir/findings.json" --risk "$dir/risk.json" || exit 1 ;;
       approved) adapter merge --mr "$mr" --body-file "$dir/findings.json" || exit 1
                 adapter label --mr "$mr" --remove needs::approval >/dev/null || true ;;
       *) echo "team: a person approves it first ($(jq -r '.risk.reasons | join("; ")' <<<"$v")) - team.sh ask" >&2; exit 1 ;;
     esac ;;
+  main)
+    need_lead "look after main"
+    p="$(adapter main-pipeline)" || exit 1
+    disarmed='[]'; dev=""
+    if [ "$(jq -r .pipeline <<<"$p")" = failed ]; then
+      disarmed="$(adapter disarm)" || exit 1
+      s="$(jq -r '.broken_by.closes[0] // empty' <<<"$p")"
+      [ -z "$s" ] || dev="$(adapter story --iid "$s" | jq -r '.dev // ""')" || dev=""
+    fi
+    jq -c --arg dev "$dev" --argjson fix "$(open_fix)" --argjson disarmed "$disarmed" '{red: (.pipeline == "failed"), pipeline, sha, web_url,
+      broken_by: (if .broken_by then {sha: .broken_by.sha, mr: .broken_by.mr, stories: .broken_by.closes, dev: (if $dev == "" then null else $dev end)} else null end),
+      fix: $fix, disarmed: $disarmed}' <<<"$p" ;;
+  fix-main)
+    need_lead "file the fix for main"; need TITLE BODY
+    p="$(adapter main-pipeline)" || exit 1
+    [ "$(jq -r .pipeline <<<"$p")" = failed ] || { echo "team: main is not red - there is nothing to fix" >&2; exit 1; }
+    f="$(open_fix)"; [ "$f" = null ] || { echo "$f"; exit 0; }
+    PARENT="${PARENT:-$(jq -r '.broken_by.closes[0] // empty' <<<"$p")}"
+    [ -n "$PARENT" ] || { echo "team: no merge request put the failure on main - name the story or feature its fix goes under (--parent)" >&2; exit 2; }
+    n="$(adapter followup --parent "$PARENT" --title "$TITLE" --body-file "$BODY" --labels type::bug,severity::blocker,compasso::fix-main)" || exit 1
+    mkdir -p "$MAIN/.compasso/runs" && jq -n --argjson i "$n" '{iid: $i}' > "$MAIN/.compasso/runs/fix-main.json" || exit 1
+    echo "$n" ;;
   update)
     need_lead "update merge requests"; need IID
     m="$(adapter mr-of --iid "$IID")" || exit 1
@@ -350,5 +403,5 @@ case "$CMD" in
     adapter label --iid "$IID" --add compasso::backlog --remove compasso::in-review >/dev/null || exit 1
     if m="$(adapter mr-of --iid "$IID" 2>/dev/null)"; then adapter label --mr "$(jq -r .iid <<<"$m")" --remove needs::approval >/dev/null || true; fi
     echo "team: #$IID is back with $dev" ;;
-  *) echo "usage: team.sh add|list|assign|claim|release|msg|messages|inbox|working|mark-backlog|review|ask|update|merge|return --repo R ..." >&2; exit 2 ;;
+  *) echo "usage: team.sh add|list|assign|claim|release|msg|messages|inbox|working|mark-backlog|review|ask|update|merge|return|main|fix-main --repo R ..." >&2; exit 2 ;;
 esac

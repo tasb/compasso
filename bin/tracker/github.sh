@@ -15,7 +15,8 @@
 #               approves with a review (Approve, or Request changes), and the tech lead merges
 #
 #   github.sh check | ensure-labels | push-plan | story | set-state | open-mr | followup | merge
-#             | mr-info | mr-of | mr-events | mr-checks | mr-update | followups | set-milestone | comment | sprint-sync | merge-commit | digest
+#             | mr-info | mr-of | mr-events | mr-checks | mr-update | main-pipeline | disarm | followups | close | set-milestone | comment
+#             | sprint-sync | merge-commit | digest
 #             | sprint-items | sprint-done | protect --repo R [options as in gitlab.sh]
 #             | labels | label-create | label | comments | comment-delete | comment-edit   (bin/team.sh's and
 #               bin/mr-report.sh's primitives, as in gitlab.sh; a pull request's comments are its issue comments)
@@ -27,7 +28,7 @@ case "${1:-}" in -h|--help) sed -n '2,/^set -u/s/^# \{0,1\}//p' "$0"; exit 0 ;; 
 
 BIN="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CMD="${1:-}"; shift || true
-REPO="." IID="" STATE="" BRANCH="" BODY="" TITLE="" PARENT="" MR="" LABELS_ARG="owner::either" MILESTONE="" RISK="" SINCE="" READ_ONLY=0 NAME="" ADD="" REMOVE="" ID=""
+REPO="." IID="" STATE="" BRANCH="" BODY="" TITLE="" PARENT="" MR="" LABELS_ARG="owner::either" MILESTONE="" RISK="" SINCE="" READ_ONLY=0 ALL=0 NAME="" ADD="" REMOVE="" ID=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --repo) REPO="$2"; shift 2 ;;
@@ -43,6 +44,7 @@ while [ $# -gt 0 ]; do
     --risk) RISK="$2"; shift 2 ;;
     --since) SINCE="$2"; shift 2 ;;
     --read-only) READ_ONLY=1; shift ;;
+    --all) ALL=1; shift ;;
     --name) NAME="$2"; shift 2 ;;
     --add) ADD="$2"; shift 2 ;;
     --remove) REMOVE="$2"; shift 2 ;;
@@ -487,7 +489,7 @@ merge() {
   mode="$(cfg .approvals.merge)"; [ "$TEAM" = true ] && mode=team   # approvals.merge is not used in a team project
   case "$mode" in agent|risk|team) ;; *) echo "github: approvals.merge is human - a person merges this pull request" >&2; return 1 ;; esac
   [ -n "$BODY" ] && [ -f "$BODY" ] || { echo "github: merge needs --body-file with the review findings" >&2; return 1; }
-  "$BIN/review-gate.sh" --findings "$BODY" --for merge || return 1
+  "$BIN/review-gate.sh" --findings "$BODY" --for merge --repo "$REPO" || return 1
   if [ "$mode" = risk ]; then
     [ -n "$RISK" ] && [ -f "$RISK" ] || { echo "github: approvals.merge is risk - merge needs --risk with risk.sh's decision" >&2; return 1; }
     [ "$(jq -r .level "$RISK")" = low ] || { echo "github: the change is high risk - a person merges it" >&2; return 1; }
@@ -567,7 +569,8 @@ sprint_sync() {
     cleaned="$(jq -c --argjson i "$i" '. + [$i]' <<<"$cleaned")"
   done
   parallel="$(cfg '.sprint.parallel // 2')"
-  jq -n --arg ms "$ms" --slurpfile items <(printf '%s' "$enriched") --slurpfile ext <(printf '%s' "$ext") --argjson cleaned "$cleaned" \
+  devs='[]'; [ "$TEAM" != true ] || devs="$(labels_cmd | jq -c 'map(select(startswith("dev::")) | sub("dev::"; ""))')" || return 1
+  jq -n --argjson devs "$devs" --arg ms "$ms" --slurpfile items <(printf '%s' "$enriched") --slurpfile ext <(printf '%s' "$ext") --argjson cleaned "$cleaned" \
         --argjson parallel "$parallel" --arg feature "$PARENT" --argjson team "$TEAM" --arg me "$ME" -f "$BIN/sprint.jq"
 }
 
@@ -602,9 +605,17 @@ merge_commit() {
 }
 
 followups_cmd() { # filed by ship.sh, which marks each with its story
-  api --paginate "repos/$R/issues?state=open&milestone=none&per_page=100" | jq -s -c 'add // []
+  local ms="&milestone=none"; [ "$ALL" -eq 0 ] || ms=""
+  api --paginate "repos/$R/issues?state=open$ms&per_page=100" | jq -s -c 'add // []
     | map(select(.pull_request == null and ((.body // "") | test("<!-- compasso:followup story=[0-9]+ -->")))
-      | {iid: .number, title, story: (.body | capture("<!-- compasso:followup story=(?<s>[0-9]+) -->").s | tonumber)})'
+      | {iid: .number, title, story: (.body | capture("<!-- compasso:followup story=(?<s>[0-9]+) -->").s | tonumber), body})'
+}
+
+close() {
+  need IID
+  comment >/dev/null || return 1
+  api -X PATCH "repos/$R/issues/$IID" -f state=closed >/dev/null || { echo "github: could not close #$IID" >&2; return 1; }
+  echo "github: #$IID closed"
 }
 
 set_milestone() {
@@ -628,6 +639,41 @@ mr_checks() { # the GitLab shape: the checks and commit statuses of its last com
     + (if ($st.total_count // 0) == 0 then [] else [{success: "success", failure: "failed", error: "failed"}[$st.state] // "running"] end)
     | {pipeline: (if index("failed") then "failed" elif index("running") then "running" elif length > 0 then "success" else "none" end),
        conflicts: ($pr.mergeable_state == "dirty")}'
+}
+
+main_pipeline() { # GitLab's shape: the newest default-branch commit whose push runs all finished is main's pipeline;
+  # a run only cancelled or skipped says nothing about main; the oldest of the newest failures broke it
+  local b p sha mr="" closes='[]'
+  b="$(api "repos/$R" --jq .default_branch)" || return 1
+  p="$(api "repos/$R/actions/runs?branch=$b&event=push&per_page=100" | jq -c '
+    reduce .workflow_runs[] as $r ([]; if (map(.sha) | index($r.head_sha)) != null
+      then map(if .sha == $r.head_sha then .runs += [$r] else . end) else . + [{sha: $r.head_sha, runs: [$r]}] end)
+    | map(select(all(.runs[]; .status == "completed"))
+          | ([.runs[] | select(.conclusion | IN("failure", "timed_out", "startup_failure", "action_required"))]) as $f
+          | if ($f | length) > 0 then {sha, state: "failed", url: $f[0].html_url}
+            elif any(.runs[]; .conclusion == "success") then {sha, state: "success", url: ([.runs[] | select(.conclusion == "success")][0].html_url)}
+            else empty end)
+    | if length == 0 then {pipeline: "none", sha: null, web_url: null, broken: null}
+      else {pipeline: .[0].state, sha: .[0].sha, web_url: .[0].url,
+            broken: (if .[0].state == "failed" then ((map(.state == "failed") | index(false)) as $i | .[($i // length) - 1].sha) else null end)} end')" ||
+    { echo "github: cannot read the runs of $b" >&2; return 1; }
+  sha="$(jq -r '.broken // empty' <<<"$p")"
+  if [ -n "$sha" ]; then
+    mr="$(api "repos/$R/commits/$sha/pulls" | jq -r '[.[] | select(.merged_at != null)][0].number // empty')"
+    [ -z "$mr" ] || closes="$(MR="$mr" mr_info | jq -c .closes)" || closes='[]'
+  fi
+  jq -c --arg mr "$mr" --argjson closes "$closes" '{pipeline, sha, web_url,
+    broken_by: (if .broken then {sha: .broken, mr: (if $mr == "" then null else ($mr | tonumber) end), closes: $closes} else null end)}' <<<"$p"
+}
+
+disarm() { # turn off auto-merge on every open pull request to the default branch (a red main, bin/team.sh main) -> [numbers]
+  local b i out=""
+  b="$(api "repos/$R" --jq .default_branch)" || return 1
+  for i in $(api --paginate "repos/$R/pulls?state=open&base=$b&per_page=100" | jq -s -r 'add // [] | .[] | select(.auto_merge != null) | .number'); do
+    gh pr merge "$i" --repo "$HOST/$R" --disable-auto >/dev/null || { echo "github: could not turn off auto-merge on #$i" >&2; return 1; }
+    out="$out $i"
+  done
+  printf '%s\n' $out | jq -R 'select(. != "") | tonumber' | jq -s -c .
 }
 
 mr_update() { # merges its base into the branch; refused when they conflict
@@ -750,8 +796,11 @@ case "$CMD" in
   mr-of) mr_of ;;
   mr-checks) mr_checks ;;
   followups) followups_cmd ;;
+  close) close ;;
   set-milestone) set_milestone ;;
   mr-update) mr_update ;;
+  main-pipeline) main_pipeline ;;
+  disarm) disarm ;;
   mr-events) mr_events ;;
   comment) comment ;;
   sprint-sync) sprint_sync ;;

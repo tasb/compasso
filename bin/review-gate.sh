@@ -11,7 +11,11 @@
 # (verified_by: security), whoever changed its status: fixed, or followup (security
 # accepts the deferral), which only a minor finding with needs may be.
 #   review: blocks while any blocker or major finding is open
-#   merge:  also blocks while any other finding is open, minors too, except a reviewer's minor with needs
+#   merge:  also blocks while any other finding is open, minors too, except a minor with needs;
+#           in stage mvp (--repo's config) only blocker and major block: open minors are filed
+#           as one issue for after the MVP (ship.sh)
+# A minor that will be filed (with needs, or left for after the MVP) blocks the merge until it
+# has an acceptance line (Given/When/Then) to be filed with, unless it was filed already.
 # --comment prints every finding as a merge request comment instead (same exit codes).
 # Exit: 0 clear | 1 blocked (open findings listed) | 2 malformed findings
 set -u
@@ -41,13 +45,20 @@ bad="$(jq -r 'if type != "array" then "not an array" else
   end' "$F" 2>/dev/null)" || { echo "review-gate: $F is not valid JSON" >&2; exit 2; }
 [ -z "$bad" ] || { printf 'review-gate: %s\n' "$bad" >&2; exit 2; }
 
-open="$(jq -r --arg for "$FOR" '
+STAGE="$("$BIN/config.sh" get --repo "$REPO" .stage 2>/dev/null)"
+open="$(jq -r --arg for "$FOR" --arg stage "$STAGE" '
   # someone else fixes it; a follow-up filed before needs was asked for stays filed
-  def elsewhere: .severity == "minor" and ((.needs // "") != "" or .followup_iid != null);
+  def filed: .followup_iid != null;
+  def elsewhere: .severity == "minor" and ((.needs // "") != "" or filed);
+  def later: .severity == "minor" and $stage == "mvp";
+  def where: if .file then " (\(.file)\(if .line then ":\(.line)" else "" end))" else "" end;
   map(. + {open: (if .by == "security" then (.verified_by == "security" and (.status == "fixed" or (.status == "followup" and elsewhere))) | not
           else .status == "open" and (elsewhere | not) end)})
-  | map(select(.open and (.severity != "minor" or $for == "merge")))
-  | .[] | "  - [\(.by)/\(.severity)] \(.summary)" + (if .file then " (\(.file)\(if .line then ":\(.line)" else "" end))" else "" end)' "$F")"
+  | map(. + {tofile: (.severity == "minor" and (filed | not) and ((.open and later)
+          or ((.needs // "") != "" and (if .by == "security" then .status == "followup" and .verified_by == "security" else .status == "open" end))))})
+  | (.[] | select(.open and (later | not) and (.severity != "minor" or $for == "merge")) | "  - [\(.by)/\(.severity)] \(.summary)" + where),
+    (.[] | select($for == "merge" and .tofile and ((.acceptance // "") | test("\\S") | not))
+      | "  - [\(.by)/\(.severity)] \(.summary)" + where + " - needs an acceptance line (Given/When/Then) to be filed")' "$F")"
 
 if [ "$COMMENT" -eq 1 ]; then
   L="$("$BIN/locale.sh" --repo "$REPO")" || exit 2

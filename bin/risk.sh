@@ -14,9 +14,10 @@
 #   - it changes the build, the pipeline, the Compasso config or dependencies
 #   - security marked the change sensitive by its content (DIR/sensitive.json)
 #   - changed-line coverage is below its minimum, or was not measured
+# In mvp a changed file in risk.sensitive_paths needs no person, but is named as a warning.
 # A security finding needs no person: an unresolved one blocks the merge (review-gate.sh).
 # DIR is the story run (cost.json, sensitive.json, coverage.json). The decision goes to F
-# (default DIR/risk.json): {level: low|high, changed_lines (product lines), files, reasons: []}.
+# (default DIR/risk.json): {level: low|high, changed_lines (product lines), files, reasons: [], warnings: []}.
 # Exit: 0 low | 3 high | 2 usage
 set -u
 case "${1:-}" in -h|--help) sed -n '2,/^set -u/s/^# \{0,1\}//p' "$0"; exit 0 ;; esac   # the header above is the help
@@ -44,8 +45,9 @@ RANGE="$BASE"; [ -z "$HEAD" ] || RANGE="$BASE...$HEAD"
 files="$(git -C "$REPO" diff --name-only "$RANGE" -- . ':(exclude).compasso/runs')"
 stage="$(cfg .stage)"; [ -n "$stage" ] || stage=production
 max="$(cfg .risk.max_changed_lines)"; [ -n "$max" ] || max=200
-reasons=""
+reasons="" warnings=""
 add() { reasons="$reasons$1"$'\n'; }
+warn() { warnings="$warnings$1"$'\n'; }
 LOC="$("$BIN/locale.sh" --repo "$REPO")" || exit 2
 say() { jq -nr -L "$BIN" --argjson L "$LOC" --arg k "$1" --argjson v "$2" 'include "i18n"; tf($k; $v)'; }   # a reason, in the project's language
 match() { # file globs...: the first glob the file matches; "**/" also matches at the top
@@ -69,7 +71,10 @@ infra_file="" lines=0
 while IFS= read -r f; do
   [ -n "$f" ] || continue
   [ -n "$infra_file" ] || ! match "$f" $infra >/dev/null || infra_file="$f"
-  [ "$stage" = production ] || continue
+  if [ "$stage" != production ]; then
+    g="$(match "$f" $sensitive)" && warn "$(say risk_sensitive "$(jq -nc --arg f "$f" --arg g "$g" '{file: $f, glob: $g}')")"
+    continue
+  fi
   g="$(match "$f" $sensitive)" && add "$(say risk_sensitive "$(jq -nc --arg f "$f" --arg g "$g" '{file: $f, glob: $g}')")"
   match "$f" $infra >/dev/null && add "$(say risk_infra "$(jq -nc --arg f "$f" '{file: $f}')")"
   g="$(match "$f" $critical)" && add "$(say risk_production_path "$(jq -nc --arg f "$f" --arg g "$g" '{file: $f, glob: $g}')")"
@@ -113,9 +118,10 @@ if [ "$stage" = production ]; then
 fi
 
 level=low; [ -z "$reasons" ] || level=high
-jq -n --arg level "$level" --argjson lines "$lines" --arg files "$files" --arg reasons "$reasons" \
+jq -n --arg level "$level" --argjson lines "$lines" --arg files "$files" --arg reasons "$reasons" --arg warnings "$warnings" \
   '{level: $level, changed_lines: $lines, files: ($files | split("\n") | map(select(. != "")) | length),
-    reasons: ($reasons | split("\n") | map(select(. != "")))}' > "$OUT"
+    reasons: ($reasons | split("\n") | map(select(. != ""))), warnings: ($warnings | split("\n") | map(select(. != "")))}' > "$OUT"
+jq -r '.warnings[] | "risk: warning: " + .' "$OUT"
 if [ "$level" = low ]; then
   echo "risk: low - $lines changed lines in $(jq .files "$OUT") files, nothing sensitive"; exit 0
 fi

@@ -7,7 +7,7 @@ A read-only readout. It changes nothing: no tracker state or label, no file, no 
 
 **Persona.** `bash ${CLAUDE_PLUGIN_ROOT}/bin/persona.sh gate --repo . --skill status` first. On a non-zero exit, show its message and stop: this checkout's persona may not run this command.
 
-1. Run `bash ${CLAUDE_PLUGIN_ROOT}/bin/status.sh --repo .`, adding `--iid <iid>` when the user names a story or bug, or `--milestone S<n>` for a sprint other than the one in `.compasso/plan.yaml`.
+1. Run `bash ${CLAUDE_PLUGIN_ROOT}/bin/status.sh --repo .`, adding `--iid <iid>` when the user names a story or bug, or `--milestone S<n>` for a sprint other than the one in `.compasso/plan.yaml`. When it warns that a newer Compasso is installed than the one running, show that warning first.
 
 2. Show its output as it is. It exits 1 when the tracker could not be read; its local part is still valid, so show it with the tracker's message. Exit 2 means there is no plan: point to `/compasso:plan`, or ask which sprint (`--milestone`).
 

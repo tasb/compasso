@@ -26,6 +26,7 @@ reasons() { jq -r '.reasons | join(" | ")' "$RUN/risk.json"; }
   run risk
   [ "$status" -eq 3 ]
   [[ "$(reasons)" == *"src/auth/b.js is a sensitive path (src/auth/**)"* ]] || false
+  [ "$(jq -c .warnings "$RUN/risk.json")" = '[]' ]
 }
 
 @test "a change over the line limit is high risk" {
@@ -80,6 +81,9 @@ reasons() { jq -r '.reasons | join(" | ")' "$RUN/risk.json"; }
   run risk
   [ "$status" -eq 0 ]
   [ "$(jq -c .reasons "$RUN/risk.json")" = '[]' ]
+  # a sensitive path asks no person in mvp, but says so
+  [ "$(jq -c .warnings "$RUN/risk.json")" = '["src/auth/b.js is a sensitive path (src/auth/**)"]' ]
+  [[ "$output" == *"warning: src/auth/b.js is a sensitive path (src/auth/**)"* ]] || false
 }
 
 @test "an infrastructure change needs its cost report: increase or unknown, or none at all, needs a person, in either stage" {
@@ -220,4 +224,7 @@ merge() { "$ROOT/bin/tracker/gitlab.sh" merge --repo "$REPO" --mr 31 --body-file
   echo '{"level":"low","changed_lines":12,"files":1,"reasons":[]}' > "$RUN/risk.json"
   run "$ROOT/bin/mr-body.sh" --story "$BATS_TEST_TMPDIR/story.json" --run "$RUN"
   [[ "$output" == *"- Merge: low risk, may merge without a person (12 changed lines in 1 files, nothing sensitive)"* ]] || false
+  echo '{"level":"low","changed_lines":12,"files":1,"reasons":[],"warnings":["src/auth/b.js is a sensitive path (src/auth/**)"]}' > "$RUN/risk.json"
+  run "$ROOT/bin/mr-body.sh" --story "$BATS_TEST_TMPDIR/story.json" --run "$RUN"
+  [[ "$output" == *"- Merge: low risk in the MVP, may merge without a person (12 changed lines in 1 files), but it touches sensitive paths: src/auth/b.js is a sensitive path (src/auth/**)"* ]] || false
 }

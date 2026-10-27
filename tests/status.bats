@@ -130,3 +130,9 @@ R() { mkdir -p "$REPO/.compasso/runs/$1"; echo "$REPO/.compasso/runs/$1"; }
   run st --iid 11
   [ "$status" -eq 0 ]
 }
+
+@test "status warns when these scripts are older than the newest Compasso installed" {
+  d="$BATS_TEST_TMPDIR/cache/tasb/compasso/99.0.0/.claude-plugin"; mkdir -p "$d"; echo '{"version":"99.0.0"}' > "$d/plugin.json"
+  COMPASSO_PLUGIN_CACHE="$BATS_TEST_TMPDIR/cache" run st --local
+  [[ "$output" == *"but 99.0.0 is installed"* ]] || false
+}

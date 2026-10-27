@@ -63,6 +63,16 @@ job() { yq -r "$1" "$OUT"; }
   [ "$(job '.compasso-coverage-check')" = null ]
 }
 
+@test "in mvp each merge request runs verify and the scans only: no e2e, no coverage; production brings them back" {
+  cfg_set '.stage = "mvp" | .commands.e2e = "npx playwright test" | .coverage.command = "npm run cov" | .coverage.report = "coverage/cobertura.xml"'
+  ci >/dev/null
+  [ "$(job '[keys[] | select(test("^compasso-"))] | join(",")')" = "compasso-scan-gate,compasso-verify" ]
+  [ "$(job '.include | length')" = 2 ]
+  cfg_set '.stage = "production"'
+  ci >/dev/null
+  [ "$(job '[keys[] | select(test("^compasso-"))] | join(",")')" = "compasso-scan-gate,compasso-verify,compasso-e2e,compasso-coverage,compasso-coverage-check" ]
+}
+
 @test "commands with YAML-special characters survive exactly" {
   cfg_set '.commands.test = "pytest -k \"not slow\" --cov: x # y"'
   ci >/dev/null

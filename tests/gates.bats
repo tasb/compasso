@@ -53,7 +53,7 @@ findings() { echo "$1" > "$BATS_TEST_TMPDIR/f.json"; "$ROOT/bin/review-gate.sh" 
   run findings '[{"by":"reviewer","severity":"minor","status":"open","summary":"naming"}]' --for merge
   [ "$status" -eq 1 ]
   [[ "$output" == *"[reviewer/minor] naming"* ]] || false
-  run findings '[{"by":"reviewer","severity":"minor","status":"open","needs":"the AWS organisation admin","summary":"no SCP"}]' --for merge
+  run findings '[{"by":"reviewer","severity":"minor","status":"open","needs":"the AWS organisation admin","summary":"no SCP","acceptance":"Given the account, When a member deletes the key, Then the SCP denies it"}]' --for merge
   [ "$status" -eq 0 ]
   run findings '[{"by":"reviewer","severity":"minor","status":"open","needs":"","summary":"naming"}]' --for merge
   [ "$status" -eq 1 ]
@@ -64,7 +64,7 @@ findings() { echo "$1" > "$BATS_TEST_TMPDIR/f.json"; "$ROOT/bin/review-gate.sh" 
 }
 
 @test "review-gate: security may defer a minor finding whose fix needs someone else, and only security, never a blocker or major" {
-  run findings '[{"by":"security","severity":"minor","status":"followup","verified_by":"security","needs":"the AWS organisation admin","summary":"no SCP"}]' --for merge
+  run findings '[{"by":"security","severity":"minor","status":"followup","verified_by":"security","needs":"the AWS organisation admin","summary":"no SCP","acceptance":"Given the account, When a member deletes the key, Then the SCP denies it"}]' --for merge
   [ "$status" -eq 0 ]
   run findings '[{"by":"security","severity":"minor","status":"followup","verified_by":"security","summary":"verbose error"}]' --for merge
   [ "$status" -eq 1 ]
@@ -77,6 +77,39 @@ findings() { echo "$1" > "$BATS_TEST_TMPDIR/f.json"; "$ROOT/bin/review-gate.sh" 
   [[ "$output" == *"[security/major] sql injection"* ]] || false
   run findings '[{"by":"security","severity":"blocker","status":"followup","verified_by":"security","summary":"rce"}]' --for review
   [ "$status" -eq 1 ]
+}
+
+@test "review-gate: in mvp a merge waits only for blocker and major findings; minors are left for after the MVP" {
+  cfg_set '.stage = "mvp"'
+  acc='"acceptance":"Given an unknown id, When GET /invoices/9, Then 404 with no stack trace"'
+  run findings "[{\"by\":\"reviewer\",\"severity\":\"minor\",\"status\":\"open\",\"summary\":\"naming\",$acc}]" --for merge --repo "$REPO"
+  [ "$status" -eq 0 ]
+  run findings "[{\"by\":\"security\",\"severity\":\"minor\",\"status\":\"open\",\"summary\":\"verbose error\",$acc}]" --for merge --repo "$REPO"
+  [ "$status" -eq 0 ]
+  run findings "[{\"by\":\"reviewer\",\"severity\":\"major\",\"status\":\"open\",\"summary\":\"off by one\",$acc}]" --for merge --repo "$REPO"
+  [ "$status" -eq 1 ]
+  run findings "[{\"by\":\"security\",\"severity\":\"major\",\"status\":\"fixed\",\"summary\":\"sql injection\",$acc}]" --for merge --repo "$REPO"
+  [ "$status" -eq 1 ]
+  # production still waits for every minor
+  cfg_set '.stage = "production"'
+  run findings "[{\"by\":\"reviewer\",\"severity\":\"minor\",\"status\":\"open\",\"summary\":\"naming\",$acc}]" --for merge --repo "$REPO"
+  [ "$status" -eq 1 ]
+}
+
+@test "review-gate: a finding left for later is filed only with its acceptance line" {
+  cfg_set '.stage = "mvp"'
+  run findings '[{"by":"reviewer","severity":"minor","status":"open","summary":"naming"}]' --for merge --repo "$REPO"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"[reviewer/minor] naming - needs an acceptance line (Given/When/Then) to be filed"* ]] || false
+  run findings '[{"by":"reviewer","severity":"minor","status":"open","summary":"naming","acceptance":"  "}]' --for merge --repo "$REPO"
+  [ "$status" -eq 1 ]
+  cfg_set '.stage = "production"'
+  run findings '[{"by":"reviewer","severity":"minor","status":"open","needs":"a person","summary":"no SCP"}]' --for merge --repo "$REPO"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"needs an acceptance line"* ]] || false
+  # one filed before keeps its issue
+  run findings '[{"by":"reviewer","severity":"minor","status":"followup","followup_iid":40,"summary":"filed before"}]' --for merge --repo "$REPO"
+  [ "$status" -eq 0 ]
 }
 
 @test "review-gate: malformed findings exit 2" {
@@ -138,6 +171,17 @@ findings() { echo "$1" > "$BATS_TEST_TMPDIR/f.json"; "$ROOT/bin/review-gate.sh" 
   [ "$status" -eq 0 ]
   [ "$(printf '%s\n' "$output" | grep -c '^PASS')" -eq 3 ]
   [ "$(jq -r 'map(.label) | join(",")' "$RUN/verify.json")" = "test,lint,story" ]
+}
+
+@test "verify: a story Verify command the repo's commands already ran runs once" {
+  cfg_set ".commands.test = \"echo ran >> $BATS_TEST_TMPDIR/count\""
+  story '["unit"]' "echo ran >> $BATS_TEST_TMPDIR/count"
+  run "$ROOT/bin/verify.sh" --repo . --run "$RUN" --story "$BATS_TEST_TMPDIR/story.json"
+  [ "$status" -eq 0 ]
+  [ "$(wc -l < "$BATS_TEST_TMPDIR/count")" -eq 1 ]
+  [[ "$output" == *"SKIP  [story] echo ran >> $BATS_TEST_TMPDIR/count - it already ran as [test]"* ]] || false
+  [ "$(jq -r 'map(.label) | join(",")' "$RUN/verify.json")" = test ]
+  [[ "$output" == *"all 1 commands passed"* ]] || false
 }
 
 @test "verify: a failing command fails the gate and shows its output" {

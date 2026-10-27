@@ -216,6 +216,29 @@ findings() { echo "$1" > "$BATS_TEST_TMPDIR/findings.json"; }
   grep -q "PUT projects/acme%2Fapp/merge_requests/31/rebase" "$FAKE_GL/calls.log"
 }
 
+@test "main-pipeline: the last finished pipeline on the default branch; when it failed, the merge request that broke it" {
+  [ "$(gl main-pipeline | jq -c .)" = '{"pipeline":"none","sha":null,"web_url":null,"broken_by":null}' ]
+  grep -q 'GET projects/acme%2Fapp/pipelines?ref=main&scope=finished' "$FAKE_GL/calls.log"
+  echo '[{"status":"canceled","sha":"c9","web_url":"u9"},{"status":"success","sha":"c1","web_url":"u1"}]' > "$FAKE_GL/pipelines.json"
+  [ "$(gl main-pipeline | jq -c '[.pipeline, .sha, .broken_by]')" = '["success","c1",null]' ]
+  # a canceled or skipped pipeline says nothing; the oldest of the newest failures broke it
+  echo '[{"status":"failed","sha":"c3","web_url":"u3"},{"status":"skipped","sha":"c2b"},{"status":"failed","sha":"c2","web_url":"u2"},{"status":"success","sha":"c1","web_url":"u1"},{"status":"failed","sha":"c0"}]' > "$FAKE_GL/pipelines.json"
+  mkdir -p "$FAKE_GL/commit-mrs"; echo '[{"iid":30,"state":"merged"}]' > "$FAKE_GL/commit-mrs/c2.json"
+  echo '{"iid":30,"title":"List API","state":"merged","source_branch":"story/8-list","target_branch":"main","web_url":"w","author":{"username":"ana"}}' > "$FAKE_GL/mr-30.json"
+  echo '[{"iid":8}]' > "$FAKE_GL/closes.json"
+  [ "$(gl main-pipeline | jq -c .)" = '{"pipeline":"failed","sha":"c3","web_url":"u3","broken_by":{"sha":"c2","mr":30,"closes":[8]}}' ]
+  echo '[]' > "$FAKE_GL/commit-mrs/c2.json"   # pushed by a person: no merge request
+  [ "$(gl main-pipeline | jq -c .broken_by)" = '{"sha":"c2","mr":null,"closes":[]}' ]
+}
+
+@test "disarm: turns off auto-merge on every open merge request to the default branch that has it" {
+  echo '[{"iid":31,"merge_when_pipeline_succeeds":true},{"iid":32,"merge_when_pipeline_succeeds":false}]' > "$FAKE_GL/mr-query.json"
+  [ "$(gl disarm | jq -c .)" = '[31]' ]
+  grep -q 'GET projects/acme%2Fapp/merge_requests?state=opened&target_branch=main' "$FAKE_GL/calls.log"
+  grep -q 'POST projects/acme%2Fapp/merge_requests/31/cancel_merge_when_pipeline_succeeds' "$FAKE_GL/calls.log"
+  ! grep -q 'merge_requests/32/cancel' "$FAKE_GL/calls.log"
+}
+
 @test "merge: without the findings it is refused" {
   cfg_set '.approvals.merge = "agent"'
   run gl merge --mr 31

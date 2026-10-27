@@ -26,7 +26,8 @@
 #   folder | security, approver, anything else: nothing
 # Budget guard. Claude Code (Agent, Task, SendMessage): dispatching or continuing a compasso:<role>
 #   agent claims a run from the budget of the run folder its prompt names (bin/budget.sh); no run
-#   folder, or no budget left, is a denial. Codex (spawn_agent): its messages are encrypted, so the flow
+#   folder, or no budget left, is a denial. A continuation uses the run the agent was dispatched for,
+#   or, when its dispatch was never bound to one, the run folder the message names. Codex (spawn_agent): its messages are encrypted, so the flow
 #   claims with budget.sh first, and spawning compasso-<role> needs a claim for that role made in the
 #   last 10 minutes and not used yet; it uses it.
 # Command guard (Bash; Read), for everyone: force-pushing the default branch, rm -r outside the repository
@@ -164,8 +165,11 @@ budget_guard() {
     SendMessage)
       id="$(jq -r '.tool_input.to // ""' <<<"$INPUT")"
       info="$(state | jq -c --arg id "$id" '.[$id] // empty')"
-      [ -n "$info" ] || return 0
-      role="$(jq -r .role <<<"$info")"; run="$(jq -r .run <<<"$info")" ;;
+      role="$(jq -r '.role // empty' <<<"$info")"
+      [ -n "$role" ] || return 0
+      run="$(jq -r '.run // empty' <<<"$info")"
+      [ -n "$run" ] || run="$(run_of "$(jq -r '.tool_input.message // ""' <<<"$INPUT")")"
+      [ -n "$run" ] || deny "continue compasso:$role with its run folder (.compasso/runs/<run>) in the message, so its budget can be claimed" ;;
     *) return 0 ;;
   esac
   out="$("$BIN/budget.sh" claim --repo "$ROOT" --run "$ROOT/$run" --role "$role" --hook 2>&1)"; rc=$?
@@ -282,7 +286,7 @@ case "$EVENT" in
     {
       atype="$(jq -r '.agent_type // ""' <<<"$INPUT")"; id="$(jq -r .agent_id <<<"$INPUT")"
       case "$atype" in
-        compasso:*) state_set '.[$id] = ((.[$id] // {}) + {started: ($now | tonumber)})' --arg id "$id" --arg now "$(date +%s)" ;;
+        compasso:*) state_set '.[$id] = ((.[$id] // {}) + {started: ($now | tonumber), role: $role})' --arg id "$id" --arg now "$(date +%s)" --arg role "${atype#compasso:}" ;;
         compasso-*)   # Codex: bind the agent to the oldest spawn of its role that is waiting for one
           state_set '(.__pending // []) as $p | ([$p | to_entries[] | select(.value.role == $role)][0]) as $m
             | .[$id] = ((.[$id] // {}) + {started: ($now | tonumber)} + (if .[$id].run then {} elif $m then {role: $role, run: $m.value.run, codex: true} else {} end))

@@ -2,6 +2,18 @@
 
 Versions follow `version` in `.claude-plugin/plugin.json`. Claude Code updates an installed plugin only when this version changes, so every change users should receive ships in a new version.
 
+## 3.2.0 (2026-10-27)
+
+MVP fast mode, from a team's retrospective in `mvp`: merges per day fell 3.9 times after 3.1.0, a merge request waited about 8 hours for the tech lead's poll, verify ran the suite twice, and developers asked most about stories they could not build. Upgrade notes for the agent: [docs/releases/3.2.0.md](docs/releases/3.2.0.md).
+
+- **In `mvp` only blocker and major findings are fixed in the story.** The open minors are filed as one `compasso::after-mvp` issue per story, in no sprint, never assigned during the MVP. Every finding to be filed carries an acceptance line its reviewer wrote, and a follow-up's Verify lists real commands. Reviewer and security rate anything that can leak or destroy data, widen access, fail open or break production at least major.
+- **In `mvp` a change merges on green.** The developer sets its own merge request to merge when nothing needs a person: no approver, no behind rule. The tech lead handles high risk, rejections and a red main: `team.sh main` turns off auto-merge while main is red, and `team.sh fix-main` files the fix as a blocker bug for the developer whose merge broke it (new `tracker.sh main-pipeline` and `disarm`). `production` keeps 3.1.0's rules.
+- **In `mvp` the tech lead answers questions on its own,** unless scope, security or cost change, and lists its answers. A developer takes the next batch in the same tick.
+- **Not ready.** In a team project a story with no acceptance or Verify, or a `dev::` label naming no one in the team, is never built or assigned; the tech lead's inbox lists it. A story whose paths overlap a merge request still open waits for it to merge.
+- **Verify runs each command once,** and the `mvp` pipeline leaves out e2e and coverage (regenerate it with `ci.sh`).
+- **Sensitive paths in `mvp`** are named as a warning on the merge request and in the tech lead's review.
+- `followups.sh legacy [--close]` closes the old follow-ups no test could check (new `tracker.sh close`). `start` and `status` warn when an older Compasso runs than the newest installed. A continued agent whose dispatch was never bound no longer fails with "unknown role 'null'".
+
 ## 3.1.2 (2026-10-23)
 
 Upgrade notes for the agent: [docs/releases/3.1.2.md](docs/releases/3.1.2.md).

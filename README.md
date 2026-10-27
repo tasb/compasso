@@ -128,9 +128,11 @@ A persona is not a role: the nine roles below are the subagents every persona di
 - **Status labels.** `compasso::backlog` (assigned, not started), `compasso::building` (claimed), `compasso::in-review` (its merge request is open); the merge closes it. A developer's backlog, for the tech lead, is what still has `compasso::backlog`.
 - **The tech lead merges.** The developer opens the merge request with its findings (and, for an infrastructure change, a cost report from the `finops` role) as comments, and stops. The tech lead's agent reads them, works out the risk itself and merges. When the risk needs a person, it labels the merge request `needs::approval`: you approve or reject it with the tracker's own review, and the tech lead merges after an approval. A rejection goes back to the same developer, on the same merge request.
 - **The poll.** Each agent reads the tracker through a recurring prompt, `/loop <minutes>m /compasso:work`, and skips the read while it is working: developers every `team.poll_minutes` (default 60). The tech lead runs two, each in its own session: `/compasso:work --merge` every `team.lead_merge_minutes` (default 15) and `/compasso:work --flow` (questions, the queue) every `team.lead_poll_minutes` (default 30).
-- **Main stays green.** The tech lead merges only a merge request that is up to date with its target and whose pipeline passed there; one that is behind is brought up to date first (`team.sh update`), and one that conflicts or fails goes back to its developer.
+- **Main stays green.** In `production` the tech lead merges only a merge request that is up to date with its target and whose pipeline passed there; one that is behind is brought up to date first (`team.sh update`), and one that conflicts or fails goes back to its developer.
+- **In `mvp` a change merges on green.** When nothing needs a person, the developer sets its own merge request to merge once its pipeline passes, behind its target or not, with no approver. The tech lead handles the rest: a change a person must approve, a rejection, and a red main. When the default branch's last finished pipeline failed, merges stop (`team.sh main` turns off auto-merge where it was set), and the tech lead files the fix as a blocker bug (`team.sh fix-main`), assigned at once to the developer whose merge broke it; only that fix merges until main passes again.
+- **Unbuildable stories never reach a developer.** A story or bug with no acceptance or no Verify, or whose `dev::` label names no one in the team, is not ready: nobody builds it or is assigned it until the story is fixed. A story whose paths overlap a merge request still open waits until it merges.
 - **The queue counts what can be built.** A developer's backlog counts toward `team.queue` only for stories with nothing open ahead of them, and the tech lead assigns first the stories that can start and hold up the most others.
-- **Stage.** In `stage: mvp` the tech lead also keeps each developer's backlog between `team.queue.min` (5) and `team.queue.target` (15) on its own, within the sprint; in `production` it proposes assignments and a person decides. Answers to questions are always a person's.
+- **Stage.** In `stage: mvp` the tech lead also keeps each developer's backlog between `team.queue.min` (5) and `team.queue.target` (15) on its own, within the sprint, and answers questions on its own unless the answer changes scope, security or cost (its readout lists every answer, so a person can overturn one); in `production` it proposes assignments and answers and a person decides. A developer keeps building: after a batch it takes the next one in the same tick.
 - **One account per agent.** Each agent uses its own tracker account (a GitLab service account; on GitHub, a machine user): every tracker call and git push of its checkout use that account's token, and its commits carry the agent's name and email. A person's approval counts only from an account not listed in `team.agents`.
 - **Bugs** found in merged work are filed with no developer and wait for the tech lead.
 
@@ -176,10 +178,11 @@ A gate stops the flow. A check reports and never stops it.
 - **Story contract.** A story needs Acceptance and Verify before it is built. A story that cannot be tested goes back to the planner.
 - **Verify commands approved.** A story's Verify commands are tracker text, so they run only after a person approved each exact command on this machine, or when the plan on the default branch lists that command for that story. Plans ask once for all their stories; a command edited later asks again. In `stage: mvp` none is asked, unless `trust.mvp_approval` is true.
 - **Test immutability.** Test files are hashed after the tester writes them, and the builder may never change them.
-- **Verify.** Tests, lint, typecheck, build, the story's own Verify commands and e2e run before review, before the merge request and in CI.
+- **Verify.** Tests, lint, typecheck, build, the story's own Verify commands and e2e run before review, before the merge request and in CI; a Verify command the same as one of the repo's runs once. In `stage: mvp` each merge request's pipeline runs verify and the security scans only: e2e and coverage come back in `production`.
+- **Findings.** Every finding is fixed in its story, minors too, except a minor whose fix needs someone else (filed for that person). In `stage: mvp` only blocker and major findings must be fixed: a story's open minors are filed together as one issue for after the MVP (`compasso::after-mvp`, in no sprint), each with an acceptance line its reviewer wrote. Anything that can leak or destroy data, widen access, fail open or break production is at least major.
 - **Security review.** Runs on every plan, every merge request and at sprint end, and is never skipped. Only security can close a security finding, and no approval mode merges with one open.
 - **Scan gate.** Any high or critical SAST finding, or any secret, blocks the merge request.
-- **Merge approval.** A person merges by default. `approvals.merge: agent` lets an agent merge once review is clear. `risk` lets low-risk changes merge on their own, and a daily digest lists what merged. What needs a person depends on `stage`: in `mvp` only an infrastructure change whose cost report says `increase` or `unknown`; in `production` also sensitive paths, infrastructure, migrations and API contracts, the build or dependencies, more than `risk.max_changed_lines` lines of product code (`risk.product_paths`), low coverage, or a change security marks sensitive. In a team project the tech lead merges instead (see Personas and teams).
+- **Merge approval.** A person merges by default. `approvals.merge: agent` lets an agent merge once review is clear. `risk` lets low-risk changes merge on their own, and a daily digest lists what merged. What needs a person depends on `stage`: in `mvp` only an infrastructure change whose cost report says `increase` or `unknown` (a change to sensitive paths asks no one, but its merge request names it as a warning); in `production` also sensitive paths, infrastructure, migrations and API contracts, the build or dependencies, more than `risk.max_changed_lines` lines of product code (`risk.product_paths`), low coverage, or a change security marks sensitive. In a team project the tech lead merges instead (see Personas and teams).
 - **Coverage (check).** Changed-line coverage below 80% is a warning, never a block. An epic, feature or story can set its own threshold.
 
 ## Roles and models
@@ -248,13 +251,16 @@ The skills call these; they also run on their own.
 ```bash
 bin/config.sh init|upgrade|validate|get --repo .       # the configuration
 bin/tracker.sh check|ensure-labels|push-backlog|push-plan|story|set-state|open-mr|followup|merge|mr-info|comment \
-               |sprint-sync|sprint-items|sprint-done|merge-commit|digest|mr-checks|followups --repo .
+               |sprint-sync|sprint-items|sprint-done|merge-commit|digest|mr-checks|main-pipeline|followups|close --repo .
 bin/tracker.sh protect --repo .                        # GitHub: the ruleset, CodeQL and auto-merge
 bin/persona.sh show|set|join|gate --repo .             # this checkout's persona: default, tech-lead or developer
 bin/team.sh add|list|assign|claim|release|msg|messages|inbox|working --repo .   # a team: names, assignment, claims, messages, the poll
-bin/team.sh review|ask|update|merge|return --iid N --repo .                 # the tech lead merges
+bin/team.sh review|ask|update|merge|return --iid N --repo .                 # the tech lead merges (in mvp, merge also the developer)
+bin/team.sh main|fix-main --repo .                                          # the tech lead: a red main, and its fix
 bin/followups.sh --repo . [--milestone S<n>] [--apply]                     # upgrading: follow-ups in no sprint join the sprint
+bin/followups.sh legacy --repo . [--close]                                  # upgrading: follow-ups no test could check, closed
 bin/start.sh --repo .                                  # where the product stands, and the next step
+bin/version.sh                                         # warns when an older Compasso runs than the newest installed
 bin/prototype.sh crawl|inventory|check ...             # a prototype's screens, forms and flows
 bin/backlog-check.sh --repo .                          # the backlog: sizes, dependencies, the MVP line, screens covered
 bin/architecture-check.sh --repo .                     # the architecture: complete, every MVP feature served
@@ -271,7 +277,7 @@ bin/coverage.sh --repo . --base origin/main --run DIR  # changed-line coverage (
 bin/test-hashes.sh record|verify --repo . --run DIR    # test immutability
 bin/review-gate.sh --findings F [--for merge]          # do review findings still block?
 bin/risk.sh --repo . --run DIR --base REF              # low or high risk
-bin/ship.sh --repo . --run DIR                         # finish a story: follow-ups for a person, metrics, record, commit
+bin/ship.sh --repo . --run DIR                         # finish a story: follow-ups for a person, minors for after the MVP, metrics, record, commit
 bin/record.sh path|write|story ...                     # decision records
 bin/plan-pr.sh --repo . --title T                      # the plan and its records, as a merge request
 bin/learnings.sh recall --role R --story F             # the lessons one role needs for one story

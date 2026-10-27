@@ -156,15 +156,16 @@ case "$CMD" in
       exit 0
     fi
     case "$TRACKER" in
-      check|story|mr-info|mr-of|mr-events|mr-checks|followups|sprint-items|sprint-done|merge-commit|digest|labels|comments) exit 0 ;;
-      merge) refuse "in a team project the tech lead merges, through bin/team.sh merge, which checks the reports, the risk and a person's approval" ;;
+      check|story|mr-info|mr-of|mr-events|mr-checks|main-pipeline|followups|sprint-items|sprint-done|merge-commit|digest|labels|comments) exit 0 ;;
+      merge) refuse "in a team project the tech lead (in mvp also the story's developer) merges, through bin/team.sh merge, which checks the reports, the risk, main and a person's approval" ;;
       mr-update) refuse "in a team project the tech lead brings a merge request up to date, through bin/team.sh update" ;;
+      disarm) refuse "in a team project the tech lead turns off auto-merge when main is red, through bin/team.sh main" ;;
       sprint-sync) [ "$READ_ONLY" -eq 1 ] && exit 0 ;;
     esac
     case "$p:$TRACKER" in
       default:*) refuse "this is a team project and this checkout has no persona, so it only reads. Run /compasso:setup and choose tech lead or developer." ;;
       tech-lead:*) ;;
-      developer:push-plan|developer:push-backlog|developer:ensure-labels|developer:protect|developer:set-milestone) refuse "$TRACKER is the tech lead's: a developer does not change the scope or the project's settings" ;;
+      developer:push-plan|developer:push-backlog|developer:ensure-labels|developer:protect|developer:set-milestone|developer:close) refuse "$TRACKER is the tech lead's: a developer does not change the scope or the project's settings" ;;
       developer:*) ;;
     esac
     exit 0 ;;

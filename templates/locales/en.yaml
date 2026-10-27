@@ -54,6 +54,7 @@ text:
   cov_below: "below min: {p}% of {min}% · uncovered: {list}"
   not_measured: not measured
   merge_low: "low risk, may merge without a person ({lines} changed lines in {files} files, nothing sensitive)"
+  merge_low_sensitive: "low risk in the MVP, may merge without a person ({lines} changed lines in {files} files), but it touches sensitive paths: {list}"
   merge_person: "a person approves: {reasons}"
   risk_sensitive: "{file} is a sensitive path ({glob})"
   risk_build: "{file} changes the build, the pipeline, the Compasso config or dependencies"
@@ -121,9 +122,11 @@ text:
   followup_who: a maintainer
   followup_want: this finding addressed
   followup_so: "{summary} no longer applies"
-  followup_given: "Given {where}, When it is reviewed again, Then the finding \"{summary}\" no longer applies"
-  followup_code_from: "the code from #{story}"
-  followup_tests: the repo tests
+  legacy_closed: "Closed: this follow-up's acceptance (\"reviewed again\") is not something a test can check. Its finding came from #{story}; if it is still worth doing, a person files it again as a story whose acceptance a test can check."
+  minors_title: "Minor findings of #{story}: {title}"
+  minors_as: the team
+  minors_want: "the minor findings of #{story} fixed"
+  minors_so: what the review found during the MVP is not lost
   rec_findings: Findings
   rec_decisions: Decisions
   rec_takeaways: Takeaways

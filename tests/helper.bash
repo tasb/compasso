@@ -1,5 +1,6 @@
 ROOT="$(cd "$(dirname "$BATS_TEST_FILENAME")/.." && pwd)"
 unset CLAUDECODE   # the suite may run inside Claude Code; a test that needs it sets it
+export COMPASSO_PLUGIN_CACHE=/nonexistent   # the machine's installed plugins never reach a test; one that needs them sets it
 
 setup_repo() {
   export COMPASSO_HOME="$BATS_TEST_TMPDIR/compasso-home"   # approvals never touch the real home
@@ -8,6 +9,9 @@ setup_repo() {
   "$ROOT/bin/config.sh" init --repo "$REPO" --project acme/app >/dev/null
   CFG="$REPO/.compasso/project.yaml"
 }
+
+# a story a developer can build: acceptance and Verify (a team never builds one without them)
+READY=$'## Acceptance\n- [ ] Given a list, When it is filtered, Then it shows the matches\n\n## Verify\n- `npm test`\n\n'
 
 # set a config value: cfg_set '.sprint.weeks = 3'
 cfg_set() { yq -i "$1" "$CFG"; }

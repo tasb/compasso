@@ -7,7 +7,7 @@ Find where the product stands and move it one step forward. Scripts are in `${CL
 
 **Persona.** `bash ${CLAUDE_PLUGIN_ROOT}/bin/persona.sh gate --repo . --skill start` first. On a non-zero exit, show its message and stop: this checkout's persona may not run this command.
 
-1. `bash ${CLAUDE_PLUGIN_ROOT}/bin/start.sh --repo .` Show its three lines as they are.
+1. `bash ${CLAUDE_PLUGIN_ROOT}/bin/start.sh --repo .` Show its three lines as they are, and first, when it warns that a newer Compasso is installed than the one running, that warning.
 
 2. Say in one line what the user can bring to that stage, then run it when they agree:
    - **discover** (`${CLAUDE_PLUGIN_ROOT}/skills/discover/SKILL.md`): ideas in the conversation, a document (Markdown, PDF, Word), tracker issues, or a prototype (a running web app, its source code, or a Figma file).

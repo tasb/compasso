@@ -57,7 +57,9 @@ jq -rn -L "$BIN" --argjson L "$L" --slurpfile s "$STORY" --slurpfile f "$RUN/fin
     "- \(t("coverage")): " + (if $c.status == "ok" then tf("cov_ok"; {p: $c.percent, min: $c.min})
         elif $c.status == "below" then tf("cov_below"; {p: $c.percent, min: $c.min, list: ($c.uncovered | join(", "))})
         else t("not_measured") end),
-    (if $k == null then empty elif $k.level == "low"
+    (if $k == null then empty elif $k.level == "low" and (($k.warnings // []) | length) > 0
+      then "- \(t("merge")): " + tf("merge_low_sensitive"; {lines: $k.changed_lines, files: $k.files, list: ($k.warnings | join("; "))})
+    elif $k.level == "low"
       then "- \(t("merge")): " + tf("merge_low"; {lines: $k.changed_lines, files: $k.files})
       else "- \(t("merge")): " + tf("merge_person"; {reasons: ($k.reasons | join("; "))}) end),
     "",

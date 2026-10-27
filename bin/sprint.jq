@@ -3,6 +3,9 @@
 # $cleaned, $parallel, $feature (a feature iid, or "" for the whole sprint). Output: what can be built now, what waits and on whom.
 # In a team project ($team true) work is assigned by a dev::<name> label, on the item or on its feature;
 # $me is the developer asking ("" for the tech lead, who builds nothing): only its own work can be built.
+# $devs are the team's developers. A story or bug with no Acceptance (a bug: Expected) or no Verify, or whose
+# developer is not in the team, is not ready: nobody builds it or is assigned it until the story is fixed.
+# A story whose Touches overlap a story in review waits until that merge request merges.
 
 def kind: .labels as $l
   | if ($l | index("type::epic")) then "epic"
@@ -28,13 +31,19 @@ $items[0] as $items | $ext[0] as $ext
 | def open($i): ($by[$i | tostring].state // "opened") == "opened";
   ($all | map(select(.kind == "story" or .kind == "bug"))
     | if $feature == "" then . else map(select(.parent == ($feature | tonumber))) end) as $work
+| ($work | map(select(.state == "opened" and (.labels | index("compasso::in-review"))))) as $review
 | ($work | map(select(.state == "opened")) | map(
-    . as $w
+    . + {missing: [(if ((.parsed.acceptance + (if .kind == "bug" then .parsed.expected else [] end)) | length) == 0 then "acceptance" else empty end),
+                   (if (.parsed.verify | length) == 0 then "verify" else empty end),
+                   (.dev as $d | if $d != null and ($devs | index($d) | not) then "developer" else empty end)]}
+    | . as $w
     | ([$w.parsed.blocked_by[] | select(open(.))]) as $blocked
-    | ([$w.parsed.depends_on[] | select(open(.))]) as $waiting
+    | ([$w.parsed.depends_on[] | select(open(.))]
+       + [$review[] | select(.iid != $w.iid and overlaps(.parsed.touches; $w.parsed.touches)) | .iid] | unique) as $waiting
     | . + {status:
         (if (.labels | index("compasso::in-review")) then "in-review"
          elif $team and (.labels | index("needs::lead")) then "needs-lead"
+         elif $team and ((.labels | index("owner::human")) | not) and (.missing | length) > 0 then "not-ready"
          elif ($blocked | length) > 0 then "blocked"
          elif $team and .dev == null then (if (.labels | index("owner::human")) then "human" else "unassigned" end)
          elif $team and $me != "" and .dev != $me then "other"
@@ -76,6 +85,7 @@ $items[0] as $items | $ext[0] as $ext
         me: (if $me == "" then null else $me end),
         # the tech lead's queue: questions, work nobody has, and how much each developer holds
         needs_lead: ($open | map(select(.labels | index("needs::lead")) | brief + {kind})),
+        not_ready: ($open | map(select(.status == "not-ready") | brief + {kind, missing})),
         # what can start first, and what holds up the most open work, comes first
         unassigned: ([$open[] | .parsed | (.depends_on + .blocked_by)[]] as $deps
           | $open | map(select(.status == "unassigned") | . as $u | brief + {kind}

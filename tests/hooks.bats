@@ -106,6 +106,17 @@ dispatch() { jq -cn --arg c "$REPO" --arg t "$1" --arg p "$2" '{hook_event_name:
   [ "$(wc -l < "$REPO/.compasso/runs/8/budget.jsonl" | tr -d ' ')" = 1 ]
 }
 
+@test "budget guard: continuing an agent that started but was never bound claims its role against the run its message names" {
+  hook subagent-start "$(jq -cn --arg c "$REPO" '{cwd: $c, agent_id: "r1", agent_type: "compasso:reviewer"}')"
+  msg() { jq -cn --arg c "$REPO" --arg m "$1" '{cwd: $c, tool_name: "SendMessage", tool_input: {to: "r1", message: $m}}'; }
+  out="$(msg "Round 2: the findings are in RUN/findings.json")"
+  [ "$(decision "$out")" = deny ]
+  [[ "$(reason "$out")" == *"continue compasso:reviewer with its run folder"* ]] || false
+  [[ "$(reason "$out")" != *"null"* ]] || false
+  [ "$(decision "$(msg "Round 2: read .compasso/runs/8/findings.json")")" = allow ]
+  [ "$(jq -r .role "$REPO/.compasso/runs/8/budget.jsonl")" = reviewer ]
+}
+
 @test "budget guard on Codex: spawning a Compasso agent uses a fresh claim of its role, once" {
   spawn() { jq -cn --arg c "$REPO" --arg t "$1" '{cwd: $c, tool_name: "collaborationspawn_agent", tool_input: {agent_type: $t, task_name: "x", message: "encrypted"}}'; }
   [[ "$(reason "$(spawn compasso-reviewer)")" == *"claim compasso-reviewer first"* ]] || false

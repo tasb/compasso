@@ -13,11 +13,17 @@
 #   gitlab.sh mr-info       --repo R --mr N                       branches, author and the issues it closes -> JSON
 #   gitlab.sh mr-of         --repo R --iid N                      the story's open merge request -> {iid, source_branch, target_branch, web_url}
 #   gitlab.sh mr-events     --repo R --mr N                       comments and approvals, oldest first -> [{kind, by, at, body, member}]
-#   gitlab.sh followups     --repo R                              open follow-ups in no sprint -> [{iid, title, story}]
+#   gitlab.sh followups     --repo R [--all]                      open follow-ups in no sprint (--all: in any) -> [{iid, title, story, body}]
+#   gitlab.sh close         --repo R --iid N --body-file F        post F on the issue, then close it (bin/followups.sh legacy)
 #   gitlab.sh set-milestone --repo R --iid N --milestone S1       move a work item into sprint S1 (bin/followups.sh)
 #   gitlab.sh mr-checks     --repo R --mr N                       its last commit's pipeline and whether it conflicts with its target
 #                                                                 -> {pipeline: success|failed|running|none, conflicts}
 #   gitlab.sh mr-update     --repo R --mr N                       rebase it onto its target (the tech lead, before merging)
+#   gitlab.sh main-pipeline --repo R                              the default branch's last finished pipeline and, when it failed, the
+#                                                                 merge request that broke it -> {pipeline: success|failed|none, sha,
+#                                                                 web_url, broken_by: {sha, mr, closes} | null}
+#   gitlab.sh disarm        --repo R                              turn off auto-merge on every open merge request to the default
+#                                                                 branch (a red main, bin/team.sh main) -> [iids]
 #   gitlab.sh comment       --repo R --mr N|--iid N --body-file F  post F as a comment on a merge request or an issue
 #   gitlab.sh sprint-sync   --repo R [--milestone S20] [--parent F] what can be built now, what waits and on whom -> JSON
 #   gitlab.sh merge-commit  --repo R --iid N                      the commit the story's merge request put on the default branch
@@ -39,7 +45,7 @@ case "${1:-}" in -h|--help) sed -n '2,/^set -u/s/^# \{0,1\}//p' "$0"; exit 0 ;; 
 
 BIN="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CMD="${1:-}"; shift || true
-REPO="." IID="" STATE="" BRANCH="" BODY="" TITLE="" PARENT="" MR="" LABELS_ARG="owner::either" MILESTONE="" RISK="" SINCE="" READ_ONLY=0 NAME="" ADD="" REMOVE="" ID=""
+REPO="." IID="" STATE="" BRANCH="" BODY="" TITLE="" PARENT="" MR="" LABELS_ARG="owner::either" MILESTONE="" RISK="" SINCE="" READ_ONLY=0 ALL=0 NAME="" ADD="" REMOVE="" ID=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --repo) REPO="$2"; shift 2 ;;
@@ -55,6 +61,7 @@ while [ $# -gt 0 ]; do
     --risk) RISK="$2"; shift 2 ;;
     --since) SINCE="$2"; shift 2 ;;
     --read-only) READ_ONLY=1; shift ;;
+    --all) ALL=1; shift ;;
     --name) NAME="$2"; shift 2 ;;
     --add) ADD="$2"; shift 2 ;;
     --remove) REMOVE="$2"; shift 2 ;;
@@ -489,7 +496,7 @@ merge() {
   mode="$(cfg .approvals.merge)"; [ "$TEAM" = true ] && mode=team   # approvals.merge is not used in a team project
   case "$mode" in agent|risk|team) ;; *) echo "gitlab: approvals.merge is human - a person merges this merge request" >&2; return 1 ;; esac
   [ -n "$BODY" ] && [ -f "$BODY" ] || { echo "gitlab: merge needs --body-file with the review findings" >&2; return 1; }
-  "$BIN/review-gate.sh" --findings "$BODY" --for merge || return 1
+  "$BIN/review-gate.sh" --findings "$BODY" --for merge --repo "$REPO" || return 1
   if [ "$mode" = risk ]; then
     [ -n "$RISK" ] && [ -f "$RISK" ] || { echo "gitlab: approvals.merge is risk - merge needs --risk with risk.sh's decision" >&2; return 1; }
     [ "$(jq -r .level "$RISK")" = low ] || { echo "gitlab: the change is high risk - a person merges it" >&2; return 1; }
@@ -517,9 +524,17 @@ mr_info() {
 }
 
 followups_cmd() { # filed by ship.sh, which marks each with its story
-  api --paginate "projects/$PID/issues?state=opened&milestone=None&per_page=100" | jq -s -c 'add // []
+  local ms="&milestone=None"; [ "$ALL" -eq 0 ] || ms=""
+  api --paginate "projects/$PID/issues?state=opened$ms&per_page=100" | jq -s -c 'add // []
     | map(select((.description // "") | test("<!-- compasso:followup story=[0-9]+ -->"))
-      | {iid, title, story: (.description | capture("<!-- compasso:followup story=(?<s>[0-9]+) -->").s | tonumber)})'
+      | {iid, title, story: (.description | capture("<!-- compasso:followup story=(?<s>[0-9]+) -->").s | tonumber), body: .description})'
+}
+
+close() {
+  need IID
+  comment >/dev/null || return 1
+  api -X PUT "projects/$PID/issues/$IID" -f state_event=close >/dev/null || { echo "gitlab: could not close #$IID" >&2; return 1; }
+  echo "gitlab: #$IID closed"
 }
 
 set_milestone() {
@@ -539,6 +554,33 @@ mr_checks() {
             | if . == "success" then "success" elif . == "failed" or . == "canceled" then "failed"
               elif . == "none" or . == "skipped" then "none" else "running" end),
           conflicts: (.has_conflicts == true)}' <<<"$m"
+}
+
+main_pipeline() { # a canceled or skipped pipeline says nothing about main; the oldest of the newest failures broke it
+  local b p sha mr="" closes='[]'
+  b="$(api "projects/$PID" | jq -r .default_branch)" || return 1
+  p="$(api "projects/$PID/pipelines?ref=$b&scope=finished&per_page=50" | jq -c '[.[] | select(.status == "success" or .status == "failed")]
+    | if length == 0 then {pipeline: "none", sha: null, web_url: null, broken: null}
+      else {pipeline: .[0].status, sha: .[0].sha, web_url: .[0].web_url,
+            broken: (if .[0].status == "failed" then ((map(.status == "failed") | index(false)) as $i | .[($i // length) - 1].sha) else null end)} end')" ||
+    { echo "gitlab: cannot read the pipelines of $b" >&2; return 1; }
+  sha="$(jq -r '.broken // empty' <<<"$p")"
+  if [ -n "$sha" ]; then
+    mr="$(api "projects/$PID/repository/commits/$sha/merge_requests" | jq -r '[.[] | select(.state == "merged")][0].iid // empty')"
+    [ -z "$mr" ] || closes="$(MR="$mr" mr_info | jq -c .closes)" || closes='[]'
+  fi
+  jq -c --arg mr "$mr" --argjson closes "$closes" '{pipeline, sha, web_url,
+    broken_by: (if .broken then {sha: .broken, mr: (if $mr == "" then null else ($mr | tonumber) end), closes: $closes} else null end)}' <<<"$p"
+}
+
+disarm() {
+  local b i out=""
+  b="$(api "projects/$PID" | jq -r .default_branch)" || return 1
+  for i in $(api --paginate "projects/$PID/merge_requests?state=opened&target_branch=$b&per_page=100" | jq -s -r 'add // [] | .[] | select(.merge_when_pipeline_succeeds == true) | .iid'); do
+    api -X POST "projects/$PID/merge_requests/$i/cancel_merge_when_pipeline_succeeds" >/dev/null || { echo "gitlab: could not turn off auto-merge on !$i" >&2; return 1; }
+    out="$out $i"
+  done
+  printf '%s\n' $out | jq -R 'select(. != "") | tonumber' | jq -s -c .
 }
 
 mr_update() { # GitLab rebases in the background: a conflict shows as conflicts in the next mr-checks
@@ -621,7 +663,8 @@ sprint_sync() {
   done
 
   parallel="$(cfg '.sprint.parallel // 2')"
-  jq -n --arg ms "$ms" --slurpfile items <(printf '%s' "$enriched") --slurpfile ext <(printf '%s' "$ext") --argjson cleaned "$cleaned" \
+  devs='[]'; [ "$TEAM" != true ] || devs="$(labels_cmd | jq -c 'map(select(startswith("dev::")) | sub("dev::"; ""))')" || return 1
+  jq -n --argjson devs "$devs" --arg ms "$ms" --slurpfile items <(printf '%s' "$enriched") --slurpfile ext <(printf '%s' "$ext") --argjson cleaned "$cleaned" \
         --argjson parallel "$parallel" --arg feature "$PARENT" --argjson team "$TEAM" --arg me "$ME" -f "$BIN/sprint.jq"
 }
 
@@ -733,8 +776,11 @@ case "$CMD" in
   mr-of) mr_of ;;
   mr-checks) mr_checks ;;
   followups) followups_cmd ;;
+  close) close ;;
   set-milestone) set_milestone ;;
   mr-update) mr_update ;;
+  main-pipeline) main_pipeline ;;
+  disarm) disarm ;;
   mr-events) mr_events ;;
   comment) comment ;;
   sprint-sync) sprint_sync ;;

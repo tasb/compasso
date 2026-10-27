@@ -22,6 +22,7 @@ while [ $# -gt 0 ]; do
     *) echo "start: unknown argument '$1'" >&2; exit 2 ;;
   esac
 done
+"$BIN/version.sh"   # warns on stderr when an older Compasso runs than the newest installed
 C="$REPO/.compasso"
 
 # greenfield: nothing tracked or on disk besides docs, CI, config and Compasso's own files

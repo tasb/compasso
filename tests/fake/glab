@@ -2,7 +2,7 @@
 # A tiny in-memory GitLab behind `glab api`, for push tests. State lives in
 # $FAKE_GL: calls.log (one "METHOD path field=value..." line per call, with
 # descriptions left out), desc/<iid>.md (the last description written),
-# labels/<iid> and next_iid. $FAKE_GL_PLAN sets the namespace plan (default free).
+# labels/<iid> and next_iid; pipelines.json (the default branch's) and commit-mrs/<sha>.json. $FAKE_GL_PLAN sets the namespace plan (default free).
 set -u
 D="$FAKE_GL"; mkdir -p "$D/desc" "$D/labels"
 [ "$1" = api ] || { echo "fake glab: only 'api' is supported" >&2; exit 1; }
@@ -75,6 +75,9 @@ case "$method $path" in
     i="${path%/notes/*}"; i="${i##*/}"
     jq --argjson id "${path##*/}" --arg b "${f_body:-}" 'map(if .id == $id then .body = $b else . end)' "$D/notes/mr-$i.json" > "$D/tmp" && mv "$D/tmp" "$D/notes/mr-$i.json"; echo '{}' ;;
   "GET projects/"*"/merge_requests?"*) cat "$D/mr-query.json" 2>/dev/null || echo '[]' ;;
+  "POST projects/"*"/merge_requests/"*"/cancel_merge_when_pipeline_succeeds") echo '{}' ;;
+  "GET projects/"*"/pipelines?"*) cat "$D/pipelines.json" 2>/dev/null || echo '[]' ;;   # newest first, as GitLab orders them
+  "GET projects/"*"/repository/commits/"*"/merge_requests") s="${path%/merge_requests}"; cat "$D/commit-mrs/${s##*/}.json" 2>/dev/null || echo '[]' ;;
   "GET projects/"*"/merge_requests/"*"/closes_issues") cat "$D/closes.json" 2>/dev/null || echo '[]' ;;
   "GET projects/"*"/merge_requests/"*) cat "$D/mr-${path##*/}.json" 2>/dev/null || { echo '{"message":"404"}'; exit 1; } ;;
   "POST projects/"*"/merge_requests") echo '{"iid":31,"web_url":"https://gitlab.example/mr/31"}' ;;

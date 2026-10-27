@@ -68,7 +68,7 @@ team_on() { cfg_set '.team.enabled = true'; }
   team_on
   for s in setup start status report present; do p gate --skill "$s"; done
   for s in plan story sprint review work harden; do run p gate --skill "$s"; [ "$status" -eq 6 ]; done
-  for c in check story sprint-items labels comments mr-checks; do p gate --tracker "$c"; done
+  for c in check story sprint-items labels comments mr-checks main-pipeline; do p gate --tracker "$c"; done
   p gate --tracker sprint-sync --read-only
   for c in sprint-sync push-plan set-state open-mr followup comment merge; do run p gate --tracker "$c"; [ "$status" -eq 6 ]; done
 }
@@ -107,6 +107,9 @@ team_on() { cfg_set '.team.enabled = true'; }
     [[ "$output" == *"team.sh merge"* ]] || false
     run p gate --tracker mr-update
     [ "$status" -eq 6 ]
+    run p gate --tracker disarm
+    [ "$status" -eq 6 ]
+    [[ "$output" == *"team.sh main"* ]] || false
   done
   for c in mr-of mr-events; do run p gate --tracker "$c"; [ "$status" -eq 0 ]; done
 }

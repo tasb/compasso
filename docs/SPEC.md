@@ -939,3 +939,40 @@ Decided with the user after reading a team's tracker in `mvp` (read-only): 50 op
 ### Open
 
 - Tried against the fakes only.
+
+## 35. MVP fast mode (2026-10-27)
+
+Decided with the user after a team's retrospective in `mvp` (the tech lead's and two developers' answers): merges per day fell 3.9 times after 3.1.0; more than 90% of a merge request's time was waiting for the tech lead's merge poll (about 8 hours), against 9 to 26 minutes of CI and 2 to 7 of the approver; the behind rule set off a rebase cascade on GitLab Free, which has no merge trains; `verify.sh` took 70 to 80% of a story's time, running the suite twice when the story's Verify was the repo's test command; about three quarters of the minor findings were worth fixing, but several should have been majors; the developers' most common question was a story they could not build; and 33 of 38 follow-ups had an acceptance no test could check.
+
+### Findings
+
+- **In `mvp` only blocker and major findings are fixed in the story** (`review-gate.sh --for merge` reads the stage). The open minors are filed by `ship.sh` as one issue per story, labelled `compasso::after-mvp`, in no sprint, under the story's feature (or the story), marked `<!-- compasso:after-mvp story=N -->` so `followups.sh` never moves it into a sprint. Those findings become `status: followup` with its iid. `/compasso:plan` offers these issues only in `production`; `/compasso:harden` lists a feature's. In `production` nothing changes.
+- **Every follow-up is measurable.** A finding to be filed carries `acceptance` (Given/When/Then), written by its reviewer; the gate lists one without it, and the reviewer adds it in the next round. A follow-up's Verify lists the repo's test command and the story's Verify commands, never "the repo tests".
+- **A severity floor** in the reviewer's and security's roles: anything that can leak or destroy data, widen access, fail open or break production is at least major.
+
+### Merging in `mvp`
+
+- **The developer sets its own merge request to merge** right after opening it (`team.sh merge`, allowed to the story's developer in `mvp`): when nothing needs a person (`approval` `not-needed`), the reports are there, there are no conflicts, its pipeline has not failed and main is not red. The tracker merges it when its pipeline passes. No approver, no behind rule: a merge request behind its target merges when its own pipeline passed.
+- **The tech lead** handles what the developer cannot: a change a person must approve (the approver runs only then), a rejection, a failed pipeline, and a red main. In `mvp` its merges follow the same rules.
+- **A red main.** `tracker.sh main-pipeline` reads the default branch's last finished pipeline (GitLab: `scope=finished`; GitHub: the newest commit on it whose push runs all finished); a canceled or skipped one says nothing. When it failed, it names the oldest failure of the newest run of failures and the merge request that put it there. `team.sh main` (each `--merge` tick, in `mvp`) then turns off auto-merge on every open merge request to the default branch (`tracker.sh disarm`), and the merge poll sets them again once main passes. `team.sh fix-main` files the fix once, as a blocker bug labelled `compasso::fix-main` under the story that broke main; the tech lead writes it in the Story format (Verify: the commands of the job that failed) and assigns it at once to the developer whose merge broke main, else the one with the least load. While main is red `team.sh merge` refuses everything but the fix.
+- **`production`** keeps 3.1.0's rules: the tech lead merges, up to date and green.
+
+### The flow
+
+- **The tech lead answers questions on its own in `mvp`**, unless the answer changes scope, security or cost; its hand back lists every answer, so a person can overturn one.
+- **A developer keeps building:** in a team project the sprint flow takes the next batch after one ends, in the same tick.
+- **Not ready.** In a team project, `sprint-sync` marks a story or bug with no acceptance (a bug: no Expected), no Verify, or a `dev::` label naming no developer of the team as `not-ready` (`team.not_ready`, with `missing`): never runnable, never offered for assignment, listed for the tech lead to fix. Work for a person (`owner::human`) is exempt.
+- **Overlapping paths wait.** A story whose Touches overlap a story in review waits until that merge request merges.
+- **Verify runs each command once:** a story's Verify command the same as a repo command already run is skipped and said so.
+- **The MVP pipeline:** in `mvp`, `ci.sh` and `ci-github.sh` leave out the e2e and coverage jobs; verify and the security scans stay. Setup generates the pipeline after the stage is written; switching to `production` and generating it again brings them back.
+- **Sensitive paths in `mvp`** ask no person, but `risk.sh` names each as a warning (`warnings` in `risk.json`), shown on the merge request's Merge line and in `team.sh review`.
+
+### Upgrading and running
+
+- `followups.sh legacy` lists the open follow-ups whose acceptance was "When it is reviewed again" (in any language Compasso shipped), in any sprint; with `--close`, after a person confirms the list, it comments on each with its story and closes it (`tracker.sh close`, the tech lead's in a team project).
+- `bin/version.sh`, run by `start.sh` and `status.sh`, warns when the running scripts are older than the newest Compasso in Claude Code's plugin cache.
+- A continuation (SendMessage) of an agent whose dispatch was never bound to a run no longer fails with "unknown role 'null'": SubagentStart records the agent's role, and the continuation claims against the run folder its message names, or is denied with how to name it.
+
+### Open
+
+- Tried against the fakes only. Setting auto-merge again on a GitLab merge request that already has it is assumed to succeed.

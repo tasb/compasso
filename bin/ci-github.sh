@@ -8,6 +8,8 @@
 #   compasso-e2e             the repo's e2e command, when set                      (gate)
 #   compasso-coverage        the coverage command, then diff-cover on changed lines (warning, never fails)
 #   compasso-scan-gate       Gitleaks and Semgrep; fails on any secret or high finding (gate; only with --scans compasso)
+# In stage mvp only verify and the scans run on each pull request: e2e and coverage come back when the
+# stage is production and this runs again (setup does).
 # Scans: GitHub's own (CodeQL and secret scanning, set up by `github.sh protect`) where the
 # repository has them - public, or private with Advanced Security - otherwise Compasso's.
 # Without --scans the choice comes from the tracker check.
@@ -35,6 +37,7 @@ case "$SCANS" in github|compasso) ;; *) echo "ci: --scans is github or compasso"
 image="$(cfg .ci.image)"
 [ -n "$image" ] || { echo "ci: set ci.image in .compasso/project.yaml to the image that has the repo's toolchain" >&2; exit 1; }
 yq_str() { v="$1" yq -n 'strenv(v)' ; }   # a YAML-safe scalar for any command string
+full=1; [ "$(cfg .stage)" = mvp ] && full=0   # mvp: no e2e or coverage job on each merge request
 
 run_lines=""
 for k in test lint typecheck build; do
@@ -63,7 +66,7 @@ jobs:
 $run_lines
 EOF
   c="$(cfg .commands.e2e)"
-  if [ -n "$c" ]; then
+  if [ -n "$c" ] && [ "$full" = 1 ]; then
     cat <<EOF
   compasso-e2e:
     runs-on: ubuntu-latest
@@ -75,7 +78,7 @@ EOF
 EOF
   fi
   c="$(cfg .coverage.command)"
-  if [ -n "$c" ]; then
+  if [ -n "$c" ] && [ "$full" = 1 ]; then
     report="$(cfg .coverage.report)"
     cat <<EOF
   compasso-coverage:

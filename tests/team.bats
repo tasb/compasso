@@ -20,12 +20,12 @@ setup() {
   issue 6  "Invoice history" '["type::feature","dev::ana"]' '**Goal:** g'
   issue 7  "Invoice PDF" '["type::feature"]' '**Goal:** g'
   issue 12 "S20: goal" '["type::epic"]' '**Goal:** g'
-  issue 11 "Year filter" '[]' $'**Tests:** unit\\\n**Touches:** `src/filter/**`' 6
-  issue 14 "Status filter" '["dev::rui"]' $'**Tests:** unit\\\n**Touches:** `src/status/**`' 6
-  issue 16 "Export CSV" '["dev::ana"]' $'**Tests:** unit\\\n**Touches:** `src/export/**`' 6
-  issue 9  "PDF endpoint" '["blocked"]' '**Tests:** unit' 7
+  issue 11 "Year filter" '[]' "$READY"$'**Tests:** unit\\\n**Touches:** `src/filter/**`' 6
+  issue 14 "Status filter" '["dev::rui"]' "$READY"$'**Tests:** unit\\\n**Touches:** `src/status/**`' 6
+  issue 16 "Export CSV" '["dev::ana"]' "$READY"$'**Tests:** unit\\\n**Touches:** `src/export/**`' 6
+  issue 9  "PDF endpoint" '["blocked"]' "$READY"'**Tests:** unit' 7
   issue 13 "PDF credentials" '["type::blocker","priority::urgent"]' '## Steps'
-  issue 15 "Empty page 2" '["type::bug"]' '## Expected' 7
+  issue 15 "Empty page 2" '["type::bug"]' $'## Expected\n- page 2 lists the next invoices\n\n## Verify\n- `npm test`' 7
   echo 11 > "$FAKE_GH/blocked/16"; echo 13 > "$FAKE_GH/blocked/9"
 }
 issue() { # number title labels-json body [parent]
@@ -85,13 +85,13 @@ join() { "$ROOT/bin/persona.sh" join --repo "$1"; }
 }
 
 @test "assign: work being built or in review goes back to the backlog of the developer it moves to" {
-  issue 14 "Status filter" '["dev::rui","compasso::in-review"]' $'**Tests:** unit' 6
+  issue 14 "Status filter" '["dev::rui","compasso::in-review"]' "$READY"$'**Tests:** unit' 6
   team "$REPO" assign --iid 14 --dev ana >/dev/null
   [ "$(labels_of 14)" = '["compasso::backlog","dev::ana"]' ]
 }
 
 @test "mark-backlog (upgrading): assigned, unstarted work gets compasso::backlog; work being built, in review or with no developer does not" {
-  issue 14 "Status filter" '["dev::rui","compasso::building"]' $'**Tests:** unit\\\n**Touches:** `src/status/**`' 6
+  issue 14 "Status filter" '["dev::rui","compasso::building"]' "$READY"$'**Tests:** unit\\\n**Touches:** `src/status/**`' 6
   run team "$ANA" mark-backlog --milestone S20
   [ "$status" -eq 6 ]
   run team "$REPO" mark-backlog --milestone S20
@@ -274,9 +274,9 @@ sync() { "$ROOT/bin/tracker.sh" sprint-sync --repo "$1" --read-only --milestone 
 }
 
 @test "sprint-sync: work with no developer says whether it can start and how much waits on it, the most first" {
-  issue 17 "Tax rules" '[]' '**Tests:** unit'
-  issue 18 "Tax report" '["dev::rui"]' '**Tests:** unit'
-  issue 19 "Tax export" '[]' '**Tests:** unit'
+  issue 17 "Tax rules" '[]' "$READY"'**Tests:** unit'
+  issue 18 "Tax report" '["dev::rui"]' "$READY"'**Tests:** unit'
+  issue 19 "Tax export" '[]' "$READY"'**Tests:** unit'
   echo 17 > "$FAKE_GH/blocked/18"; echo 18 > "$FAKE_GH/blocked/19"
   [ "$(sync "$REPO" | jq -c '[.team.unassigned[] | [.iid, .ready, .holds]]')" = '[[17,true,1],[15,true,0],[19,false,0]]' ]
 }
@@ -300,6 +300,22 @@ sync() { "$ROOT/bin/tracker.sh" sprint-sync --repo "$1" --read-only --milestone 
   s="$(sync "$ANA")"
   [ "$(jq -c '[.next_batch[].iid]' <<<"$s")" = '[]' ]
   [ "$(jq -c '[.team.needs_lead[] | [.iid, .dev]]' <<<"$s")" = '[[11,"ana"]]' ]
+}
+
+@test "sprint-sync: a story with no Acceptance or Verify, or whose developer is not in the team, is not ready: never built nor assigned" {
+  issue 17 "No verify" '["dev::ana"]' $'## Acceptance\n- [ ] Given x, When y, Then z\n\n**Tests:** unit' 6
+  issue 18 "No acceptance" '[]' $'## Verify\n- `npm test`\n\n**Tests:** unit' 7
+  issue 19 "Left the team" '["dev::zed"]' "$READY"'**Tests:** unit' 7
+  issue 20 "A bug with nothing to check" '["type::bug"]' '## Expected' 7
+  run "$ROOT/bin/tracker.sh" sprint-sync --repo "$REPO" --read-only --milestone S20
+  [ "$(jq -c '[.team.not_ready[] | [.iid, .missing]]' <<<"$output")" = '[[17,["verify"]],[18,["acceptance"]],[19,["developer"]],[20,["acceptance","verify"]]]' ]
+  [ "$(jq -c '[.team.unassigned[].iid] | map(select(. >= 17))' <<<"$output")" = '[]' ]
+  [ "$(jq -c '[.runnable[].iid] | map(select(. >= 17))' <<<"$output")" = '[]' ]
+  [ "$(jq -c '[.team.load[] | select(.dev == "ana") | .ready]' <<<"$output")" = '[0]' ]
+  run "$ROOT/bin/tracker.sh" sprint-sync --repo "$ANA" --read-only --milestone S20
+  [ "$(jq -c '[.next_batch[].iid] | map(select(. >= 17))' <<<"$output")" = '[]' ]
+  run team "$REPO" inbox --milestone S20
+  [[ "$output" == *"Not ready (fix the story first): #17 No verify (verify); #18 No acceptance (acceptance); #19 Left the team (developer zed); #20 A bug with nothing to check (acceptance, verify)"* ]] || false
 }
 
 @test "sprint-sync: without a team nothing changes: no dev, no team block" {

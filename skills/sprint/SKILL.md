@@ -23,8 +23,8 @@ Move the sprint forward as far as it can go, then say exactly what waits and on 
    - **One checkout per story.** Items in one batch never touch overlapping paths. Give each its own worktree inside the repository, `git worktree add .compasso/worktrees/<iid> -b story/<iid>-<short-slug> <base>` (the base as the story flow's step 3 says). Its run folder stays `.compasso/runs/<iid>` in this repository. In the story flow for that story, `.` means its worktree: pass `--repo .compasso/worktrees/<iid>` to the scripts and run git and the repo's commands there, and tell every agent to work in `.compasso/worktrees/<iid>`.
    - **Step by step, in parallel.** Follow the story flow (`${CLAUDE_PLUGIN_ROOT}/skills/story/SKILL.md`) for every story of the batch at once. At each step that dispatches agents, dispatch that step's agents for all the stories in one message, so they run at the same time, each with its own run folder in its prompt. Then run each story's checks (verify, coverage, review gate) and decide its next step. A story that stops (a budget refusal, a hand-back, a failing gate after its last attempt) leaves the batch; the others continue.
    - When a story's flow ends, `git worktree remove .compasso/worktrees/<iid>`.
-   - With `approvals.merge: human`, and in a team project (the tech lead merges), stories that depend on an item of this batch wait for its merge request to be merged: stop after the batch and report.
-   - With `approvals.merge: agent`, repeat steps 2 and 3 while `next_batch` is not empty.
+   - With `approvals.merge: human`, stories that depend on an item of this batch wait for its merge request to be merged: stop after the batch and report.
+   - With `approvals.merge: agent`, and in a team project (a developer keeps building), repeat steps 2 and 3 while `next_batch` is not empty: a story that waits on a merge request still open is not in it.
 
 4. **Verify finished features.** For each feature with `ready_to_verify`:
    - `tracker.sh set-state --iid <feature> --state verifying`.

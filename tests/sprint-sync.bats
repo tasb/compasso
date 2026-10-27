@@ -120,6 +120,15 @@ field() { sync | jq -c "$1"; }
   [ "$(field '[.runnable[] | has("stack_on")] | any')" = false ]
 }
 
+@test "a story whose paths overlap a merge request still open waits until it merges" {
+  add 16 task "Export CSV" opened '["owner::agent","compasso::in-review"]' $'**Tests:** unit\\\n**Touches:** `src/billing/filter/**`' 6
+  echo "$items" > "$FAKE_GL/issue-query.json"
+  [ "$(field '[.runnable[].iid]')" = '[]' ]
+  [ "$(field '[.waiting[] | select(.iid == 11 or .iid == 14) | [.iid, .on]]')" = '[[11,[16]],[14,[16]]]' ]
+  items="$(jq -c 'map(if .iid == 16 then .state = "closed" else . end)' <<<"$items")"; echo "$items" > "$FAKE_GL/issue-query.json"
+  [ "$(field '[.runnable[].iid]')" = '[11,14]' ]
+}
+
 @test "--read-only reports the same sprint and changes nothing on the tracker" {
   run "$ROOT/bin/tracker/gitlab.sh" sprint-sync --repo "$REPO" --milestone S20 --read-only
   [ "$status" -eq 0 ]

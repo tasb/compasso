@@ -30,6 +30,7 @@ while [ $# -gt 0 ]; do
     *) echo "status: unknown argument '$1'" >&2; exit 2 ;;
   esac
 done
+"$BIN/version.sh"   # warns on stderr when an older Compasso runs than the newest installed
 PLAN="$REPO/.compasso/plan.yaml"
 RUNS="$REPO/.compasso/runs"
 

@@ -51,6 +51,7 @@ text:
   cov_below: "abaixo do mínimo: {p}% de {min}% · por cobrir: {list}"
   not_measured: não medida
   merge_low: "risco baixo, pode ser integrado sem uma pessoa ({lines} linhas alteradas em {files} arquivos, nada sensível)"
+  merge_low_sensitive: "risco baixo no MVP, pode ser integrado sem uma pessoa ({lines} linhas alteradas em {files} arquivos), mas mexe em caminhos sensíveis: {list}"
   merge_person: "uma pessoa aprova: {reasons}"
   risk_sensitive: "{file} é um caminho sensível ({glob})"
   risk_build: "{file} altera o build, a pipeline, a configuração do Compasso ou as dependências"
@@ -118,9 +119,11 @@ text:
   followup_who: quem mantém o código
   followup_want: esta finding resolvida
   followup_so: "{summary} deixe de se aplicar"
-  followup_given: "Dado {where}, Quando for revisto de novo, Então a finding \"{summary}\" deixa de se aplicar"
-  followup_code_from: "o código de #{story}"
-  followup_tests: os testes do repositório
+  legacy_closed: "Fechado: a aceitação deste follow-up (\"revisto de novo\") não é algo que um teste possa verificar. A finding veio de #{story}; se ainda valer a pena, uma pessoa a cria de novo como uma story com aceitação que um teste possa verificar."
+  minors_title: "Achados minor da #{story}: {title}"
+  minors_as: o time
+  minors_want: "os achados minor da #{story} corrigidos"
+  minors_so: o que a revisão encontrou durante o MVP não se perca
   rec_findings: Constatações
   rec_decisions: Decisões
   rec_takeaways: Aprendizados
