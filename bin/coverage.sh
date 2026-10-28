@@ -7,8 +7,9 @@
 # Runs coverage.command, then diff-cover on coverage.report. A changed file under
 # coverage.paths that is missing from the report counts as fully uncovered.
 # --min defaults to coverage.min_changed (the story flow passes the resolved one).
-# Writes DIR/coverage.json: {status, percent, min, uncovered: ["file:line"...]}.
-# Exit: 0 at or above min, or nothing changed | 3 below min, or not measured | 2 usage
+# Writes DIR/coverage.json: {status, percent, min, uncovered: ["file:line"...]}, and the
+# command's seconds to DIR/events.jsonl. In stage mvp it is skipped: status "skipped", nothing runs.
+# Exit: 0 at or above min, nothing changed, or skipped | 3 below min, or not measured | 2 usage
 set -u
 case "${1:-}" in -h|--help) sed -n '2,/^set -u/s/^# \{0,1\}//p' "$0"; exit 0 ;; esac   # the header above is the help
 set -f   # coverage.paths are patterns
@@ -36,11 +37,15 @@ result() { # status percent uncovered-json
 }
 not_measured() { echo "coverage: not measured - $1"; result not-measured null '[]'; exit 3; }
 
+if [ "$(cfg .stage)" = mvp ]; then echo "coverage: skipped in stage mvp"; result skipped null '[]'; exit 0; fi
 git -C "$REPO" rev-parse --verify --quiet "$BASE^{commit}" >/dev/null || not_measured "base '$BASE' does not resolve"
 cmd="$(cfg .coverage.command)"; report="$(cfg .coverage.report)"
 [ -n "$cmd" ] || not_measured "no coverage.command in .compasso/project.yaml"
 command -v diff-cover >/dev/null || not_measured "diff-cover is not installed"
-( cd "$REPO" && bash -c "$cmd" ) > "$RUN/coverage-command.log" 2>&1 || not_measured "coverage.command failed (see coverage-command.log)"
+t0=$SECONDS; ( cd "$REPO" && bash -c "$cmd" ) > "$RUN/coverage-command.log" 2>&1; rc=$?
+jq -cn --arg at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg s "$([ "$rc" -eq 0 ] && echo pass || echo fail)" --argjson t $((SECONDS - t0)) \
+  '{at: $at, type: "verify", label: "coverage", status: $s, seconds: $t}' >> "$RUN/events.jsonl"
+[ "$rc" -eq 0 ] || not_measured "coverage.command failed (see coverage-command.log)"
 [ -f "$REPO/$report" ] || not_measured "coverage.command did not write $report"
 
 ( cd "$REPO" && diff-cover "$report" --compare-branch="$BASE" --include-untracked \

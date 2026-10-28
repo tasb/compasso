@@ -49,6 +49,7 @@ text:
   open: em aberto
   cov_ok: "{p}% das linhas alteradas (mín. {min}%)"
   cov_below: "abaixo do mínimo: {p}% de {min}% · por cobrir: {list}"
+  cov_skipped: não medida no MVP
   not_measured: não medida
   merge_low: "risco baixo, pode ser integrado sem uma pessoa ({lines} linhas alteradas em {files} ficheiros, nada sensível)"
   merge_low_sensitive: "risco baixo no MVP, pode ser integrado sem uma pessoa ({lines} linhas alteradas em {files} ficheiros), mas toca em caminhos sensíveis: {list}"
@@ -252,6 +253,8 @@ ui:
     avgPerStory: média por story
     bugsFound: Bugs encontrados
     bugsNote: "{e2e} pelos testes das funcionalidades · {testers} pelos testadores"
+    verifyTime: Tempo a correr verificações
+    verifyTimeNone: não registado
     testGuide: Guia de testes
     pctWork: "{p}% funcionam"
     guideNote: "{pass} funcionam · {fail} não · {blocked} não testáveis"

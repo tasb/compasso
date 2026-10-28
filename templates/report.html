@@ -294,6 +294,9 @@
   tile(qt, u('testGuide'), tg ? fmt('pctWork', { p: Math.round(100 * tg.pass / Math.max(1, tg.pass + tg.fail)) }) : '—',
     tg ? fmt('guideNote', { pass: tg.pass, fail: tg.fail, blocked: tg.blocked }) : u('noResults'));
   tile(qt, u('coverage'), q.coverage_avg == null ? '—' : q.coverage_avg + '%', u('avgPerStory'));
+  var vm = q.verify_minutes || {}, vk = Object.keys(vm);
+  tile(qt, u('verifyTime'), vk.length ? dur(vk.reduce(function (s, k) { return s + vm[k]; }, 0)) : '—',
+    vk.length ? vk.map(function (k) { return k + ' ' + dur(vm[k]); }).join(' · ') : u('verifyTimeNone'));
   var qc = el('div', { 'class': 'card', style: 'margin-top:16px' }, null, app);
   el('div', { style: 'font-weight:600' }, u('findingsTitle'), qc);
   plainTable(qc, [u('foundBy'), u('blocker'), u('major'), u('minor'), u('total')], ['reviewer', 'security'].map(function (k) {

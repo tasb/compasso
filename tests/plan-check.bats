@@ -88,11 +88,14 @@ json() { pc --json | jq -r "$1"; }
   [[ "$output" == *"epic.goal is required"* ]] || false
 }
 
-@test "unit tests are always required" {
+@test "a story names at least one test level; e2e alone is enough" {
   plan_set '.features[0].stories[0].tests = ["e2e"]'
   run pc
+  [[ "$output" != *"S-1: tests"* ]] || false
+  plan_set '.features[0].stories[0].tests = []'
+  run pc
   [ "$status" -eq 1 ]
-  [[ "$output" == *"S-1: tests must include unit"* ]] || false
+  [[ "$output" == *"S-1: tests is required"* ]] || false
 }
 
 @test "an unknown owner is refused" {

@@ -178,7 +178,7 @@ A gate stops the flow. A check reports and never stops it.
 - **Story contract.** A story needs Acceptance and Verify before it is built. A story that cannot be tested goes back to the planner.
 - **Verify commands approved.** A story's Verify commands are tracker text, so they run only after a person approved each exact command on this machine, or when the plan on the default branch lists that command for that story. Plans ask once for all their stories; a command edited later asks again. In `stage: mvp` none is asked, unless `trust.mvp_approval` is true.
 - **Test immutability.** Test files are hashed after the tester writes them, and the builder may never change them.
-- **Verify.** Tests, lint, typecheck, build, the story's own Verify commands and e2e run before review, before the merge request and in CI; a Verify command the same as one of the repo's runs once. In `stage: mvp` each merge request's pipeline runs verify and the security scans only: e2e and coverage come back in `production`.
+- **Verify.** Tests, lint, typecheck, build, the story's own Verify commands and e2e run before review, before the merge request and in CI; a Verify command the same as one of the repo's runs once, and e2e runs last, only when the rest passed. Each acceptance line is tested once, at the cheapest level that can observe it, and a finished feature gets e2e only for what its stories' tests left out. In `stage: mvp` each merge request's pipeline runs verify and the security scans only, and the story flow measures no coverage: e2e and coverage come back in `production`.
 - **Findings.** Every finding is fixed in its story, minors too, except a minor whose fix needs someone else (filed for that person). In `stage: mvp` only blocker and major findings must be fixed: a story's open minors are filed together as one issue for after the MVP (`compasso::after-mvp`, in no sprint), each with an acceptance line its reviewer wrote. Anything that can leak or destroy data, widen access, fail open or break production is at least major.
 - **Security review.** Runs on every plan, every merge request and at sprint end, and is never skipped. Only security can close a security finding, and no approval mode merges with one open.
 - **Scan gate.** Any high or critical SAST finding, or any secret, blocks the merge request.
@@ -192,7 +192,7 @@ Eight roles, each defined once in `roles/`, each with its own model per harness 
 | Role | What it does | Claude default |
 |---|---|---|
 | planner | Q&A, breakdown into one-day stories, dependencies | opus |
-| tester | Writes the failing tests first: unit always, e2e when the story asks | sonnet |
+| tester | Writes the failing tests first: each acceptance line once, unit or e2e | sonnet |
 | builder | Makes the tests pass with the smallest change and fixes findings. Never edits a test | sonnet |
 | reviewer | One-pass review: correctness, regressions, simplicity, tests, docs | sonnet |
 | security | Mandatory security review of plans, merge requests and sprints | opus |

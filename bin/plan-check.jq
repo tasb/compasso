@@ -68,7 +68,6 @@ def hours: (.estimate_h | numbers) // 0;
                 then "\($s.key): dev '\($d)' is not a developer's name" else empty end)
          elif ($s.owner // "") | IN("agent", "human", "either") | not
            then "\($s.key): owner must be agent, human or either" else empty end),
-        (if ($s.tests // []) | index("unit") | not then "\($s.key): tests must include unit" else empty end),
         # a story on a sensitive path needs security's abuse cases in its acceptance before it is built
         ([($s.touches // [])[] | glob_prefix] as $t
           | [($c.sensitive // [])[] | . as $g | glob_prefix as $p

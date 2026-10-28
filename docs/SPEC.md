@@ -279,7 +279,8 @@ read the feature and the code
 → approval in the chat (approvals.plan: human), or automatic when security found nothing (auto)
 → push the stories; a Plan comment records the breakdown, the security result and who approved
 → compasso::building: story flows in dependency waves
-→ compasso::verifying: feature e2e + full suite; each failure becomes a Bug fixed through the story flow
+→ compasso::verifying: e2e for the feature's acceptance lines its stories' e2e left out, + full suite and e2e;
+  each failure becomes a Bug fixed through the story flow
 → compasso::done: the feature's section of the test guide is written
 ```
 
@@ -294,7 +295,7 @@ gitlab.sh story → stop if not an open task, if a Depends on / Blocked by item 
                   (naming the blocker's assignee), if Acceptance or Verify is missing,
                   or if owner::human (unless the user confirms)
 → branch story/<iid>-<slug> from origin/<default>; state compasso::building
-→ tester: failing tests (unit; e2e when the story's tests include it)
+→ tester: failing tests, each acceptance line once (unit, or e2e when it needs the boundary)
   → confirm they fail → commit them on their own (TESTS) → test-hashes record
 → builder: go green → test-hashes verify (violation: restore from TESTS, one retry)
   → verify.sh (gate; 3 attempts)
@@ -346,7 +347,7 @@ A **gate** stops the flow; a **check** reports and never stops it.
 | Story has Acceptance + Verify | story flow start | gate |
 | Verify commands approved by a person (`trust.sh`) | plan approval, story start, `verify.sh` | gate: tracker text never runs unapproved |
 | Test immutability (hashes) | after each builder turn | gate |
-| `verify.sh`: tests, lint, typecheck, build, the story's Verify commands, e2e | before review, before the MR, and in the MR pipeline | gate |
+| `verify.sh`: tests, lint, typecheck, build, the story's Verify commands, then e2e only when they all passed | before review, before the MR, and in the MR pipeline | gate |
 | Security review | every plan, every MR, sprint end | gate, never skippable |
 | SAST and secret detection scans | every MR pipeline | gate: `compasso-scan-gate` fails on any high or critical finding, and fails closed when secret detection did not run |
 | Merge approval | every MR | gate: human by default, platform-enforced through protected branches |
@@ -371,12 +372,13 @@ What happened to Harmonia's gates:
 - Line coverage only; e2e tests do not contribute.
 - Below the threshold: exit 3, shown as a warning (`allow_failure: exit_codes: [3]` in the pipeline) and in the MR's Review section with the uncovered lines. It never blocks a merge, human or agent approval.
 - No `coverage.command`: "not measured", never a pass.
+- In `stage: mvp` it is skipped: nothing runs, status `skipped`, the MR says "not measured in the MVP".
 - The pipeline job also publishes the report as a `coverage_report` artifact so GitLab shows covered lines in the MR diff.
 
 ## 7. Tests
 
-- Unit tests always.
-- E2E tests when the change is observable across a boundary (UI flow, public API, CLI, service integration). Every feature with a UI or API gets feature-level e2e.
+- Each acceptance line is tested once, at the cheapest level that can observe it: unit for logic, rules, edge and abuse cases; e2e for a line that needs the real boundary (UI flow, public API, CLI, service integration). A story's tests are `unit`, `e2e` or both.
+- A finished feature gets e2e tests only for the acceptance lines its stories' e2e tests did not cover; then the whole suite and e2e run.
 - `setup` records the `e2e:` command, detecting the framework (Playwright for web, the project's runner for API, bats for CLI).
 
 ## 8. Test guide (sprint deliverable)
@@ -479,7 +481,7 @@ Decided 2026-09-24: one HTML sprint report, on demand (`/compasso:report`) and a
 
 - **Delivery:** planned vs done hours, stories done and open, burn-down, carry-over, velocity over past sprints, time stories wait on blockers.
 - **Flow and waiting:** cycle time per story (building to merged) and how long merge requests wait for a person.
-- **Quality:** review and security findings by severity, review rounds, bugs found by feature e2e and by testers, test guide pass rate, coverage.
+- **Quality:** review and security findings by severity, review rounds, bugs found by feature e2e and by testers, test guide pass rate, coverage, and the minutes spent running each verify command and coverage.
 - **Agent effort and cost:** agent time and tokens per story and per role, estimate vs agent time; cost only when prices are configured.
 - **Sources:** GitLab (stories, estimates, label history, merge requests, milestones of past sprints), each story's `.compasso/metrics/<iid>.json` committed in its merge request (so run data survives the local run folder), and testers' results committed under `docs/releases/`.
 - **Built as:** `bin/story-metrics.sh` (the story flow records each agent run with the tokens and time the harness reports, and each review round, verify failure, test violation and re-plan, then writes `.compasso/metrics/<iid>.json` into the story's merge request); `bin/metrics.sh collect` (GitLab plus those files, counted to the report's date); `bin/report.sh` renders `templates/report.html`, a self-contained page with a table view for every chart; `/compasso:report`. Optional `metrics.prices` (per million tokens, per model) adds approximate cost.
@@ -976,3 +978,14 @@ Decided with the user after a team's retrospective in `mvp` (the tech lead's and
 ### Open
 
 - Tried against the fakes only. Setting auto-merge again on a GitLab merge request that already has it is assumed to succeed.
+
+## 36. Balanced tests (2026-10-27)
+
+The GoSales sprint 1 report: the tester was the costliest role (328 runs, 16.7M tokens, 829 agent minutes, more than the builder's 716), and the same acceptance line was often tested three times: a unit test and an e2e test in its story, and e2e again for the feature.
+
+- **One level per acceptance line.** The planner chooses each story's `tests` by line: unit for logic, rules, edge and abuse cases; e2e only for a line that needs the real boundary. A story's tests are `unit`, `e2e` or both (`plan-check` no longer requires `unit`; an empty list is still refused). The tester never tests one line at both levels unless the e2e test checks the wiring itself.
+- **No tests of prose.** The tester refuses tests that pin the wording of docstrings, comments or documentation; the reviewer files a wrong comment as a finding to fix in its text. In GoSales such tests produced rounds of follow-ups about words, not behaviour.
+- **Feature e2e fills gaps.** When a feature's stories are merged, the tester reads their e2e tests and writes e2e only for the feature's acceptance lines none covers. With none to write there is no e2e merge request; the whole suite and e2e still run (`verify.sh --e2e`), and so does the regression at sprint close.
+- **E2e last.** `verify.sh` runs e2e after every other command and only when they all passed: a failing attempt no longer pays for the slowest suite.
+- **No local coverage in `mvp`.** `coverage.sh` is skipped there (status `skipped`), as the MVP pipeline already leaves the coverage job out and risk ignores coverage.
+- **Time is measured.** `verify.sh` and `coverage.sh` record each command's seconds (`verify.json`, and `verify` events in the run's `events.jsonl`); a story's metrics sum them by label (`verify_seconds`) and the sprint report shows the minutes per label (`quality.verify_minutes`).

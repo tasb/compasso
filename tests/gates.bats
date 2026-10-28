@@ -210,6 +210,40 @@ findings() { echo "$1" > "$BATS_TEST_TMPDIR/f.json"; "$ROOT/bin/review-gate.sh" 
   [[ "$output" == *"PASS  [e2e] echo e2e-ran"* ]] || false
 }
 
+@test "verify: e2e runs last, and only when every other command passed" {
+  cfg_set ".commands.test = \"false\" | .commands.lint = \"true\" | .commands.e2e = \"touch $BATS_TEST_TMPDIR/e2e-ran\""
+  story '["unit","e2e"]' 'echo story-check'
+  run "$ROOT/bin/verify.sh" --repo . --run "$RUN" --story "$BATS_TEST_TMPDIR/story.json"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"SKIP  [e2e] touch $BATS_TEST_TMPDIR/e2e-ran - an earlier command failed"* ]] || false
+  [ ! -e "$BATS_TEST_TMPDIR/e2e-ran" ]
+  [ "$(jq -r 'map(.label) | join(",")' "$RUN/verify.json")" = "test,lint,story" ]
+  cfg_set '.commands.test = "echo ok"'
+  run "$ROOT/bin/verify.sh" --repo . --run "$RUN" --story "$BATS_TEST_TMPDIR/story.json"
+  [ "$status" -eq 0 ]
+  [ "$(jq -r 'map(.label) | join(",")' "$RUN/verify.json")" = "test,lint,story,e2e" ]
+}
+
+@test "verify: --e2e runs the e2e command without a story, and fails without one" {
+  cfg_set '.commands.test = "true" | .commands.e2e = "echo e2e-ran"'
+  run "$ROOT/bin/verify.sh" --repo . --run "$RUN" --e2e
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"PASS  [e2e] echo e2e-ran"* ]] || false
+  cfg_set 'del(.commands.e2e)'
+  run "$ROOT/bin/verify.sh" --repo . --run "$RUN" --e2e
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"commands.e2e is empty"* ]] || false
+}
+
+@test "verify: each command's time is in verify.json and in the run's events" {
+  cfg_set '.commands.test = "sleep 1" | .commands.lint = "true"'
+  run "$ROOT/bin/verify.sh" --repo . --run "$RUN"
+  [ "$status" -eq 0 ]
+  [ "$(jq -c 'map([.label, (.seconds | type)])' "$RUN/verify.json")" = '[["test","number"],["lint","number"]]' ]
+  [ "$(jq '.[0].seconds >= 1' "$RUN/verify.json")" = true ]
+  [ "$(jq -sc 'map(select(.type == "verify") | [.label, .status, (.seconds | type), (.at | type)])' "$RUN/events.jsonl")" = '[["test","pass","number","string"],["lint","pass","number","string"]]' ]
+}
+
 @test "verify: a story that needs e2e fails without an e2e command" {
   cfg_set '.commands.test = "true"'
   story '["unit","e2e"]'
@@ -243,6 +277,25 @@ cov() { "$ROOT/bin/coverage.sh" --repo . --base main --run "$RUN" "$@"; }
   [ "$status" -eq 3 ]
   [[ "$output" == *"not measured - no coverage.command"* ]] || false
   [ "$(jq -r .status "$RUN/coverage.json")" = not-measured ]
+}
+
+@test "coverage: skipped in stage mvp, without running the command" {
+  change_a
+  cfg_set ".stage = \"mvp\" | .coverage.command = \"touch $BATS_TEST_TMPDIR/cov-ran\" | .coverage.report = \"cov.xml\""
+  run cov
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"coverage: skipped in stage mvp"* ]] || false
+  [ ! -e "$BATS_TEST_TMPDIR/cov-ran" ]
+  [ "$(jq -c '[.status, .percent]' "$RUN/coverage.json")" = '["skipped",null]' ]
+}
+
+@test "coverage: the coverage command's time is in the run's events" {
+  change_a
+  cobertura "src/a.py=1:1 2:1 4:1 5:1 6:1 7:1"
+  cfg_set '.coverage.command = "true" | .coverage.report = "cov.xml"'
+  run cov
+  [ "$status" -eq 0 ]
+  [ "$(jq -sc 'map(select(.type == "verify") | [.label, (.seconds | type)])' "$RUN/events.jsonl")" = '[["coverage","number"]]' ]
 }
 
 @test "coverage: at or above the threshold passes with the percentage" {

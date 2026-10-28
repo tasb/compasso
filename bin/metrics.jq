@@ -70,6 +70,8 @@ $items[0] as $items | $sync[0] as $sync | $history[0] as $history | $files[0] as
     test_guide: (if ($results | length) == 0 then null else
       ([$results[].results[]] | {pass: map(select(.status == "pass")) | length, fail: map(select(.status == "fail")) | length,
         blocked: map(select(.status == "blocked")) | length, not_tested: map(select(.status == "not-tested")) | length}) end),
+    verify_minutes: ([$files[].verify_seconds // {} | to_entries[]] | group_by(.key)
+      | map({key: .[0].key, value: (map(.value) | add / 60 | r1)}) | from_entries),
     coverage_avg: ([$files[].coverage | select(. != null and .percent != null) | .percent] as $c
       | if ($c | length) == 0 then null else ($c | add / length | round) end)
   },

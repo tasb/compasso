@@ -17,6 +17,9 @@ sm() { "$ROOT/bin/story-metrics.sh" "$@"; }
   sm agent --run "$RUN" --role security --model opus
   sm event --run "$RUN" --type verify-fail
   sm event --run "$RUN" --type round
+  printf '%s\n' '{"at":"2026-10-06T10:00:00Z","type":"verify","label":"test","status":"fail","seconds":30}' \
+    '{"at":"2026-10-06T10:01:00Z","type":"verify","label":"e2e","status":"pass","seconds":90}' \
+    '{"at":"2026-10-06T10:02:00Z","type":"verify","label":"test","status":"pass","seconds":40}' >> "$RUN/events.jsonl"
   run sm write --run "$RUN" --repo "$REPO"
   [ "$status" -eq 0 ]
   m="$REPO/.compasso/metrics/8.json"
@@ -24,6 +27,7 @@ sm() { "$ROOT/bin/story-metrics.sh" "$@"; }
   [ "$(jq -c '.findings' "$m")" = '{"reviewer":{"blocker":0,"major":0,"minor":1},"security":{"blocker":0,"major":1,"minor":1}}' ]
   [ "$(jq '.security_open' "$m")" = 1 ]
   [ "$(jq -c '.coverage' "$m")" = '{"status":"below","percent":72,"min":80}' ]
+  [ "$(jq -c '.verify_seconds' "$m")" = '{"e2e":90,"test":70}' ]
   [ "$(jq -c '.agents' "$m")" = '[{"role":"tester","model":"sonnet","tokens":1000,"ms":60000},{"role":"security","model":"opus"}]' ]
 }
 
@@ -66,11 +70,11 @@ collect_setup() {
   jq -n '[{action: "add", label: {name: "compasso::building"}, created_at: "2026-10-07T10:00:00Z"},
           {action: "add", label: {name: "compasso::in-review"}, created_at: "2026-10-07T12:00:00Z"}]' > "$FAKE_GL/events/11.json"
   mkdir -p "$REPO/.compasso/metrics" "$REPO/docs/releases/S20-results"
-  jq -n '{iid: 8, title: "List API", estimate_h: 4, review_rounds: 2, security_open: 0, coverage: {status: "ok", percent: 100, min: 80},
+  jq -n '{iid: 8, title: "List API", estimate_h: 4, review_rounds: 2, security_open: 0, coverage: {status: "ok", percent: 100, min: 80}, verify_seconds: {test: 600, e2e: 300},
           findings: {reviewer: {blocker: 0, major: 1, minor: 0}, security: {blocker: 0, major: 1, minor: 1}},
           agents: [{role: "tester", model: "sonnet", tokens: 2000000, ms: 120000}, {role: "security", model: "opus", tokens: 1000000, ms: 60000}]}' \
     > "$REPO/.compasso/metrics/8.json"
-  jq -n '{iid: 99, title: "Another sprint", review_rounds: 9, findings: {reviewer: {blocker: 9, major: 0, minor: 0}, security: {blocker: 9, major: 0, minor: 0}}, agents: []}' \
+  jq -n '{iid: 99, title: "Another sprint", review_rounds: 9, verify_seconds: {test: 6000}, findings: {reviewer: {blocker: 9, major: 0, minor: 0}, security: {blocker: 9, major: 0, minor: 0}}, agents: []}' \
     > "$REPO/.compasso/metrics/99.json"
   jq -n '{guide: "S20", tester: "Ana", results: [{status: "pass"}, {status: "pass"}, {status: "fail"}, {status: "blocked"}]}' > "$REPO/docs/releases/S20-results/ana.json"
   OUT="$BATS_TEST_TMPDIR/report.json"
@@ -110,6 +114,7 @@ get() { jq -c "$1" "$OUT"; }
   [ "$(get '.quality | [.findings, .security_open, .review_rounds_avg, .coverage_avg]')" = '[{"reviewer":{"blocker":0,"major":1,"minor":0},"security":{"blocker":0,"major":1,"minor":1}},0,2,100]' ]
   [ "$(get '.quality.bugs')" = '{"testers":1,"feature_e2e":1}' ]
   [ "$(get '.quality.test_guide')" = '{"pass":2,"fail":1,"blocked":1,"not_tested":0}' ]
+  [ "$(get '.quality.verify_minutes')" = '{"e2e":5,"test":10}' ]
 }
 
 @test "collect: agent effort by role and by story; no cost without prices" {

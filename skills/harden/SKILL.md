@@ -32,7 +32,7 @@ Harden one delivered feature, or every feature of an epic. It runs only when a p
 
 ## Record
 
-8. **Gaps become stories for a later sprint.** For each gap, or group of gaps about one behaviour, write a story in the Story format (what to strengthen or fix, acceptance a test can check, Verify, `Tests: unit` or `unit, e2e`, owner agent, 1–4h) and file it: `tracker.sh followup --parent <feature> --title "<title>" --body-file <story> --labels owner::agent --milestone none` (bugs from broken rules or failing live checks: `--labels type::bug,severity::<level>,owner::agent`). Put each story's iid on its gap as `story`.
+8. **Gaps become stories for a later sprint.** For each gap, or group of gaps about one behaviour, write a story in the Story format (what to strengthen or fix, acceptance a test can check, Verify, `Tests: unit`, `e2e` or both, owner agent, 1–4h) and file it: `tracker.sh followup --parent <feature> --title "<title>" --body-file <story> --labels owner::agent --milestone none` (bugs from broken rules or failing live checks: `--labels type::bug,severity::<level>,owner::agent`). Put each story's iid on its gap as `story`.
 
 9. **Report.** `bash ${CLAUDE_PLUGIN_ROOT}/bin/harden-report.sh --results RUN/results --set <set> --feature <feature> > RUN/report.md`, then `tracker.sh comment --iid <feature> --body-file RUN/report.md`.
 

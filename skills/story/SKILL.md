@@ -33,10 +33,10 @@ Build one story end to end. Scripts are in `${CLAUDE_PLUGIN_ROOT}/bin`, roles in
 
 5. **Build.** Dispatch the **builder** with `RUN/story.json`. Then:
    - `test-hashes.sh verify --repo . --run RUN`. A violation fails the round: restore the tests with `git checkout TESTS -- <each file it names>` (delete files it added), and send the builder back once; a second violation stops the flow.
-   - `bash ${CLAUDE_PLUGIN_ROOT}/bin/verify.sh --repo . --run RUN --story RUN/story.json`. On FAIL, send the builder the failing output; after 3 failed attempts stop and hand back.
+   - `bash ${CLAUDE_PLUGIN_ROOT}/bin/verify.sh --repo . --run RUN --story RUN/story.json`. E2e runs last, only when every other command passed. On FAIL, send the builder the failing output; after 3 failed attempts stop and hand back.
    - When verify passes, commit the builder's work with the message it wrote in `RUN/commit-msg.txt` (what changed and why), so every round ends on a clean tree.
 
-6. **Coverage (warning).** `bash ${CLAUDE_PLUGIN_ROOT}/bin/coverage.sh --repo . --base <base> --run RUN --min <coverage_min from story.json>`. Exit 3 is a warning: report it and continue.
+6. **Coverage (warning).** `bash ${CLAUDE_PLUGIN_ROOT}/bin/coverage.sh --repo . --base <base> --run RUN --min <coverage_min from story.json>`. Exit 3 is a warning: report it and continue. In `stage: mvp` it is skipped and runs nothing.
 
 7. **Review loop, at most 3 rounds.**
    - Write the diff (`git diff <base>` plus untracked files) to `RUN/diff.patch`.

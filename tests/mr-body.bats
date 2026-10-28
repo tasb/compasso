@@ -51,6 +51,9 @@ EOF2
   rm "$RUN/coverage.json"
   run body
   [[ "$output" == *"- Coverage: not measured"* ]] || false
+  echo '{"status":"skipped","percent":null,"min":80,"uncovered":[]}' > "$RUN/coverage.json"
+  run body
+  [[ "$output" == *"- Coverage: not measured in the MVP"* ]] || false
 }
 
 @test "no reviewer findings says so; open ones are counted" {

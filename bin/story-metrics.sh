@@ -6,7 +6,8 @@
 #   story-metrics.sh write --run DIR --repo R                                   .compasso/metrics/<iid>.json
 #
 # Runs and events are appended to DIR/events.jsonl with a timestamp. `write`
-# summarises them with DIR/story.json, DIR/findings.json and DIR/coverage.json;
+# summarises them with DIR/story.json, DIR/findings.json and DIR/coverage.json, and the
+# seconds verify.sh and coverage.sh spent per command label (their "verify" events);
 # the file is committed in the story's merge request so the numbers outlive the
 # local run folder. Tokens and time are what the harness reports; when it reports
 # none, they are left out rather than guessed.
@@ -70,6 +71,7 @@ case "$CMD" in
         security_open: ([$f[] | select(.by == "security" and (.verified_by != "security" or .status == "open"))] | length),
         verify_failures: count("verify-fail"), violations: count("violation"), replanned: (count("replan") > 0),
         coverage: (if $c == null then null else {status: $c.status, percent: $c.percent, min: $c.min} end),
+        verify_seconds: ([$e[] | select(.type == "verify")] | group_by(.label) | map({key: .[0].label, value: (map(.seconds) | add)}) | from_entries),
         agents: [$e[] | select(.type == "agent") | {role, model} + (if .tokens then {tokens} else {} end) + (if .ms then {ms} else {} end)]
       }' > "$REPO/.compasso/metrics/$iid.json"
     echo "story-metrics: wrote .compasso/metrics/$iid.json"

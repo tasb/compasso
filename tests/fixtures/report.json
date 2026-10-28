@@ -16,7 +16,7 @@
     {"title":"Invoice detail API","building_h":1.1,"waiting_h":4.0,"merged":false}]},
   "quality": {"findings": {"reviewer": {"blocker":0,"major":1,"minor":2}, "security": {"blocker":0,"major":3,"minor":2}},
     "security_open": 0, "review_rounds_avg": 1.8, "bugs": {"feature_e2e": 1, "testers": 2},
-    "test_guide": {"pass": 8, "fail": 1, "blocked": 1, "not_tested": 0}, "coverage_avg": 96},
+    "test_guide": {"pass": 8, "fail": 1, "blocked": 1, "not_tested": 0}, "coverage_avg": 96, "verify_minutes": {"e2e": 42.5, "test": 88}},
   "agents": {
     "by_role": [{"role":"tester","model":"sonnet","runs":5,"tokens":285000,"minutes":9.5},
                 {"role":"builder","model":"sonnet","runs":6,"tokens":262000,"minutes":6.1},

@@ -2,6 +2,17 @@
 
 Versions follow `version` in `.claude-plugin/plugin.json`. Claude Code updates an installed plugin only when this version changes, so every change users should receive ships in a new version.
 
+## 3.3.0 (2026-10-27)
+
+Balanced tests, from the GoSales sprint 1 report: the tester was the costliest role (16.7M tokens, 829 agent minutes, more than the builder), and an acceptance line was often tested three times. Upgrade notes for the agent: [docs/releases/3.3.0.md](docs/releases/3.3.0.md).
+
+- **Each acceptance line is tested once,** at the cheapest level that can observe it: unit for logic, rules, edge and abuse cases, e2e for a line that needs the real boundary. A story's tests may be `unit`, `e2e` or both: `plan-check` no longer requires `unit`.
+- **A finished feature gets e2e only for what its stories' tests left out.** With nothing to add there is no e2e merge request; the whole suite and e2e still run (`verify.sh --e2e`, also used by the sprint's regression).
+- **Verify runs e2e last,** only when every other command passed.
+- **No local coverage in `mvp`:** `coverage.sh` is skipped, and the merge request says "not measured in the MVP".
+- **No tests of prose.** The tester refuses tests that pin the wording of docstrings, comments or documentation; a wrong comment is fixed in its text.
+- **Time in checks is measured:** each verify command's seconds and the coverage run go to the story's metrics (`verify_seconds`) and the sprint report (`quality.verify_minutes`, a "Time running checks" tile).
+
 ## 3.2.0 (2026-10-27)
 
 MVP fast mode, from a team's retrospective in `mvp`: merges per day fell 3.9 times after 3.1.0, a merge request waited about 8 hours for the tech lead's poll, verify ran the suite twice, and developers asked most about stories they could not build. Upgrade notes for the agent: [docs/releases/3.2.0.md](docs/releases/3.2.0.md).

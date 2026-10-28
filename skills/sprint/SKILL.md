@@ -28,13 +28,13 @@ Move the sprint forward as far as it can go, then say exactly what waits and on 
 
 4. **Verify finished features.** For each feature with `ready_to_verify`:
    - `tracker.sh set-state --iid <feature> --state verifying`.
-   - On a branch `feature/<iid>-e2e` from the default branch, dispatch the **tester** to write end-to-end tests for every acceptance line of the feature (the feature's description has them), using the repo's e2e framework.
-   - Run the whole suite and e2e (`verify.sh --repo . --run RUN/feature-<iid>`). For every failing test, file a Bug under the feature: `tracker.sh followup --parent <feature> --title <what fails> --body-file <Bug format> --labels type::bug,severity::<blocker|major|minor>,owner::agent`, with the failing test as its Verify. Mark those tests skipped with a reference to the bug, so the passing ones can ship.
+   - On a branch `feature/<iid>-e2e` from the default branch, dispatch the **tester** to write end-to-end tests for the feature's acceptance lines (the feature's description has them) that the e2e tests of its stories do not cover yet, using the repo's e2e framework. When they cover every line it writes none: there is no e2e merge request, and the feature only needs the run below.
+   - Run the whole suite and e2e (`verify.sh --repo . --run RUN/feature-<iid> --e2e`). For every failing test, file a Bug under the feature: `tracker.sh followup --parent <feature> --title <what fails> --body-file <Bug format> --labels type::bug,severity::<blocker|major|minor>,owner::agent`, with the failing test as its Verify. Mark those tests skipped with a reference to the bug, so the passing ones can ship.
    - Ship the tests like a story: review and mandatory security review loop, shipper, merge request "Add end-to-end tests for #<feature>".
-   - When the feature is `ready_to_finish` (all its stories and bugs closed) and its e2e merge request is merged: `tracker.sh set-state --iid <feature> --state done`. A person closes the feature.
+   - When the feature is `ready_to_finish` (all its stories and bugs closed) and its e2e merge request, if it had one, is merged: `tracker.sh set-state --iid <feature> --state done`. A person closes the feature.
 
 5. **Close the sprint** when `sprint_done` is true:
-   - Regression: `verify.sh` on the default branch with the e2e command.
+   - Regression: `verify.sh --repo . --run RUN/sprint --e2e` on the default branch.
    - Security pass over everything the sprint changed: write `git diff <last commit of the default branch before the sprint's start date>..origin/<default branch>` (`git rev-list -1 --before=<start> origin/<default branch>`) to `RUN/sprint.patch` and dispatch **security** with it: security only reads files, it cannot run commands. Every finding becomes a Bug on the epic's feature it touches (or on the epic), severity as found.
    - The test guide, for business testers: the **shipper** writes `docs/releases/S<n>-test-guide.json` in the project's `language`, for people who do not know the code:
      - one entry per feature a person can try on a screen, with what is new and why it matters in plain words, what to prepare (accounts, data, where: `test_guide.where`), and scenarios turned from the feature's acceptance into steps and an expected result a person can see. No work items, merge requests, commits, status codes or file names. Security fixes become plain scenarios ("try to open another customer's invoice: you are told you have no access").

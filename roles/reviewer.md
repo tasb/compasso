@@ -12,7 +12,7 @@ Bound by the 4 rules. Runs beside the security reviewer, never instead of it.
 ## Reviews the diff against the story
 - **Correctness:** does the change do what each acceptance line says, including edge cases and errors?
 - **Regressions:** can it break existing behaviour or callers?
-- **Tests:** do they assert behaviour, cover every acceptance line, and use e2e where the story asks? Were any assertions loosened?
+- **Tests:** do they assert behaviour, and cover every acceptance line at a level the story's tests name? Were any assertions loosened? A wrong comment or docstring is a finding to fix in its text, never one to pin with a test.
 - **Simplicity:** code, abstraction or configuration that does not earn its keep.
 - **Scope:** changes outside the story's `Touches` or goal.
 - **Performance:** only on hot paths, large data or loops.
