@@ -8,8 +8,9 @@
 # F is the JSON from `gitlab.sh story`. Each command runs with bash from the
 # repo root; its output goes to DIR/verify-<n>.log and a summary to DIR/verify.json, with
 # each command's seconds; each run is also added to DIR/events.jsonl for the story's metrics.
-# The story's Verify commands come from the tracker, so each must first be approved for
-# this checkout by a person (bin/trust.sh); an unapproved one stops verify before anything runs.
+# The story's Verify commands come from the tracker. With trust.verify_approval: true each must first be
+# approved for this checkout by a person (bin/trust.sh), and an unapproved one stops verify before anything
+# runs; without it they run as they are (bin/trust.sh check passes them all).
 # Exit: 0 all passed | 1 a command failed, or the story needs e2e and there is no e2e command | 2 usage
 #       4 a Verify command is not approved (listed)
 set -u

@@ -10,7 +10,8 @@
 # edited command no longer matches.
 # A story's command also counts as approved when the plan on the default branch (.compasso/plan.yaml
 # on origin, fetched first) lists it for that story (its `gitlab:` iid): the plan reached that branch
-# through a merge request. In stage: mvp no command needs approval, unless trust.mvp_approval is true.
+# through a merge request. Only with trust.verify_approval: true (trust.mvp_approval before 4.0) does any command need
+# approval, in every stage: the runner's sessions ask no one.
 #
 #   trust.sh check   --repo R (--story F | --plan)   the Verify commands not yet approved
 #   trust.sh approve --repo R (--story F | --plan)   approve them (after a person said yes)
@@ -65,8 +66,8 @@ planned() { # the story's Verify commands the plan on the default branch lists f
 
 case "$CMD" in
   check)
-    [ "$(yq -r '.stage' "$REPO/.compasso/project.yaml" 2>/dev/null)" != mvp ] ||
-      [ "$(yq -r '.trust.mvp_approval' "$REPO/.compasso/project.yaml")" = true ] || exit 0
+    a="$(yq -r '.trust.verify_approval // .trust.mvp_approval // false' "$REPO/.compasso/project.yaml" 2>/dev/null)" || a=true   # no config: ask
+    [ "$a" = true ] || exit 0
     list="$(commands)" || exit $?
     plan=""; [ -z "$STORY" ] || plan="$(planned)"
     missing=0

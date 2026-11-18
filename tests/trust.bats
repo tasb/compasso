@@ -3,6 +3,7 @@ load helper
 
 setup() {
   setup_repo
+  cfg_set '.trust.verify_approval = true'   # these tests are about approving; without it nothing is asked
   S="$BATS_TEST_TMPDIR/story.json"
   jq -n '{story: {verify: ["npm test -- billing", "npx playwright test billing"]}}' > "$S"
 }
@@ -117,23 +118,25 @@ story() { jq -n --argjson i "$1" --arg c "$2" '{iid: $i, story: {verify: [$c]}}'
   [ "$status" -eq 0 ]
 }
 
-# C: in mvp a Verify command needs no approval, unless trust.mvp_approval is true; production ignores the key
-@test "in mvp Verify commands run without approval by default; trust.mvp_approval: true asks as in production" {
-  [ "$(yq '.trust.mvp_approval' "$ROOT/templates/project.yaml")" = false ]
-  cfg_set '.stage = "mvp"'
-  run t check --story "$S"
-  [ "$status" -eq 0 ]
+# C: Verify commands run without approval unless trust.verify_approval is true, in every stage; the key from before 4.0 still counts
+@test "without trust.verify_approval nothing is asked, in any stage; true asks; trust.mvp_approval still counts" {
+  [ "$(yq '.trust.verify_approval' "$ROOT/templates/project.yaml")" = false ]
+  for st in mvp harden production; do
+    cfg_set ".stage = \"$st\" | .trust.verify_approval = false"
+    run t check --story "$S"
+    [ "$status" -eq 0 ]
+  done
   run t check --plan
   [ "$status" -eq 0 ]
-  cfg_set '.trust.mvp_approval = true'
+  cfg_set '.trust.verify_approval = true'
   run t check --story "$S"
   [ "$status" -eq 3 ]
-  cfg_set '.stage = "production" | .trust.mvp_approval = false'
+  cfg_set 'del(.trust.verify_approval) | .trust.mvp_approval = true'
   run t check --story "$S"
   [ "$status" -eq 3 ]
-  cfg_set '.trust.mvp_approval = "no"'
+  cfg_set '.trust.verify_approval = "no"'
   run "$ROOT/bin/config.sh" validate --repo "$REPO"
-  [[ "$output" == *"trust.mvp_approval must be true or false"* ]] || false
+  [[ "$output" == *"trust.verify_approval must be true or false"* ]] || false
 }
 
 @test "verify.sh runs a command the plan on the default branch lists, with no approval recorded" {

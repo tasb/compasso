@@ -100,7 +100,11 @@ case "$method $path" in
     jq --argjson id "${path##*/}" 'map(select(.id != $id))' "$D/notes/$i.json" > "$D/tmp" && mv "$D/tmp" "$D/notes/$i.json"; echo '{}' ;;
   "POST projects/"*"/notes") echo '{"id":900}' ;;
   "GET projects/"*"/links") echo '[]' ;;
-  "GET projects/"*"/issues/"*) cat "$D/issues/${path##*/}.json" 2>/dev/null || { echo '{"message":"404"}'; exit 1; } ;;
+  "GET projects/"*"/issues/"*)   # an issue the fake created has only its labels
+    i="${path##*/}"
+    if [ -f "$D/issues/$i.json" ]; then cat "$D/issues/$i.json"
+    elif [ -f "$D/labels/$i" ]; then jq -nc --argjson i "$i" --arg l "$(cat "$D/labels/$i")" '{iid: $i, labels: ($l | split(",") | map(select(. != "")))}'
+    else echo '{"message":"404"}'; exit 1; fi ;;
   "POST projects/"*"/links") echo '{}' ;;
   *" graphql")   # parents live in parent/<child id>; GitLab refuses to re-assign an assigned item
     q="${f_query:-}"; mkdir -p "$D/parent"

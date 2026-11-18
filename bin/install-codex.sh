@@ -120,12 +120,11 @@ install_hooks() {
   local dest="$REPO/.codex/hooks.json" h="bash $ENGINE/bin/hook.sh"
   if [ -f "$dest" ] && ! grep -qF "$MARK" "$dest"; then die "$dest is not Compasso's; left untouched (merge Compasso's hooks into it by hand: see $ENGINE/hooks/hooks.json)"; fi
   jq -n --arg mark "$MARK --repo" --arg h "$h" '{
-    description: "Compasso: role guard, agent-run budget and command guard, agent-run metrics, runs in progress. \($mark).",
+    description: "Compasso: role guard and command guard, agent-run metrics. \($mark).",
     hooks: {
       PreToolUse: [{matcher: ".*", hooks: [{type: "command", command: "\($h) pre-tool", timeout: 20}]}],
       SubagentStart: [{hooks: [{type: "command", command: "\($h) subagent-start", timeout: 10}]}],
-      SubagentStop: [{hooks: [{type: "command", command: "\($h) subagent-stop", timeout: 20}]}],
-      SessionStart: [{hooks: [{type: "command", command: "\($h) resume", timeout: 10}]}]}}' > "$dest" || die "cannot write $dest"
+      SubagentStop: [{hooks: [{type: "command", command: "\($h) subagent-stop", timeout: 20}]}]}}' > "$dest" || die "cannot write $dest"
   echo "install-codex: hooks in $dest - approve them once in Codex with /hooks"
 }
 

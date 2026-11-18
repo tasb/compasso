@@ -79,7 +79,7 @@ labels_of() { jq -c '[.labels[].name] | sort' "$FAKE_GH/issues/$1.json"; }
   grep -q "POST repos/acme/app/milestones title=S20 due_on=2026-10-16T23:59:59Z" "$FAKE_GH/calls.log"
   for k in F-1 F-2 B-1 S-1 S-2 S-3 S-4; do [ "$(num $k)" != null ]; done
   [ "$(labels_of "$(yq .epic.gitlab.issue "$PLAN")")" = '["type::epic"]' ]
-  [ "$(labels_of "$(num F-1)")" = '["type::feature"]' ]
+  [ "$(labels_of "$(num F-1)")" = '["compasso::building","type::feature"]' ]
   [ "$(labels_of "$(num S-4)")" = '["blocked","owner::agent"]' ]
   [ "$(labels_of "$(num B-1)")" = '["priority::urgent","type::blocker"]' ]
   [ "$(jq -r .milestone.title "$FAKE_GH/issues/$(num S-1).json")" = S20 ]
@@ -93,12 +93,13 @@ labels_of() { jq -c '[.labels[].name] | sort' "$FAKE_GH/issues/$1.json"; }
   [ ! -e "$FAKE_GH/parent/$(num B-1)" ]
 }
 
-@test "push-plan: dependencies and blockers are GitHub's native blocked-by, not description lines" {
+@test "push-plan: dependencies and blockers are GitHub's native blocked-by, and description lines too (bin/run.sh reads those)" {
   gh_ push-plan >/dev/null
   [ "$(cat "$FAKE_GH/blocked/$(num S-2)")" = "$(num S-1)" ]
   [ "$(sort "$FAKE_GH/blocked/$(num S-4)" | paste -sd, -)" = "$(printf '%s\n' 12 "$(num B-1)" | sort | paste -sd, -)" ]
-  [ "$(jq -r .body "$FAKE_GH/issues/$(num S-2).json" | grep -c 'Depends on' || true)" -eq 0 ]
+  jq -r .body "$FAKE_GH/issues/$(num S-2).json" | grep -q "^\*\*Depends on:\*\* #$(num S-1)"
   jq -r .body "$FAKE_GH/issues/$(num S-4).json" | grep -q "^\*\*Blocked by:\*\* #$(num B-1)"
+  jq -r .body "$FAKE_GH/issues/$(num S-4).json" | grep -q "^\*\*Feature:\*\* #$(num F-2)"
 }
 
 @test "push-plan: the blocker is assigned; an assignee who cannot be assigned stops the push" {
@@ -220,64 +221,6 @@ story_fixture() {
   [ "$(calls 'POST repos/acme/app/pulls')" -eq 0 ]
 }
 
-@test "followup: a failed attach is tried again; when it keeps failing the follow-up is still returned, with a warning" {
-  issue 6 "Feature" open '["type::feature"]' '' 1
-  echo "x" > "$BATS_TEST_TMPDIR/f.md"
-  n="$(FAKE_GH_FAIL_ONCE="POST repos/acme/app/issues/6/sub_issues" gh_ followup --parent 6 --title "Rename helper" --body-file "$BATS_TEST_TMPDIR/f.md")"
-  [ "$(cat "$FAKE_GH/parent/$n")" = 6 ]
-  FAKE_GH_FAIL="POST repos/acme/app/issues/6/sub_issues" run gh_ followup --parent 6 --title "Again" --body-file "$BATS_TEST_TMPDIR/f.md"
-  [ "$status" -eq 0 ]
-  n="$(tail -1 <<<"$output")"
-  [ -f "$FAKE_GH/issues/$n.json" ] && [ ! -e "$FAKE_GH/parent/$n" ]
-  [[ "$output" == *"created #$n but could not attach it to #6: attach it by hand"* ]] || false
-}
-
-@test "followup: a sub-issue of the parent, in its milestone unless --milestone none" {
-  issue 6 "Feature" open '["type::feature"]' '' 1
-  echo '[{"number":1,"title":"S20"}]' > "$FAKE_GH/milestones.json"
-  echo "x" > "$BATS_TEST_TMPDIR/f.md"
-  n="$(gh_ followup --parent 6 --title "Rename helper" --body-file "$BATS_TEST_TMPDIR/f.md")"
-  [ "$(cat "$FAKE_GH/parent/$n")" = 6 ]
-  [ "$(labels_of "$n")" = '["owner::either"]' ]
-  [ "$(jq -r .milestone.title "$FAKE_GH/issues/$n.json")" = S20 ]
-  n="$(gh_ followup --parent 6 --title "Later" --body-file "$BATS_TEST_TMPDIR/f.md" --milestone none --labels type::bug,severity::minor)"
-  [ "$(jq -r .milestone "$FAKE_GH/issues/$n.json")" = null ]
-  [ "$(labels_of "$n")" = '["severity::minor","type::bug"]' ]
-}
-
-@test "merge: refused while a person merges; an open security finding always stops an agent" {
-  echo '[]' > "$BATS_TEST_TMPDIR/f.json"
-  run gh_ merge --mr 31 --body-file "$BATS_TEST_TMPDIR/f.json"
-  [ "$status" -eq 1 ]
-  [[ "$output" == *"a person merges"* ]] || false
-  cfg_set '.approvals.merge = "agent"'
-  echo '[{"by":"security","severity":"minor","status":"open","summary":"x"}]' > "$BATS_TEST_TMPDIR/f.json"
-  run gh_ merge --mr 31 --body-file "$BATS_TEST_TMPDIR/f.json"
-  [ "$status" -eq 1 ]
-  [ "$(calls 'PR merge')" -eq 0 ]
-}
-
-@test "merge: an agent labels the pull request and turns on auto-merge" {
-  cfg_set '.approvals.merge = "agent"'
-  issue 31 "PR" open '[]' ''
-  echo '[]' > "$BATS_TEST_TMPDIR/f.json"
-  run gh_ merge --mr 31 --body-file "$BATS_TEST_TMPDIR/f.json"
-  [ "$status" -eq 0 ]
-  [ "$(labels_of 31)" = '["compasso::auto-merged"]' ]
-  grep -q "PR merge 31 --repo github.com/acme/app --auto --merge" "$FAKE_GH/calls.log"
-}
-
-@test "merge: never when a check of its last commit failed" {
-  cfg_set '.approvals.merge = "agent"'
-  issue 31 "PR" open '[]' ''
-  echo '[]' > "$BATS_TEST_TMPDIR/f.json"
-  echo '{"check_runs":[{"status":"completed","conclusion":"success"},{"status":"completed","conclusion":"failure"}]}' > "$FAKE_GH/checks.json"
-  run gh_ merge --mr 31 --body-file "$BATS_TEST_TMPDIR/f.json"
-  [ "$status" -eq 1 ]
-  [[ "$output" == *"its checks failed"* ]] || false
-  [ "$(calls 'PR merge')" -eq 0 ]
-}
-
 @test "mr-checks: the checks and statuses of the last commit, and whether it conflicts with its base" {
   [ "$(gh_ mr-checks --mr 31 | jq -c .)" = '{"pipeline":"none","conflicts":false}' ]
   echo '{"check_runs":[{"status":"completed","conclusion":"success"},{"status":"completed","conclusion":"skipped"}]}' > "$FAKE_GH/checks.json"
@@ -307,28 +250,6 @@ story_fixture() {
   [ "$(gh_ main-pipeline | jq -c '[.pipeline, .sha, .broken_by]')" = '["success","c5",null]' ]
 }
 
-@test "disarm: turns off auto-merge on every open pull request to the default branch that has it" {
-  echo '[{"number":31,"auto_merge":{"merge_method":"merge"}},{"number":32,"auto_merge":null}]' > "$FAKE_GH/pr-query.json"
-  [ "$(gh_ disarm | jq -c .)" = '[31]' ]
-  grep -q 'GET repos/acme/app/pulls?state=open&base=main' "$FAKE_GH/calls.log"
-  grep -q '^PR merge 31 --repo github.com/acme/app --disable-auto' "$FAKE_GH/calls.log"
-  ! grep -q '^PR merge 32' "$FAKE_GH/calls.log"
-}
-
-@test "mr-update: brings the pull request's branch up to date with its base" {
-  run gh_ mr-update --mr 31
-  [ "$status" -eq 0 ]
-  grep -q "PUT repos/acme/app/pulls/31/update-branch" "$FAKE_GH/calls.log"
-}
-
-@test "merge: with approvals.merge risk, a high-risk change is left to a person" {
-  cfg_set '.approvals.merge = "risk"'
-  echo '[]' > "$BATS_TEST_TMPDIR/f.json"; echo '{"level":"high"}' > "$BATS_TEST_TMPDIR/r.json"
-  run gh_ merge --mr 31 --body-file "$BATS_TEST_TMPDIR/f.json" --risk "$BATS_TEST_TMPDIR/r.json"
-  [ "$status" -eq 1 ]
-  [ "$(calls 'PR merge')" -eq 0 ]
-}
-
 @test "mr-info: the GitLab shape, with the issues it closes" {
   echo '{"number":31,"title":"t","state":"MERGED","url":"u","isDraft":false,"headRefName":"feat","baseRefName":"main","author":{"login":"ana"},"closingIssuesReferences":{"nodes":[{"number":8}]}}' > "$FAKE_GH/pr-31.json"
   run gh_ mr-info --mr 31
@@ -344,24 +265,6 @@ story_fixture() {
   gh_ comment --iid 8 --body-file "$BATS_TEST_TMPDIR/c.md" >/dev/null
   [ "$(calls 'POST repos/acme/app/issues/31/comments')" -eq 1 ]
   [ "$(calls 'POST repos/acme/app/issues/8/comments')" -eq 1 ]
-}
-
-@test "merge-commit comes from the pull requests that close the story; open-mr-branch is gone" {
-  mkdir -p "$FAKE_GH/closing"
-  echo '[{"number":30,"state":"CLOSED","merged":false,"headRefName":"old","mergeCommit":null},{"number":31,"state":"MERGED","merged":true,"headRefName":"story/8","mergeCommit":{"oid":"abc123"}},{"number":32,"state":"OPEN","merged":false,"headRefName":"story/8-fix","mergeCommit":null}]' > "$FAKE_GH/closing/8.json"
-  [ "$(gh_ merge-commit --iid 8)" = abc123 ]
-  run gh_ merge-commit --iid 9
-  [ "$status" -eq 1 ]
-  run gh_ open-mr-branch --iid 8
-  [ "$status" -eq 1 ]
-}
-
-@test "digest: merged auto-merged pull requests since a date" {
-  echo '{"items":[{"number":31,"title":"Invoice list","pull_request":{"merged_at":"2026-10-06T10:30:00Z"}}]}' > "$FAKE_GH/search.json"
-  run gh_ digest --since 2026-10-06
-  [ "$status" -eq 0 ]
-  [[ "$output" == *"- #31 Invoice list · merged 2026-10-06 10:30"* ]] || false
-  grep -q "q=repo:acme/app is:pr is:merged label:compasso::auto-merged merged:>=2026-10-06" "$FAKE_GH/calls.log"
 }
 
 # ---------- sprint ----------
@@ -455,9 +358,9 @@ workflow() { cfg_set '.ci.image = "node:22" | .commands.test = "npm test"'"${1:-
   [ "$status" -eq 0 ]
   n="$(yq '.features[1].gitlab' "$REPO/.compasso/backlog.yaml")"
   [ "$n" != null ]
-  [ "$(labels_of "$n")" = '["mvp","type::feature"]' ]
+  [ "$(labels_of "$n")" = '["compasso::new","mvp","type::feature"]' ]
   [ "$(jq -r .milestone "$FAKE_GH/issues/$n.json")" = null ]
-  [ "$(labels_of "$(yq '.features[4].gitlab' "$REPO/.compasso/backlog.yaml")")" = '["type::feature"]' ]
+  [ "$(labels_of "$(yq '.features[4].gitlab' "$REPO/.compasso/backlog.yaml")")" = '["compasso::new","type::feature"]' ]
   [ "$(calls 'milestones')" -eq 0 ]
 }
 
@@ -468,7 +371,7 @@ workflow() { cfg_set '.ci.image = "node:22" | .commands.test = "npm test"'"${1:-
   yq -i '.features[2].mvp = false | .features[3].mvp = false' "$REPO/.compasso/backlog.yaml"
   gh_ push-backlog >/dev/null
   [ "$(calls 'POST repos/acme/app/issues ')" -eq 0 ]
-  [ "$(labels_of "$(yq '.features[2].gitlab' "$REPO/.compasso/backlog.yaml")")" = '["type::feature"]' ]
+  [ "$(labels_of "$(yq '.features[2].gitlab' "$REPO/.compasso/backlog.yaml")")" = '["compasso::new","type::feature"]' ]
 }
 
 @test "push-backlog: a backlog feature planned into a sprint keeps its issue and joins the sprint" {
@@ -493,22 +396,21 @@ workflow() { cfg_set '.ci.image = "node:22" | .commands.test = "npm test"'"${1:-
 # ---------- team projects: dev:: labels in place of owner:: ----------
 
 @test "push-plan in a team: developers' labels on stories and features, no owner label, and a change moves the label" {
-  cfg_set '.team.enabled = true'
+  cfg_set '.team.enabled = true | .team.developers = ["ana", "rui"]'
   "$ROOT/bin/persona.sh" set --repo "$REPO" --persona tech-lead >/dev/null
   yq -i 'del(.features[].stories[].owner) | .features[0].dev = "ana" | .features[0].stories[2].dev = "rui"' "$PLAN"
-  printf 'dev::ana\ndev::rui\n' >> "$FAKE_GH/labels.txt"
   run gh_ push-plan
   [ "$status" -eq 0 ]
   [ "$(labels_of "$(num S-3)")" = '["dev::rui"]' ]
   [ "$(labels_of "$(num S-1)")" = '[]' ]
   [ "$(labels_of "$(num S-4)")" = '["blocked"]' ]
-  [ "$(labels_of "$(num F-1)")" = '["dev::ana","type::feature"]' ]
+  [ "$(labels_of "$(num F-1)")" = '["compasso::building","dev::ana","type::feature"]' ]
   yq -i '.features[0].stories[2].dev = "ana" | .features[0].dev = "rui"' "$PLAN"
   gh_ push-plan >/dev/null
   [ "$(labels_of "$(num S-3)")" = '["dev::ana"]' ]
-  [ "$(labels_of "$(num F-1)")" = '["dev::rui","type::feature"]' ]
+  [ "$(labels_of "$(num F-1)")" = '["compasso::building","dev::rui","type::feature"]' ]
   yq -i '.features[0].stories[0].dev = "zed"' "$PLAN"
   run gh_ push-plan
   [ "$status" -eq 1 ]
-  [[ "$output" == *"zed is not in the team"* ]] || false
+  [[ "$output" == *"zed is not in team.developers"* ]] || false
 }

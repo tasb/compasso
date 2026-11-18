@@ -46,7 +46,7 @@ it() { "$ROOT/bin/issue-templates.sh" --repo "$REPO"; }
   grep -q '^/assign ' "$ROOT/templates/issue_templates/en/Blocker.md"
 }
 
-@test "on GitHub: .github/ISSUE_TEMPLATE, each type's labels, no Depends on line" {
+@test "on GitHub: .github/ISSUE_TEMPLATE, each type's labels, and the Depends on line" {
   "$ROOT/bin/config.sh" init --repo "$REPO" --project acme/app >/dev/null
   yq -i '.tracker.provider = "github"' "$REPO/.compasso/project.yaml"
   run it
@@ -55,14 +55,15 @@ it() { "$ROOT/bin/issue-templates.sh" --repo "$REPO"; }
   [ ! -e "$REPO/.gitlab" ]
   D="$REPO/.github/ISSUE_TEMPLATE"
   [ "$(yq --front-matter=extract '.labels' "$D/blocker.md")" = "type::blocker, priority::urgent" ]
+  [ "$(yq --front-matter=extract '.labels' "$D/feature.md")" = "type::feature, compasso::new" ]
   [ "$(yq --front-matter=extract '.title' "$D/epic.md")" = "S<sprint>: " ]
-  [ "$(grep -c 'Depends on' "$D/story.md" || true)" -eq 0 ]
+  grep -q 'Depends on' "$D/story.md"
   grep -q 'Blocked by' "$D/story.md"
   run it
   [[ "$output" == *"0 added, 5 unchanged"* ]] || false
 }
 
-@test "in the project's language: Portuguese templates, read back by Compasso; GitHub drops Depends on in any language" {
+@test "in the project's language: Portuguese templates, read back by Compasso; GitHub keeps Depends on in any language" {
   "$ROOT/bin/config.sh" init --repo "$REPO" --project acme/app >/dev/null
   yq -i '.language = "pt-PT"' "$REPO/.compasso/project.yaml"
   it >/dev/null
@@ -71,7 +72,7 @@ it() { "$ROOT/bin/issue-templates.sh" --repo "$REPO"; }
   [ "$(jq -c '[(.acceptance | length), (.verify | length)]' "$BATS_TEST_TMPDIR/p.json")" = '[1,1]' ]
   rm -rf "$REPO/.gitlab"; yq -i '.tracker.provider = "github" | .language = "pt-BR"' "$REPO/.compasso/project.yaml"
   it >/dev/null
-  [ "$(grep -c 'Depende de' "$REPO/.github/ISSUE_TEMPLATE/story.md" || true)" -eq 0 ]
+  grep -q 'Depende de' "$REPO/.github/ISSUE_TEMPLATE/story.md"
   grep -q 'Blocked by' "$REPO/.github/ISSUE_TEMPLATE/story.md"
   grep -qx '## Escopo' "$REPO/.github/ISSUE_TEMPLATE/feature.md"
 }

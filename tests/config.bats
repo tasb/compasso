@@ -13,7 +13,6 @@ setup() { setup_repo; }
   [ "$(yq -r .limits.story_max_hours "$CFG")" = 8 ]
   [ "$(yq -r .limits.story_target_hours "$CFG")" = 4 ]
   [ "$(yq -r .approvals.plan "$CFG")" = human ]
-  [ "$(yq -r .approvals.merge "$CFG")" = human ]
 }
 
 @test "init refuses to overwrite an existing config" {
@@ -50,11 +49,10 @@ setup() { setup_repo; }
 }
 
 @test "unknown approval modes are rejected" {
-  cfg_set '.approvals.plan = "maybe" | .approvals.merge = "auto"'
+  cfg_set '.approvals.plan = "maybe"'
   run "$ROOT/bin/config.sh" validate --repo "$REPO"
   [ "$status" -eq 1 ]
   [[ "$output" == *"approvals.plan"* ]] || false
-  [[ "$output" == *"approvals.merge must be human, agent or risk"* ]] || false
 }
 
 @test "the security role cannot run on a fast-tier Claude model" {
@@ -64,8 +62,8 @@ setup() { setup_repo; }
   [[ "$output" == *"models.claude.security"* ]] || false
 }
 
-@test "the approver cannot run on a fast-tier Codex model or low effort" {
-  cfg_set '.harnesses = ["claude","codex"] | .models.codex.approver = {"model":"gpt-6-luna","effort":"low"}'
+@test "security cannot run on a fast-tier Codex model or low effort" {
+  cfg_set '.harnesses = ["claude","codex"] | .models.codex.security = {"model":"gpt-6-luna","effort":"low"}'
   run "$ROOT/bin/config.sh" validate --repo "$REPO"
   [ "$status" -eq 1 ]
   [[ "$output" == *"fast-tier"* ]] || false
@@ -73,7 +71,7 @@ setup() { setup_repo; }
 }
 
 @test "other roles may use fast models" {
-  cfg_set '.models.claude.builder.model = "haiku"'
+  cfg_set '.models.claude.tester.model = "haiku"'
   run "$ROOT/bin/config.sh" validate --repo "$REPO"
   [ "$status" -eq 0 ]
 }
@@ -86,13 +84,6 @@ setup() { setup_repo; }
   run "$ROOT/bin/config.sh" validate --repo "$REPO"
   [ "$status" -eq 1 ]
   [[ "$output" == *"models.codex.planner.model is required"* ]] || false
-}
-
-@test "a switch for security review is refused" {
-  cfg_set '.security = {"enabled": false}'
-  run "$ROOT/bin/config.sh" validate --repo "$REPO"
-  [ "$status" -eq 1 ]
-  [[ "$output" == *"mandatory"* ]] || false
 }
 
 @test "every problem is reported at once" {
@@ -137,7 +128,7 @@ setup() { setup_repo; }
 }
 
 @test "upgrade adds keys a newer Compasso introduced and keeps every value" {
-  cfg_set 'del(.test_paths) | del(.ci) | .sprint.weeks = 3 | .models.claude.builder.model = "opus"'
+  cfg_set 'del(.test_paths) | del(.ci) | .sprint.weeks = 3 | .models.claude.tester.model = "opus"'
   run "$ROOT/bin/config.sh" validate --repo "$REPO"
   [ "$status" -eq 1 ]
   [[ "$output" == *"config.sh upgrade"* ]] || false
@@ -146,7 +137,7 @@ setup() { setup_repo; }
   [ "$(yq -r '.test_paths | length' "$CFG")" -gt 0 ]
   [ "$(yq -r '.ci.image' "$CFG")" = "" ]
   [ "$(yq -r .sprint.weeks "$CFG")" = 3 ]
-  [ "$(yq -r .models.claude.builder.model "$CFG")" = opus ]
+  [ "$(yq -r .models.claude.tester.model "$CFG")" = opus ]
   [ "$(yq -r .tracker.project "$CFG")" = acme/app ]
   "$ROOT/bin/config.sh" validate --repo "$REPO"
 }
@@ -177,17 +168,6 @@ setup() { setup_repo; }
   [[ "$output" == *"metrics.prices must map each model to a number"* ]] || false
 }
 
-@test "hardening: the test environment is a web URL and flaky runs are at least 2" {
-  cfg_set '.harden.environment.url = "staging.example.com" | .harden.flaky_runs = 1'
-  run "$ROOT/bin/config.sh" validate --repo "$REPO"
-  [ "$status" -eq 1 ]
-  [[ "$output" == *"harden.environment.url must start with http"* ]] || false
-  [[ "$output" == *"harden.flaky_runs must be a number of at least 2"* ]] || false
-  cfg_set '.harden.environment.url = "https://staging.example.com" | .harden.flaky_runs = 3'
-  run "$ROOT/bin/config.sh" validate --repo "$REPO"
-  [ "$status" -eq 0 ]
-}
-
 @test "tracker: the provider is gitlab or github, and GitHub needs its Project fields and status options" {
   cfg_set '.tracker.provider = "jira"'
   run "$ROOT/bin/config.sh" validate --repo "$REPO"
@@ -204,47 +184,60 @@ setup() { setup_repo; }
   [ "$status" -eq 0 ]
 }
 
-@test "stage: production by default, mvp or production only, and a missing stage is fine" {
+@test "stage: production by default, mvp, harden or production only, and a missing stage is fine" {
   [ "$(yq -r .stage "$CFG")" = production ]
   cfg_set '.stage = "beta"'
   run "$ROOT/bin/config.sh" validate --repo "$REPO"
   [ "$status" -eq 1 ]
-  [[ "$output" == *"stage must be mvp or production"* ]] || false
+  [[ "$output" == *"stage must be mvp, harden or production"* ]] || false
+  for s in mvp harden production; do
+    cfg_set ".stage = \"$s\""
+    run "$ROOT/bin/config.sh" validate --repo "$REPO"
+    [ "$status" -eq 0 ]
+  done
   cfg_set 'del(.stage)'
   run "$ROOT/bin/config.sh" validate --repo "$REPO"
   [ "$status" -eq 0 ]
 }
 
-@test "risk paths are lists of globs: product, infrastructure, production-critical" {
-  [ "$(yq -o=json -I0 .risk.product_paths "$CFG")" = '["src/**"]' ]
-  [ "$(yq -r '.risk.infra_paths | length' "$CFG")" -gt 0 ]
-  [ "$(yq -r '.risk.production_paths | length' "$CFG")" -gt 0 ]
-  cfg_set '.risk.infra_paths = "infra"'
+@test "run: how often the lead and the developers wake, how long a job may take, and who answers" {
+  [ "$(yq -o=json -I0 '.run | del(.allow)' "$CFG")" = '{"lead_minutes":15,"dev_minutes":10,"job_minutes":60,"failures":2}' ]
+  [ "$(yq -o=json -I0 .people "$CFG")" = '{"ask":[]}' ]
+  [ "$(yq -o=json -I0 .team.developers "$CFG")" = '[]' ]
+  [ "$(yq -o=json -I0 .run.allow "$CFG")" = '[]' ]
+  cfg_set '.run.lead_minutes = 0 | .run.dev_minutes = "ten" | .run.job_minutes = 0 | .run.failures = 0 | .people.ask = "ana" | .team.developers = "jobs" | .run.allow = "Bash(make)"'
   run "$ROOT/bin/config.sh" validate --repo "$REPO"
   [ "$status" -eq 1 ]
-  [[ "$output" == *"risk.infra_paths must be a list"* ]] || false
+  [[ "$output" == *"run.lead_minutes must be a whole number of minutes, at least 1"* ]] || false
+  [[ "$output" == *"run.dev_minutes must be a whole number of minutes, at least 1"* ]] || false
+  [[ "$output" == *"run.job_minutes must be a whole number of minutes, at least 1"* ]] || false
+  [[ "$output" == *"run.failures must be at least 1"* ]] || false
+  [[ "$output" == *"people.ask must be a list of tracker logins"* ]] || false
+  [[ "$output" == *"team.developers must be a list of names"* ]] || false
+  [[ "$output" == *"run.allow must be a list of tool rules"* ]] || false
+  cfg_set '.run = {"lead_minutes": 5, "dev_minutes": 5, "job_minutes": 30, "failures": 1} | .people.ask = ["ana"] | .team.developers = ["jobs"] | .run.allow = ["Bash(make check)"]'
+  run "$ROOT/bin/config.sh" validate --repo "$REPO"
+  [ "$status" -eq 0 ]
 }
 
-@test "team: the lead's poll, the queue and the agents' logins" {
-  [ "$(yq -r .team.lead_poll_minutes "$CFG")" = 30 ]
+@test "team: the queue" {
   [ "$(yq -o=json -I0 .team.queue "$CFG")" = '{"target":15,"min":5}' ]
-  [ "$(yq -o=json -I0 .team.agents "$CFG")" = '[]' ]
-  cfg_set '.team.queue = {"target": 4, "min": 5} | .team.lead_poll_minutes = 0 | .team.agents = "bot"'
+  cfg_set '.team.queue = {"target": 4, "min": 5}'
   run "$ROOT/bin/config.sh" validate --repo "$REPO"
   [ "$status" -eq 1 ]
   [[ "$output" == *"team.queue.min must be at least 1 and at most team.queue.target"* ]] || false
-  [[ "$output" == *"team.lead_poll_minutes must be an integer from 1 to 1440"* ]] || false
-  [[ "$output" == *"team.agents must be a list of logins"* ]] || false
 }
 
-@test "team: the lead's merge poll, every 15 minutes; a project without it uses 15" {
-  [ "$(yq -r .team.lead_merge_minutes "$CFG")" = 15 ]
-  cfg_set 'del(.team.lead_merge_minutes)'
-  "$ROOT/bin/config.sh" validate --repo "$REPO"
-  for v in 0 1441 '"often"'; do
-    cfg_set ".team.lead_merge_minutes = $v"
-    run "$ROOT/bin/config.sh" validate --repo "$REPO"
-    [ "$status" -eq 1 ]
-    [[ "$output" == *"team.lead_merge_minutes must be an integer from 1 to 1440"* ]] || false
+@test "upgrade to 4.0.0: renamed keys keep their value, keys nothing reads go" {
+  cfg_set 'del(.trust.verify_approval) | del(.prototype) | .trust.mvp_approval = true | .harden.images.a11y = "pw:v1.2.3"
+    | .limits.agent_runs.total = 30 | .approvals.merge = "risk" | .team.agents = ["bot"] | .team.poll_minutes = 60
+    | .models.claude.builder = {"model": "sonnet"} | .risk.infra_paths = ["**/*.tf"]'
+  "$ROOT/bin/config.sh" upgrade --repo "$REPO" >/dev/null
+  [ "$(yq -r .trust.verify_approval "$CFG")" = true ]
+  [ "$(yq -r .prototype.image "$CFG")" = pw:v1.2.3 ]
+  for k in .trust.mvp_approval .harden .limits.agent_runs .approvals.merge .team.agents .team.poll_minutes .models.claude.builder .risk.infra_paths; do
+    [ "$(yq -r "$k" "$CFG")" = null ] || { echo "$k is still there"; false; }
   done
+  [ "$(yq -r .approvals.plan "$CFG")" = human ]
+  "$ROOT/bin/config.sh" validate --repo "$REPO"
 }

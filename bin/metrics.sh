@@ -1,24 +1,26 @@
 #!/usr/bin/env bash
 # Collect a sprint's metrics into the report's data.
 #
-#   metrics.sh collect --repo R --out F [--today YYYY-MM-DD]
+#   metrics.sh collect --repo R --out F [--today YYYY-MM-DD] [--events FILE]...
 #
 # Reads the sprint from .compasso/plan.yaml, its work items and their label history
 # from GitLab, the last four sprints' done hours, the story metrics files in
-# .compasso/metrics/, the testers' results in docs/releases/S<n>-results/, and the
-# optional prices in metrics.prices. Render the result with report.sh.
+# .compasso/metrics/ (written before 4.0.0), the testers' results in docs/releases/S<n>-results/, the runners'
+# events (each --events file; without one, this machine's .compasso/runs/runner/events.jsonl), and the optional
+# prices in metrics.prices (without them, the cost the harness reported, in USD). Render the result with report.sh.
 # Exit: 0 | 1 input or tracker problem
 set -u
 case "${1:-}" in -h|--help) sed -n '2,/^set -u/s/^# \{0,1\}//p' "$0"; exit 0 ;; esac   # the header above is the help
 
 BIN="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CMD="${1:-}"; shift || true
-REPO="." OUT="" TODAY="$(date -u +%Y-%m-%d)" NOW="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+REPO="." OUT="" EVENTS="" TODAY="$(date -u +%Y-%m-%d)" NOW="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 while [ $# -gt 0 ]; do
   case "$1" in
     --repo) REPO="$2"; shift 2 ;;
     --out) OUT="$2"; shift 2 ;;
     --today) TODAY="$2"; NOW="$2T23:59:59Z"; shift 2 ;;   # everything is counted to the report's date
+    --events) [ -f "$2" ] || { echo "metrics: no events file $2" >&2; exit 1; }; EVENTS="$EVENTS$2"$'\n'; shift 2 ;;
     *) echo "metrics: unknown argument '$1'" >&2; exit 1 ;;
   esac
 done
@@ -43,6 +45,8 @@ done
 
 iids="$(jq -c '[.[].iid]' <<<"$items")"
 files="$( (ls "$REPO"/.compasso/metrics/*.json 2>/dev/null | xargs cat 2>/dev/null) | jq -sc --argjson in "$iids" 'map(select(.iid as $i | $in | index($i)))')"
+[ -n "$EVENTS" ] || { [ -f "$REPO/.compasso/runs/runner/events.jsonl" ] && EVENTS="$REPO/.compasso/runs/runner/events.jsonl"$'\n'; }
+events="$(printf '%s' "$EVENTS" | while IFS= read -r f; do [ -n "$f" ] && cat "$f"; done | jq -R 'fromjson? // empty' | jq -sc .)"
 results="$( (ls "$REPO/docs/releases/$ms-results/"*.json 2>/dev/null | xargs cat 2>/dev/null) | jq -sc .)"
 prices="$(yq -o=json '.metrics.prices // {}' "$REPO/.compasso/project.yaml")"
 currency="$(cfg '.metrics.currency // "USD"')"
@@ -53,6 +57,6 @@ sprint="$(yq -o=json '.epic' "$PLAN" | jq -c --argjson cap "$(cfg .sprint.capaci
 mkdir -p "$(dirname "$OUT")"
 jq -n --argjson sprint "$sprint" --arg today "$TODAY" --arg now "$NOW" \
   --slurpfile items <(printf '%s' "$items") --slurpfile sync <(printf '%s' "$sync") --slurpfile history <(printf '%s' "$history") \
-  --slurpfile files <(printf '%s' "$files") --slurpfile results <(printf '%s' "$results") --argjson prices "$prices" --arg currency "$currency" \
+  --slurpfile files <(printf '%s' "$files") --slurpfile results <(printf '%s' "$results") --slurpfile events <(printf '%s' "$events") --argjson prices "$prices" --arg currency "$currency" \
   -f "$BIN/metrics.jq" > "$OUT" || { echo "metrics: could not build the report data" >&2; exit 1; }
 echo "metrics: wrote $OUT"

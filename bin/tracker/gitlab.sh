@@ -4,39 +4,38 @@
 #   gitlab.sh check         --repo R   the tracker gate: auth, project, role, tier -> JSON on stdout
 #   gitlab.sh ensure-labels --repo R   create Compasso's labels that are missing (idempotent)
 #   gitlab.sh push-plan     --repo R   create or update .compasso/plan.yaml in GitLab; ids are written back
+#   gitlab.sh push-backlog  --repo R   create or update .compasso/backlog.yaml's features, outside any sprint
 #   gitlab.sh story         --repo R --iid N                      a story, its resolved coverage and open dependencies -> JSON
 #   gitlab.sh set-state     --repo R --iid N --state S            S: backlog | building | in-review; drops the other compasso:: states
 #   gitlab.sh open-mr       --repo R --iid N --branch B --body-file F   create or update the story's MR to the default branch -> JSON {iid, web_url}
-#   gitlab.sh followup      --repo R --parent N --title T --body-file F [--labels a,b]  a task under N (a minor finding, a bug) -> iid
-#   gitlab.sh merge         --repo R --mr N --body-file F [--risk R]  merge when the pipeline succeeds, never after it failed (approvals.merge agent, or risk with a low-risk R;
-#                                                                 in a team project the tech lead, through bin/team.sh, which decided who approves)
 #   gitlab.sh mr-info       --repo R --mr N                       branches, author and the issues it closes -> JSON
-#   gitlab.sh mr-of         --repo R --iid N                      the story's open merge request -> {iid, source_branch, target_branch, web_url}
-#   gitlab.sh mr-events     --repo R --mr N                       comments and approvals, oldest first -> [{kind, by, at, body, member}]
-#   gitlab.sh followups     --repo R [--all]                      open follow-ups in no sprint (--all: in any) -> [{iid, title, story, body}]
-#   gitlab.sh close         --repo R --iid N --body-file F        post F on the issue, then close it (bin/followups.sh legacy)
-#   gitlab.sh set-milestone --repo R --iid N --milestone S1       move a work item into sprint S1 (bin/followups.sh)
+#   gitlab.sh close         --repo R --iid N --body-file F        post F on the issue, then close it
 #   gitlab.sh mr-checks     --repo R --mr N                       its last commit's pipeline and whether it conflicts with its target
 #                                                                 -> {pipeline: success|failed|running|none, conflicts}
-#   gitlab.sh mr-update     --repo R --mr N                       rebase it onto its target (the tech lead, before merging)
 #   gitlab.sh main-pipeline --repo R                              the default branch's last finished pipeline and, when it failed, the
 #                                                                 merge request that broke it -> {pipeline: success|failed|none, sha,
 #                                                                 web_url, broken_by: {sha, mr, closes} | null}
-#   gitlab.sh disarm        --repo R                              turn off auto-merge on every open merge request to the default
-#                                                                 branch (a red main, bin/team.sh main) -> [iids]
 #   gitlab.sh comment       --repo R --mr N|--iid N --body-file F  post F as a comment on a merge request or an issue
 #   gitlab.sh sprint-sync   --repo R [--milestone S20] [--parent F] what can be built now, what waits and on whom -> JSON
-#   gitlab.sh merge-commit  --repo R --iid N                      the commit the story's merge request put on the default branch
-#   gitlab.sh digest        --repo R --since YYYY-MM-DD           merge requests merged without a person, as a comment
 #   gitlab.sh sprint-items  --repo R --milestone S20              the sprint's work items with their label history (the report)
 #   gitlab.sh sprint-done   --repo R --milestone S19              hours done in a sprint, or null
-# The primitives bin/team.sh builds assignment, claims and messages on (never run through tracker.sh):
-#   gitlab.sh labels        --repo R                              every label name -> JSON
-#   gitlab.sh label-create  --repo R --name L [--title DESC]      create one label
-#   gitlab.sh label         --repo R --iid N|--mr N [--add a,b] [--remove c,d]
+#   gitlab.sh human-ask     --repo R --key K [--iid N] --title T --body-file F   open, or update, the needs::human issue for (K, N),
+#                                                                 assigned to people.ask; N gets needs::human (bin/human.sh) -> {iid, web_url, created}
+#   gitlab.sh assign        --repo R --iid N --name D             give N to developer D: dev::D and the backlog state, no other
+#                                                                 developer's label (the tech lead, bin/run.sh's assign job)
+#   gitlab.sh human-done    --repo R --iid N                      the question about N was answered: N loses needs::human
+#   gitlab.sh snapshot      --repo R                              open work items, open merge requests and main's pipeline, in four
+#                                                                 reads (bin/run.sh, before it starts a model) -> JSON (bin/snapshot.jq)
+#   gitlab.sh mr-merge      --repo R --mr N                       merge when the pipeline succeeds, never after it failed (the tech lead, bin/lead.sh)
+#   gitlab.sh mr-label      --repo R --mr N [--add L] [--remove L]   only compasso::rework and compasso::fix-main, the labels bin/run.sh reads
+#   gitlab.sh after-mvp     --repo R --title T --body-file F      add F as a comment on the one open after-MVP list, opened (titled T)
+#                                                                 when there is none -> {iid, web_url}
+#   gitlab.sh reopen        --repo R --iid N                      reopen a closed work item (a story whose merge was reverted)
+#   gitlab.sh harden-feature --repo R --title T                  the one open hardening feature, opened (titled T) when there is none
+#                                                                 -> {iid, web_url}
+#   gitlab.sh add-story     --repo R --parent F --title T --from S.json   a story under feature F, in its sprint, with its developer
+#                                                                 (S: the plan's story fields; bin/lead.sh story checks them) -> {iid, web_url}
 #   gitlab.sh comments      --repo R --iid N|--mr N               [{id, body, author, at, member}], oldest first
-#   gitlab.sh comment-delete --repo R --iid N --id ID
-#   gitlab.sh comment-edit  --repo R --iid N|--mr N --id ID --body-file F   (bin/mr-report.sh)
 #
 # Exit: 0 ok | 1 config/usage | 2 not logged in | 3 project not found or no access
 #       4 role below Developer | 5 tier cannot be detected (set tracker.tier)
@@ -45,7 +44,7 @@ case "${1:-}" in -h|--help) sed -n '2,/^set -u/s/^# \{0,1\}//p' "$0"; exit 0 ;; 
 
 BIN="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CMD="${1:-}"; shift || true
-REPO="." IID="" STATE="" BRANCH="" BODY="" TITLE="" PARENT="" MR="" LABELS_ARG="owner::either" MILESTONE="" RISK="" SINCE="" READ_ONLY=0 ALL=0 NAME="" ADD="" REMOVE="" ID=""
+REPO="." IID="" STATE="" BRANCH="" BODY="" TITLE="" PARENT="" MR="" MILESTONE="" READ_ONLY=0 NAME="" ADD="" REMOVE="" KEY="" FROM=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --repo) REPO="$2"; shift 2 ;;
@@ -56,16 +55,13 @@ while [ $# -gt 0 ]; do
     --title) TITLE="$2"; shift 2 ;;
     --parent) PARENT="$2"; shift 2 ;;
     --mr) MR="$2"; shift 2 ;;
-    --labels) LABELS_ARG="$2"; shift 2 ;;
     --milestone) MILESTONE="$2"; shift 2 ;;
-    --risk) RISK="$2"; shift 2 ;;
-    --since) SINCE="$2"; shift 2 ;;
     --read-only) READ_ONLY=1; shift ;;
-    --all) ALL=1; shift ;;
     --name) NAME="$2"; shift 2 ;;
     --add) ADD="$2"; shift 2 ;;
     --remove) REMOVE="$2"; shift 2 ;;
-    --id) ID="$2"; shift 2 ;;
+    --key) KEY="$2"; shift 2 ;;
+    --from) FROM="$2"; shift 2 ;;
     *) echo "gitlab: unknown argument '$1'" >&2; exit 1 ;;
   esac
 done
@@ -89,10 +85,12 @@ NAMES="$("$BIN/locale.sh" --names)"                   # work-item names in every
 LOC="$("$BIN/locale.sh" --repo "$REPO")" || exit 1    # the project's language, for writing
 
 # a team project assigns work by dev::<name> labels and uses no owner:: labels but owner::human,
-# work for a person no agent is assigned (bin/persona.sh, bin/team.sh)
+# work for a person no agent is assigned (bin/persona.sh)
 TEAM=false; [ "$(cfg .team.enabled)" = true ] && TEAM=true
+# each developer's dev:: label is one of Compasso's labels too (ensure-labels creates it)
+[ "$TEAM" = true ] && LABELS="$LABELS
+$(yq -r '.team.developers // [] | .[] | "dev::" + . + "|#6699cc|Built by the developer " + .' "$REPO/.compasso/project.yaml")"
 ME=""; [ "$TEAM" = true ] && ME="$("$BIN/persona.sh" show --repo "$REPO" --json | jq -r '.name // ""')"
-[ "$TEAM" = true ] && LABELS_ARG="$(printf '%s' "$LABELS_ARG" | tr ',' '\n' | grep -vx -e owner::agent -e owner::either | paste -sd, -)"
 DEV_COLOR="#0e8a16"
 
 check() {
@@ -225,7 +223,7 @@ push_plan() {
   for dev in $(yq -o=json . "$PLAN" | jq -r '[.features[] | .dev, ((.stories // [])[].dev)] | map(select(. != null)) | unique | .[]'); do
     [ "$TEAM" = true ] || break
     printf '%s\n' "$devs" | grep -qxF "dev::$dev" ||
-      { echo "gitlab: $dev is not in the team - the tech lead adds a developer with bin/team.sh add" >&2; return 1; }
+      { echo "gitlab: $dev is not in team.developers in .compasso/project.yaml - add the name there first" >&2; return 1; }
   done
   ms="$(milestone)" || return 1
 
@@ -238,6 +236,10 @@ push_plan() {
     res="$(upsert_issue "$(jq -r '.gitlab // ""' <<<"$f")" "$title" "$desc" "$ms" issue "" type::feature)"
     [ -n "$res" ] || { echo "gitlab: could not write feature $key" >&2; return 1; }
     iid="${res% *}"; id="${res#* }"
+    # its stories are planned: the runner builds and delivers it; a state it already moved past is kept
+    case "$(api "projects/$PID/issues/$iid" | jq -r '[.labels[] | select(startswith("compasso::"))][0] // ""')" in
+      ""|compasso::new) IID="$iid" STATE=building set_state >/dev/null || return 1 ;;
+    esac
     pset '(.features[] | select(.key == strenv(K)) | .gitlab) = (strenv(V) | tonumber)' "$key" "$iid"
     iids="$(jq -c --arg k "$key" --argjson v "$iid" --argjson id "$id" '.[$k] = $v | .["id:" + $k] = $id' <<<"$iids")"
     if [ "$TEAM" = true ]; then   # a feature's developer covers its stories and its verification
@@ -352,6 +354,7 @@ push_backlog() {
     f="$(yq -o=json ".features[$i]" "$BL")"; key="$(jq -r .key <<<"$f")"
     labels="type::feature"; [ "$(jq -r .mvp <<<"$f")" = true ] && labels="$labels mvp"
     num="$(jq -r '.gitlab // ""' <<<"$f")"
+    [ -n "$num" ] || labels="$labels compasso::new"   # new: the tech lead splits it into stories when its turn comes
     # no milestone: a feature joins a sprint when /compasso:plan pushes it
     # shellcheck disable=SC2086
     res="$(upsert_issue "$num" "$(jq -r .title <<<"$f")" "$(render feature "$f" '{}')" "" issue "" $labels)"
@@ -364,7 +367,7 @@ push_backlog() {
   done
 }
 
-# ---------- story flow ----------
+# ---------- stories and merge requests ----------
 need() { for v in "$@"; do eval "[ -n \"\$$v\" ]" || { echo "gitlab: $CMD needs --$(echo "$v" | tr 'A-Z_' 'a-z-')" >&2; exit 1; }; done; }
 
 parent_iid() { # work item id -> parent iid, or empty
@@ -452,66 +455,7 @@ open_mr() {
   printf '%s' "$out" | jq -e -c '{iid, web_url}' 2>/dev/null || { echo "gitlab: could not open the merge request for $BRANCH" >&2; return 1; }
 }
 
-followup() {
-  local res pj ms new target tj epic why errs try
-  need PARENT TITLE BODY
-  pj="$(api "projects/$PID/issues/$PARENT")"
-  [ -n "$(jq -r '.iid // empty' <<<"$pj" 2>/dev/null)" ] || { echo "gitlab: no work item #$PARENT" >&2; return 1; }
-  # the parent's sprint, unless --milestone none puts it in the backlog for a later sprint
-  ms=""; [ "$MILESTONE" = none ] || ms="$(jq -r '.milestone.id // ""' <<<"$pj")"
-  # GitLab allows no Task under a Task: a story's follow-up goes to its feature, else to its sprint's epic
-  tj="$pj"
-  if [ "$(jq -r .issue_type <<<"$pj")" = task ]; then
-    target="$(parent_iid "$(jq -r .id <<<"$pj")")"
-    if [ -z "$target" ] && [ -n "$(jq -r '.milestone.title // ""' <<<"$pj")" ]; then
-      epic="$(api "projects/$PID/issues?milestone=$(jq -r .milestone.title <<<"$pj")&labels=type::epic&state=all" | jq -r '.[0].iid // empty')"
-      target="$epic"
-    fi
-    tj=""; [ -z "$target" ] || tj="$(api "projects/$PID/issues/$target")" || tj=""
-  fi
-  res="$(upsert_issue "" "$TITLE" "$(cat "$BODY")" "$ms" task "" $(printf '%s' "$LABELS_ARG" | tr ',' ' '))"
-  [ -n "$res" ] || { echo "gitlab: could not create the follow-up" >&2; return 1; }
-  new="${res% *}"
-  # the follow-up exists from here on: it is always returned, so a caller never files it twice
-  if [ -n "$tj" ]; then
-    for try in 1 2 3; do   # a transient error (GitLab's "Internal server error") is tried again
-      errs="$(api graphql -f query="mutation { workItemUpdate(input: { id: \"gid://gitlab/WorkItem/${res#* }\", hierarchyWidget: { parentId: \"gid://gitlab/WorkItem/$(jq -r .id <<<"$tj")\" } }) { errors } }" 2>&1 |
-        jq -r 'if .data.workItemUpdate then (.data.workItemUpdate.errors | join("; ")) else "no response" end' 2>/dev/null)" || errs="no response"
-      [ -n "$errs" ] || { echo "$new"; return 0; }
-      [ "$try" -eq 3 ] || sleep 1
-    done
-    why="could not attach #$new to #$(jq -r .iid <<<"$tj") ($errs)"
-  else
-    why="#$PARENT has no feature or epic to attach #$new to"
-  fi
-  api -X POST "projects/$PID/issues/$new/links" -f target_project_id="$(api "projects/$PID" | jq -r .id)" -f target_issue_iid="$PARENT" -f link_type=relates_to >/dev/null &&
-    echo "gitlab: $why; linked to #$PARENT instead" >&2 ||
-    echo "gitlab: $why, and could not link it to #$PARENT either: attach it by hand" >&2
-  echo "$new"
-}
 
-merge() {
-  local mode
-  need MR
-  mode="$(cfg .approvals.merge)"; [ "$TEAM" = true ] && mode=team   # approvals.merge is not used in a team project
-  case "$mode" in agent|risk|team) ;; *) echo "gitlab: approvals.merge is human - a person merges this merge request" >&2; return 1 ;; esac
-  [ -n "$BODY" ] && [ -f "$BODY" ] || { echo "gitlab: merge needs --body-file with the review findings" >&2; return 1; }
-  "$BIN/review-gate.sh" --findings "$BODY" --for merge --repo "$REPO" || return 1
-  if [ "$mode" = risk ]; then
-    [ -n "$RISK" ] && [ -f "$RISK" ] || { echo "gitlab: approvals.merge is risk - merge needs --risk with risk.sh's decision" >&2; return 1; }
-    [ "$(jq -r .level "$RISK")" = low ] || { echo "gitlab: the change is high risk - a person merges it" >&2; return 1; }
-  fi
-  # a project that lets a failed pipeline merge would merge at once: main stays green
-  [ "$(mr_checks | jq -r .pipeline)" != failed ] || { echo "gitlab: !$MR is not merged: its pipeline failed" >&2; return 1; }
-  # merged without a person: the daily digest lists it (a team's tech lead passes --risk only then)
-  if [ "$mode" != team ] || { [ -n "$RISK" ] && [ "$(jq -r .level "$RISK" 2>/dev/null)" = low ]; }; then
-    api -X PUT "projects/$PID/merge_requests/$MR" -f add_labels=compasso::auto-merged >/dev/null ||
-      { echo "gitlab: could not label !$MR" >&2; return 1; }
-  fi
-  api -X PUT "projects/$PID/merge_requests/$MR/merge" -f merge_when_pipeline_succeeds=true >/dev/null ||
-    { echo "gitlab: could not merge !$MR" >&2; return 1; }
-  echo "gitlab: !$MR merges when its pipeline succeeds"
-}
 
 
 mr_info() {
@@ -523,12 +467,6 @@ mr_info() {
   jq -c --argjson closes "$closes" '{iid, title, state, source_branch, target_branch, web_url, author: .author.username, draft, closes: $closes}' <<<"$mr"
 }
 
-followups_cmd() { # filed by ship.sh, which marks each with its story
-  local ms="&milestone=None"; [ "$ALL" -eq 0 ] || ms=""
-  api --paginate "projects/$PID/issues?state=opened$ms&per_page=100" | jq -s -c 'add // []
-    | map(select((.description // "") | test("<!-- compasso:followup story=[0-9]+ -->"))
-      | {iid, title, story: (.description | capture("<!-- compasso:followup story=(?<s>[0-9]+) -->").s | tonumber), body: .description})'
-}
 
 close() {
   need IID
@@ -537,13 +475,6 @@ close() {
   echo "gitlab: #$IID closed"
 }
 
-set_milestone() {
-  local id
-  need IID MILESTONE
-  id="$(api "projects/$PID/milestones?title=$MILESTONE" | jq -r --arg t "$MILESTONE" '[.[] | select(.title == $t)][0].id // empty')"
-  [ -n "$id" ] || { echo "gitlab: no sprint $MILESTONE (milestone) in $PROJECT" >&2; return 1; }
-  api -X PUT "projects/$PID/issues/$IID" -f milestone_id="$id" >/dev/null || { echo "gitlab: could not move #$IID into $MILESTONE" >&2; return 1; }
-}
 
 mr_checks() {
   local m
@@ -573,46 +504,9 @@ main_pipeline() { # a canceled or skipped pipeline says nothing about main; the 
     broken_by: (if .broken then {sha: .broken, mr: (if $mr == "" then null else ($mr | tonumber) end), closes: $closes} else null end)}' <<<"$p"
 }
 
-disarm() {
-  local b i out=""
-  b="$(api "projects/$PID" | jq -r .default_branch)" || return 1
-  for i in $(api --paginate "projects/$PID/merge_requests?state=opened&target_branch=$b&per_page=100" | jq -s -r 'add // [] | .[] | select(.merge_when_pipeline_succeeds == true) | .iid'); do
-    api -X POST "projects/$PID/merge_requests/$i/cancel_merge_when_pipeline_succeeds" >/dev/null || { echo "gitlab: could not turn off auto-merge on !$i" >&2; return 1; }
-    out="$out $i"
-  done
-  printf '%s\n' $out | jq -R 'select(. != "") | tonumber' | jq -s -c .
-}
 
-mr_update() { # GitLab rebases in the background: a conflict shows as conflicts in the next mr-checks
-  need MR
-  api -X PUT "projects/$PID/merge_requests/$MR/rebase" >/dev/null || { echo "gitlab: could not rebase !$MR" >&2; return 1; }
-  echo "gitlab: !$MR is being rebased onto its target; its pipeline runs again"
-}
 
-mr_of() { # the open merge request that closes a story
-  local m
-  need IID
-  m="$(api "projects/$PID/issues/$IID/related_merge_requests" |
-    jq -c --arg c "Closes #$IID" '[.[] | select(.state == "opened" and ((.description // "") | contains($c)))][0] // empty
-      | {iid, source_branch, target_branch, web_url}')"
-  [ -n "$m" ] || { echo "gitlab: #$IID has no open merge request" >&2; return 1; }
-  echo "$m"
-}
 
-mr_events() { # a merge request's comments and approvals, oldest first; GitLab writes an approval as a system note
-  local notes members='{}' a
-  need MR
-  notes="$(api --paginate "projects/$PID/merge_requests/$MR/notes?sort=asc&per_page=100" | jq -s -c 'add // []')" ||
-    { echo "gitlab: cannot read the notes of !$MR" >&2; return 1; }
-  for a in $(jq -r '[.[].author.id] | unique | .[]' <<<"$notes"); do
-    if api "projects/$PID/members/all/$a" >/dev/null 2>&1; then members="$(jq -c --arg a "$a" '.[$a] = true' <<<"$members")"; fi
-  done
-  jq -c --argjson m "$members" 'sort_by(.id) | map(
-      (if .system then ({"approved this merge request": "approved", "unapproved this merge request": "unapproved"}[.body // ""] // null)
-       else "comment" end) as $k | select($k != null)
-      | {kind: $k, by: .author.username, at: .created_at, body: (if .system then "" else (.body // "") end),
-         member: ($m[.author.id | tostring] // false)})' <<<"$notes"
-}
 
 comment() { # on a merge request (--mr) or an issue (--iid)
   local target where
@@ -669,26 +563,72 @@ sprint_sync() {
 }
 
 
-merge_commit() { # the commit a story's merge request put on the default branch
-  local mr
+snapshot() { # four reads; bin/snapshot.jq shapes them the same way for both trackers
+  local proj issues mrs pipes parsed
+  proj="$(api "projects/$PID")" || { echo "gitlab: cannot read $PROJECT" >&2; return 1; }
+  issues="$(api --paginate "projects/$PID/issues?state=opened&per_page=100")" && issues="$(jq -s 'add // []' <<<"$issues")" ||
+    { echo "gitlab: cannot read the open work items" >&2; return 1; }
+  mrs="$(api --paginate "projects/$PID/merge_requests?state=opened&per_page=100")" && mrs="$(jq -s 'add // []' <<<"$mrs")" ||
+    { echo "gitlab: cannot read the open merge requests" >&2; return 1; }
+  pipes="$(api "projects/$PID/pipelines?per_page=100")" || { echo "gitlab: cannot read the pipelines" >&2; return 1; }
+  parsed="$(jq '.[] | .description // ""' <<<"$issues" | jq -c --argjson N "$NAMES" -f "$BIN/parse.jq" | jq -s .)" || return 1
+  jq -n -L "$BIN" --arg main "$(jq -r '.default_branch // "main"' <<<"$proj")" \
+    --slurpfile issues <(printf '%s' "$issues") --slurpfile parsed <(printf '%s' "$parsed") \
+    --slurpfile mrs <(printf '%s' "$mrs") --slurpfile pipes <(printf '%s' "$pipes") '
+    include "snapshot";
+    ($pipes[0] | map({ref, sha, status})) as $p
+    | snapshot(
+        [$issues[0], $parsed[0]] | transpose | map(.[0] as $i | {iid: $i.iid, title: $i.title, web_url: $i.web_url,
+          labels: $i.labels, description: ($i.description // ""), deps: (.[1].depends_on + .[1].blocked_by), feature: .[1].feature,
+          sprint: ($i.milestone | if . then {title, due: .due_date} else null end), type: $i.issue_type});
+        $mrs[0] | map(. as $m | {iid, title, web_url, draft, labels, branch: .source_branch, description: (.description // ""),
+          author: .author.username, pipeline: ([$p[] | select(.sha == $m.sha)][0].status // "none")});
+        [$p[] | select(.ref == $main and (.status == "success" or .status == "failed"))][0] | {pipeline: (.status // "none"), sha})'
+}
+
+
+assign_cmd() {
+  local others
+  need IID NAME
+  others="$(api "projects/$PID/issues/$IID" | jq -r --arg me "dev::$NAME" '[.labels[] | select(startswith("dev::") and . != $me)] | join(",")')" ||
+    { echo "gitlab: no work item #$IID" >&2; return 1; }
+  api -X PUT "projects/$PID/issues/$IID" -f add_labels="dev::$NAME,compasso::backlog" \
+    -f remove_labels="${others:+$others,}compasso::building,compasso::in-review" >/dev/null || { echo "gitlab: could not assign #$IID" >&2; return 1; }
+}
+
+human_done() { # the question was answered: the story is free again (bin/run.sh)
   need IID
-  mr="$(api "projects/$PID/issues/$IID/closed_by" | jq -c '[.[] | select(.state == "merged")][0] // empty')"
-  [ -n "$mr" ] || { echo "gitlab: #$IID was not closed by a merged merge request" >&2; return 1; }
-  jq -r '.squash_commit_sha // .merge_commit_sha // empty' <<<"$mr" | grep . ||
-    { echo "gitlab: the merge request that closed #$IID has no merge commit" >&2; return 1; }
+  api -X PUT "projects/$PID/issues/$IID" -f remove_labels=needs::human >/dev/null || { echo "gitlab: could not unblock #$IID" >&2; return 1; }
+}
+
+human_ask() { # one open issue per (key, story): asking again updates it
+  local open marker hit ids="" u id out
+  need KEY TITLE BODY
+  marker="<!-- compasso:ask story=$IID key=$KEY -->"
+  open="$(api --paginate "projects/$PID/issues?state=opened&labels=needs::human&per_page=100")" && open="$(jq -s 'add // []' <<<"$open")" ||
+    { echo "gitlab: cannot read the open needs::human issues" >&2; return 1; }
+  hit="$(jq -c --arg m "$marker" '[.[] | select((.description // "") | startswith($m))][0] // empty' <<<"$open")"
+  if [ -n "$hit" ]; then
+    out="$(api -X PUT "projects/$PID/issues/$(jq -r .iid <<<"$hit")" -f title="$TITLE" -f description="$(cat "$BODY")")" ||
+      { echo "gitlab: could not update the question" >&2; return 1; }
+    jq -c '{iid, web_url, created: false}' <<<"$out"
+  else
+    for u in $(cfg '.people.ask // [] | .[]'); do
+      id="$(api "users?username=$u" | jq -r '.[0].id // empty')"
+      [ -n "$id" ] && ids="$ids -f assignee_ids[]=$id" || echo "gitlab: no user $u on $HOST to ask; the question stays unassigned" >&2
+    done
+    # shellcheck disable=SC2086
+    out="$(api -X POST "projects/$PID/issues" -f title="$TITLE" -f description="$(cat "$BODY")" -f issue_type=issue -f labels=needs::human $ids)" &&
+      [ -n "$(jq -r '.iid // empty' <<<"$out")" ] || { echo "gitlab: could not open the question" >&2; return 1; }
+    jq -c '{iid, web_url, created: true}' <<<"$out"
+  fi
+  [ -z "$IID" ] || api -X PUT "projects/$PID/issues/$IID" -f add_labels=needs::human >/dev/null ||
+    { echo "gitlab: asked, but could not hold back #$IID: add needs::human to it by hand" >&2; return 1; }
 }
 
 
-digest() { # merge requests merged without a person since a date, for the daily digest
-  local mrs
-  need SINCE
-  mrs="$(api --paginate "projects/$PID/merge_requests?state=merged&labels=compasso::auto-merged&updated_after=${SINCE}T00:00:00Z&per_page=100" | jq -s 'add // []')" ||
-    { echo "gitlab: cannot read the merged merge requests" >&2; return 1; }
-  jq -r -L "$BIN" --argjson L "$LOC" --arg since "$SINCE" 'include "i18n";
-    tf("digest_title"; {since: $since}), "",
-    (if length == 0 then "- " + t("nothing") else (sort_by(.merged_at)[] | "- !\(.iid) \(.title) · " + tf("merged_at"; {at: (.merged_at[0:16] | sub("T"; " "))})) end),
-    "", t("digest_footer")' <<<"$mrs"
-}
+
+
 
 
 sprint_items() { # a sprint's work items with their label history, for the report
@@ -711,17 +651,71 @@ sprint_done() { # hours of work done in a sprint, or null when the sprint does n
 }
 
 
-# ---------- the primitives bin/team.sh builds assignment, claims and messages on ----------
-team_devs() { # the team's dev:: labels, one per line; nothing outside a team project
+team_devs() { # the team's developers (team.developers) as dev:: labels, one per line; nothing outside a team project
   [ "$TEAM" = true ] || return 0
-  api --paginate "projects/$PID/labels?per_page=100" | jq -s -r 'add // [] | .[].name | select(startswith("dev::"))'
+  yq -r '.team.developers // [] | .[] | "dev::" + .' "$REPO/.compasso/project.yaml"
 }
 labels_cmd() { api --paginate "projects/$PID/labels?per_page=100" | jq -s -c 'add // [] | map(.name)'; }
-label_create() {
-  need NAME
-  api -X POST "projects/$PID/labels" -f name="$NAME" -f color="$DEV_COLOR" -f description="$TITLE" >/dev/null ||
-    { echo "gitlab: could not create label $NAME" >&2; return 1; }
-  echo "gitlab: label $NAME created"
+harden_feature() { # what the harden stage drains from the after-MVP list goes under it (bin/lead.sh hardening)
+  local marker="<!-- compasso:harden -->" open out
+  need TITLE
+  open="$(api --paginate "projects/$PID/issues?state=opened&labels=type::feature&per_page=100")" && open="$(jq -s 'add // []' <<<"$open")" ||
+    { echo "gitlab: cannot read the open features" >&2; return 1; }
+  out="$(jq -c --arg m "$marker" '[.[] | select((.description // "") | startswith($m))] | sort_by(.iid) | .[0] // empty' <<<"$open")"
+  if [ -z "$out" ]; then
+    out="$(api -X POST "projects/$PID/issues" -f title="$TITLE" -f description="$marker" -f issue_type=issue -f labels=type::feature,compasso::building)" &&
+      [ -n "$(jq -r '.iid // empty' <<<"$out")" ] || { echo "gitlab: could not open the hardening feature" >&2; return 1; }
+  fi
+  jq -c '{iid, web_url}' <<<"$out"
+}
+add_story() { # in the feature's sprint and hierarchy; its developer covers its stories
+  local f s labels="owner::agent" dev res
+  need PARENT TITLE FROM
+  f="$(api "projects/$PID/issues/$PARENT")" && [ -n "$(jq -r '.iid // empty' <<<"$f" 2>/dev/null)" ] || { echo "gitlab: no feature #$PARENT" >&2; return 1; }
+  s="$(jq -c --arg f "#$PARENT" '. + {feature: $f} | del(.key)' "$FROM")" || { echo "gitlab: $FROM is not JSON" >&2; return 1; }
+  if [ "$TEAM" = true ]; then
+    dev="$(jq -r '[.labels[] | select(startswith("dev::"))][0] // empty' <<<"$f")"; labels="${dev:+$dev,compasso::backlog}"
+  fi
+  res="$(upsert_issue "" "$TITLE" "$(render story "$s" '{"iids": {}}')" "$(jq -r '.milestone.id // empty' <<<"$f")" task "" "$labels")"
+  [ -n "$res" ] || { echo "gitlab: could not write the story" >&2; return 1; }
+  api graphql -f query="mutation { workItemUpdate(input: { id: \"gid://gitlab/WorkItem/${res#* }\", hierarchyWidget: { parentId: \"gid://gitlab/WorkItem/$(jq -r .id <<<"$f")\" } }) { errors } }" |
+    jq -e '(.data.workItemUpdate.errors // ["no response"]) | length == 0' >/dev/null || { echo "gitlab: #${res% *} written, but not attached to #$PARENT" >&2; return 1; }
+  jq -cn --argjson iid "${res% *}" --arg u "https://$HOST/$PROJECT/-/issues/${res% *}" '{iid: $iid, web_url: $u}'
+}
+mr_merge() { # the tech lead's merge: no approvals to check; main stays green
+  need MR
+  [ "$(mr_checks | jq -r .pipeline)" != failed ] || { echo "gitlab: !$MR is not merged: its pipeline failed" >&2; return 1; }
+  api -X PUT "projects/$PID/merge_requests/$MR/merge" -f merge_when_pipeline_succeeds=true >/dev/null ||
+    { echo "gitlab: could not merge !$MR" >&2; return 1; }
+  echo "gitlab: !$MR merges when its pipeline succeeds"
+}
+mr_label() {
+  local l
+  need MR
+  for l in $(printf '%s,%s' "$ADD" "$REMOVE" | tr ',' ' '); do
+    case "$l" in compasso::rework|compasso::fix-main) ;; *) echo "gitlab: mr-label sets only compasso::rework and compasso::fix-main, not $l" >&2; return 1 ;; esac
+  done
+  IID="" label_cmd
+}
+after_mvp() { # one list, appended to: what the MVP leaves for the harden stage
+  local marker="<!-- compasso:after-mvp list -->" open iid out
+  need TITLE BODY
+  [ -f "$BODY" ] || { echo "gitlab: no body file $BODY" >&2; return 1; }
+  open="$(api --paginate "projects/$PID/issues?state=opened&labels=compasso::after-mvp&per_page=100")" && open="$(jq -s 'add // []' <<<"$open")" ||
+    { echo "gitlab: cannot read the after-MVP list" >&2; return 1; }
+  out="$(jq -c --arg m "$marker" '[.[] | select((.description // "") | startswith($m))] | sort_by(.iid) | .[0] // empty' <<<"$open")"
+  if [ -z "$out" ]; then
+    out="$(api -X POST "projects/$PID/issues" -f title="$TITLE" -f description="$marker" -f issue_type=issue -f labels=compasso::after-mvp)" &&
+      [ -n "$(jq -r '.iid // empty' <<<"$out")" ] || { echo "gitlab: could not open the after-MVP list" >&2; return 1; }
+  fi
+  iid="$(jq -r .iid <<<"$out")"
+  IID="$iid" MR="" comment >/dev/null || return 1
+  jq -c '{iid, web_url}' <<<"$out"
+}
+reopen() {
+  need IID
+  api -X PUT "projects/$PID/issues/$IID" -f state_event=reopen >/dev/null || { echo "gitlab: could not reopen #$IID" >&2; return 1; }
+  echo "gitlab: #$IID reopened"
 }
 label_cmd() { # --add and --remove take comma-separated labels; on an issue (--iid) or a merge request (--mr)
   local on where
@@ -745,24 +739,9 @@ comments() { # oldest first; member: the tracker says a project member wrote it
   jq -c --argjson m "$members" 'map({id, body: (.body // ""), author: .author.username, at: .created_at,
     member: ($m[.author.id | tostring] // false)}) | sort_by(.id)' <<<"$notes"
 }
-comment_delete() {
-  need IID ID
-  api -X DELETE "projects/$PID/issues/$IID/notes/$ID" >/dev/null || { echo "gitlab: could not delete comment $ID" >&2; return 1; }
-}
-comment_edit() {
-  local on
-  need ID BODY; on="$(notes_of)" || return 1
-  [ -f "$BODY" ] || { echo "gitlab: no body file $BODY" >&2; return 1; }
-  api -X PUT "projects/$PID/$on/notes/$ID" -f body="$(cat "$BODY")" >/dev/null || { echo "gitlab: could not edit comment $ID" >&2; return 1; }
-}
 
 case "$CMD" in
-  labels) labels_cmd ;;
-  label-create) label_create ;;
-  label) label_cmd ;;
   comments) comments ;;
-  comment-delete) comment_delete ;;
-  comment-edit) comment_edit ;;
   check) check ;;
   ensure-labels) ensure_labels ;;
   push-plan) push_plan ;;
@@ -770,23 +749,23 @@ case "$CMD" in
   story) story ;;
   set-state) set_state ;;
   open-mr) open_mr ;;
-  followup) followup ;;
-  merge) merge ;;
   mr-info) mr_info ;;
-  mr-of) mr_of ;;
   mr-checks) mr_checks ;;
-  followups) followups_cmd ;;
   close) close ;;
-  set-milestone) set_milestone ;;
-  mr-update) mr_update ;;
   main-pipeline) main_pipeline ;;
-  disarm) disarm ;;
-  mr-events) mr_events ;;
   comment) comment ;;
   sprint-sync) sprint_sync ;;
-  merge-commit) merge_commit ;;
-  digest) digest ;;
   sprint-items) sprint_items ;;
   sprint-done) sprint_done ;;
-  *) echo "usage: gitlab.sh check|ensure-labels|push-plan|push-backlog|story|set-state|open-mr|followup|merge|mr-info|mr-checks|mr-update|followups|set-milestone|comment|sprint-sync|merge-commit|digest|sprint-items|sprint-done --repo R ..." >&2; exit 1 ;;
+  snapshot) snapshot ;;
+  mr-merge) mr_merge ;;
+  mr-label) mr_label ;;
+  after-mvp) after_mvp ;;
+  reopen) reopen ;;
+  add-story) add_story ;;
+  harden-feature) harden_feature ;;
+  human-ask) human_ask ;;
+  human-done) human_done ;;
+  assign) assign_cmd ;;
+  *) echo "usage: gitlab.sh <command> --repo R ... (gitlab.sh --help lists them)" >&2; exit 1 ;;
 esac

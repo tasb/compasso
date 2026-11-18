@@ -132,6 +132,42 @@ get() { jq -c "$1" "$OUT"; }
   [ "$(get '.agents.cost')" = '{"currency":"EUR","total":21}' ]
 }
 
+# the runners' jobs: ana's machine built #11; the tech lead's reviewed #8 and #11 in one job; #99 is another sprint's
+runner_events() {
+  mkdir -p "$REPO/.compasso/runs/runner"
+  printf '%s\n' '{"at":"2026-10-06T10:00:00Z","role":"dev","name":"ana","job":"build","iids":[11],"result":"done","seconds":600,"tokens":1000,"cost_usd":0.5,"model":"claude-opus"}' \
+    '{"at":"2026-10-06T11:00:00Z","role":"dev","name":"ana","job":null,"iids":[],"result":"idle","seconds":1}' \
+    '{"at":"2026-10-06T12:00:00Z","role":"dev","name":"ana","job":"build","iids":[99],"result":"done","seconds":900,"tokens":9999}' \
+    > "$REPO/.compasso/runs/runner/events.jsonl"
+  LEAD="$BATS_TEST_TMPDIR/lead-events.jsonl"
+  echo '{"at":"2026-10-07T10:00:00Z","role":"lead","name":null,"job":"review","iids":[8,11],"result":"done","seconds":120,"tokens":2000,"cost_usd":0.2,"model":"claude-opus"}' > "$LEAD"
+}
+
+@test "collect: without --events, this machine's runner jobs on the sprint's items; idle runs and other sprints' items are left out" {
+  collect_setup; runner_events; collect
+  [ "$(get '[.agents.by_role[] | select(.role == "build") | [.model, .runs, .tokens, .minutes]]')" = '[["claude-opus",1,1000,10]]' ]
+  [ "$(get '[.agents.by_role[].role]')" = '["build","security","tester"]' ]
+}
+
+@test "collect: every machine's events: a job over several stories is shared out; the cost the harness reported, in USD" {
+  collect_setup; runner_events
+  cfg_set '.metrics.currency = "EUR"'   # only prices are in that currency
+  "$ROOT/bin/metrics.sh" collect --repo "$REPO" --out "$OUT" --today 2026-10-07 --events "$REPO/.compasso/runs/runner/events.jsonl" --events "$LEAD" >/dev/null
+  [ "$(get '[.agents.by_role[] | select(.role == "review") | [.runs, .tokens, .minutes]]')" = '[[1,2000,2]]' ]
+  [ "$(get '[.agents.stories[] | [.title, .estimate_h, .agent_minutes, .tokens, .cost]]')" = '[["List API",4,4,3001000,null],["Year filter",4,11,2000,0.6]]' ]
+  [ "$(get '.agents.cost')" = '{"currency":"USD","total":0.7}' ]
+  run "$ROOT/bin/metrics.sh" collect --repo "$REPO" --out "$OUT" --events "$BATS_TEST_TMPDIR/none.jsonl"
+  [ "$status" -eq 1 ]
+}
+
+@test "collect: with prices, runner jobs are priced like any run, never mixed with the harness's USD" {
+  collect_setup; runner_events
+  cfg_set '.metrics.prices = {"sonnet": 3, "opus": 15, "claude-opus": 100} | .metrics.currency = "EUR"'
+  "$ROOT/bin/metrics.sh" collect --repo "$REPO" --out "$OUT" --today 2026-10-07 --events "$LEAD" >/dev/null
+  [ "$(get '[.agents.stories[] | [.title, .cost]]')" = '[["List API",21.1],["Year filter",0.1]]' ]
+  [ "$(get '.agents.cost')" = '{"currency":"EUR","total":21.2}' ]
+}
+
 @test "collect: without a plan it refuses" {
   collect_setup; rm "$REPO/.compasso/plan.yaml"
   run "$ROOT/bin/metrics.sh" collect --repo "$REPO" --out "$OUT"

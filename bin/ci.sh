@@ -9,6 +9,8 @@
 #   compasso-coverage  the coverage command, then diff-cover on changed lines (warning: exit 3 allowed)
 #   GitLab SAST and Secret Detection                                         (security scans, every tier)
 #   compasso-scan-gate  fails on any high or critical scan finding           (gate)
+#   compasso-deploy-staging  on the default branch only, after verify and the scan gate: staging.deploy
+# Verify and the scans run on the default branch too, so a red main is seen (bin/run.sh's red-main job).
 # In stage mvp only verify and the scans run on each merge request: e2e and coverage come back when the
 # stage is production and this runs again (setup does).
 # The product repo includes the file from its .gitlab-ci.yml.
@@ -58,6 +60,7 @@ variables:
 .compasso-mr:
   rules:
     - if: \$CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: \$CI_COMMIT_BRANCH == \$CI_DEFAULT_BRANCH
 
 # Keep the scan reports as plain artifacts so the scan gate (last stage) can read them.
 semgrep-sast:
@@ -95,6 +98,25 @@ compasso-verify:
   script:
 $script_lines
 EOF
+  c="$(cfg .staging.deploy)"
+  if [ -n "$c" ]; then
+    cat <<EOF
+# A green main deploys itself to staging, where people test what was delivered; one deploy at a time.
+compasso-deploy-staging:
+  stage: .post
+  image: $(yq_str "$image")
+  needs: [compasso-verify, compasso-scan-gate]
+  rules:
+    - if: \$CI_COMMIT_BRANCH == \$CI_DEFAULT_BRANCH
+  resource_group: staging
+  environment:
+    name: staging
+    url: $(yq_str "$(cfg .staging.url)")
+  script:
+    - $(yq_str "$c")
+
+EOF
+  fi
   c="$(cfg .commands.e2e)"
   if [ -n "$c" ] && [ "$full" = 1 ]; then
     cat <<EOF

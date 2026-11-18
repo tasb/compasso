@@ -2,8 +2,8 @@
 # language: run with -L <bin> and --argjson L <bin/locale.sh output>.
 include "i18n";
 # Input: {kind: "epic"|"feature"|"story"|"blocker", item, ctx}
-#   ctx.tier       "free" | "premium" (story Depends on lines are Free only)
-#   ctx.iids       {"S-1": 12, ...}   plan key -> GitLab iid, for dependencies
+#   ctx.tier       "free" | "premium" | "github"
+#   ctx.iids       {"S-1": 12, ...}   plan key -> GitLab iid, for dependencies and the story's feature
 #   ctx.capacity   sprint capacity in hours (epic)
 #   ctx.features   [{iid, title, hours}] (epic)
 #   ctx.needed     [{iid, title}] stories a blocker holds up (blocker)
@@ -11,7 +11,7 @@ include "i18n";
 def bullets: map("- " + .) | join("\n");
 def checks: map("- [ ] " + .) | join("\n");
 def section($title; $body): if ($body // "") == "" then empty else "## \($title)\n\($body)" end;
-def key_line: "<!-- compasso:key=\(.key) -->";
+def key_line: if .key then "<!-- compasso:key=\(.key) -->" else empty end;   # a story the lead wrote on the tracker has no plan key
 def key($k): "**\(md($k)):**";
 def coverage_line: if .coverage != null then "\(key("coverage")) \(.coverage)%" else empty end;
 def hours: (. | tostring) + "h";
@@ -50,9 +50,10 @@ def hours: (. | tostring) + "h";
       "**\(md("as"))** \($i.as) **\(md("i_want"))** \($i.want) **\(md("so_that"))** \($i.so_that).",
       section(md("acceptance"); $i.acceptance | checks),
       section(md("verify"); $i.verify | map("`\(.)`") | bullets),
-      ([ "\(key("tests")) \($i.tests | join(", "))",
+      ([ (if $i.feature then ($i.feature | tostring) as $f | "\(key("feature")) \(if $f | startswith("#") then $f else "#\($ctx.iids[$f] // $f)" end)" else empty end),
+         "\(key("tests")) \($i.tests | join(", "))",
          (if ($i.touches // []) | length > 0 then "\(key("touches")) \($i.touches | map("`\(.)`") | join(", "))" else empty end),
-         (if $ctx.tier == "free" and ($deps | length) > 0 then "\(key("depends_on")) \($deps | join(", "))" else empty end),
+         (if ($deps | length) > 0 then "\(key("depends_on")) \($deps | join(", "))" else empty end),
          (if ($i.blocked_by // []) | length > 0 then "\(key("blocked_by")) \(($i.blocked_by | map("#\($ctx.iids[.] // .)") | join(", ")))" else empty end),
          ($i | coverage_line) ] | join("\\\n")),
       ($i | key_line)

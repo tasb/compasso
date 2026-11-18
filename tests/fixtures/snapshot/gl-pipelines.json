@@ -1,0 +1,7 @@
+[
+ {"id":105,"ref":"refs/merge-requests/8/head","sha":"ccc","status":"running"},
+ {"id":104,"ref":"main","sha":"m2","status":"failed"},
+ {"id":103,"ref":"refs/merge-requests/7/head","sha":"bbb","status":"success"},
+ {"id":102,"ref":"refs/merge-requests/7/head","sha":"old","status":"failed"},
+ {"id":101,"ref":"main","sha":"m1","status":"success"}
+]

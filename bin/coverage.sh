@@ -6,7 +6,7 @@
 #
 # Runs coverage.command, then diff-cover on coverage.report. A changed file under
 # coverage.paths that is missing from the report counts as fully uncovered.
-# --min defaults to coverage.min_changed (the story flow passes the resolved one).
+# --min defaults to coverage.min_changed (the build job passes the story's own, when it has one).
 # Writes DIR/coverage.json: {status, percent, min, uncovered: ["file:line"...]}, and the
 # command's seconds to DIR/events.jsonl. In stage mvp it is skipped: status "skipped", nothing runs.
 # Exit: 0 at or above min, nothing changed, or skipped | 3 below min, or not measured | 2 usage

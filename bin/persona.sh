@@ -13,7 +13,6 @@
 #
 #   persona.sh show --repo R [--json]                         the persona, name and checkout id
 #   persona.sh set  --repo R --persona P [--name N]           after a person chose (setup)
-#   persona.sh join --repo R                                  the JSON a developer hands to the tech lead
 #   persona.sh gate --repo R --skill S | --tracker C [--read-only]   may this persona run it?
 #   persona.sh account --repo R --set LOGIN --email E   the tracker account this agent uses (one per agent, never a person's)
 #   persona.sh env  --repo R                                  "export ..." of the account's token, for the adapters to eval
@@ -90,10 +89,6 @@ case "$CMD" in
     { echo "persona=$PERSONA"; [ -z "$NAME" ] || echo "name=$NAME"; grep -E '^(account|email|host|provider)=' "$FILE" 2>/dev/null || true; } > "$FILE.tmp" &&
       mv "$FILE.tmp" "$FILE" || exit 1   # the account stays: it is the agent's, whatever its persona
     echo "persona: this checkout is $PERSONA$( [ -n "$NAME" ] && echo " $NAME")" ;;
-  join)
-    [ "$(persona)" = developer ] || { echo "persona: only a developer joins a team - run setup and choose developer" >&2; exit 1; }
-    jq -n --arg n "$(name)" --arg p "$("$BIN/config.sh" get --repo "$CFG_REPO" .tracker.project)" --arg c "$CHECKOUT" --arg a "$(field account)" \
-      '{compasso: "join", name: $n, project: $p, harness: "claude", checkout: $c} + (if $a == "" then {} else {account: $a} end)' ;;
   account)
     [ -n "$ACCOUNT" ] || { jq -n --arg a "$(field account)" --arg e "$(field email)" '{account: (if $a == "" then null else $a end), email: (if $e == "" then null else $e end)}'; exit 0; }
     [[ "$ACCOUNT" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$ ]] || { echo "persona: '$ACCOUNT' is not a tracker login" >&2; exit 2; }
@@ -121,11 +116,7 @@ case "$CMD" in
     case "$(persona)" in developer) who="$(name)" ;; tech-lead) who=tech-lead ;; *) who="$ACCOUNT" ;; esac
     git -C "$REPO" config --local user.name "$who" && git -C "$REPO" config --local user.email "$EMAIL" || exit 1
     echo "persona: this checkout uses $ACCOUNT on $host; its commits are $who <$EMAIL>"
-    # the tech lead owns the configuration: its own login joins the agents, whose approvals never count as a person's
-    if [ "$(persona)" = tech-lead ]; then
-      A="$ACCOUNT" yq -i '.team.agents = ((.team.agents // []) + [strenv(A)] | unique)' "$CFG_REPO/.compasso/project.yaml" || exit 1
-      echo "persona: $ACCOUNT is in team.agents - commit .compasso/project.yaml"
-    fi ;;
+    ;;
   env)
     [ -n "$(field account)" ] || exit 0
     t="$("$BIN/git-credential-compasso" token --repo "$REPO")" && [ -n "$t" ] || exit 1
@@ -136,19 +127,16 @@ case "$CMD" in
   gate)
     p="$(persona)"
     [ -n "$SKILL$TRACKER" ] || { echo "persona: gate needs --skill or --tracker" >&2; exit 2; }
-    case "$TRACKER" in label|label-create|comment-delete|comment-edit)
-      refuse "$TRACKER is used through bin/team.sh and bin/mr-report.sh, which check who may assign, claim, message and report" ;; esac
     if ! team; then
       [ "$p" = default ] || refuse "this checkout is $p, but the project has no team (team.enabled is false in .compasso/project.yaml). The tech lead's setup turns it on; pull its change, or run setup and choose default."
-      [ "$SKILL" != work ] || refuse "the poll is for team projects (team.enabled: true)"
       exit 0
     fi
     if [ -n "$SKILL" ]; then
       case "$p:$SKILL" in
         *:setup|*:start|*:status) ;;
-        tech-lead:story) refuse "the tech lead never builds: assign the story to a developer (bin/team.sh assign)" ;;
+        tech-lead:build) refuse "the tech lead never builds: bin/run.sh assigns the story to a developer" ;;
         tech-lead:*) ;;
-        developer:story|developer:sprint|developer:review|developer:work) ;;
+        developer:build) ;;
         developer:*) refuse "a developer builds what is assigned to it; /compasso:$SKILL is the tech lead's" ;;
         default:report|default:present) ;;
         default:*) refuse "this is a team project and this checkout has no persona, so it only reads. Run /compasso:setup and choose tech lead or developer." ;;
@@ -156,18 +144,18 @@ case "$CMD" in
       exit 0
     fi
     case "$TRACKER" in
-      check|story|mr-info|mr-of|mr-events|mr-checks|main-pipeline|followups|sprint-items|sprint-done|merge-commit|digest|labels|comments) exit 0 ;;
-      merge) refuse "in a team project the tech lead (in mvp also the story's developer) merges, through bin/team.sh merge, which checks the reports, the risk, main and a person's approval" ;;
-      mr-update) refuse "in a team project the tech lead brings a merge request up to date, through bin/team.sh update" ;;
-      disarm) refuse "in a team project the tech lead turns off auto-merge when main is red, through bin/team.sh main" ;;
+      check|story|mr-info|mr-checks|main-pipeline|sprint-items|sprint-done|comments|snapshot) exit 0 ;;
       sprint-sync) [ "$READ_ONLY" -eq 1 ] && exit 0 ;;
     esac
     case "$p:$TRACKER" in
       default:*) refuse "this is a team project and this checkout has no persona, so it only reads. Run /compasso:setup and choose tech lead or developer." ;;
       tech-lead:*) ;;
-      developer:push-plan|developer:push-backlog|developer:ensure-labels|developer:protect|developer:set-milestone|developer:close) refuse "$TRACKER is the tech lead's: a developer does not change the scope or the project's settings" ;;
+      developer:assign) refuse "assign is the tech lead's: a developer builds what is assigned to it" ;;
+      developer:mr-merge) refuse "the tech lead merges: a developer opens the merge request, and the tech lead reviews and merges it (bin/lead.sh)" ;;
+      developer:reopen|developer:after-mvp) refuse "$TRACKER is the tech lead's (bin/lead.sh): a developer builds what is assigned to it" ;;
+      developer:push-plan|developer:push-backlog|developer:add-story|developer:harden-feature|developer:ensure-labels|developer:protect|developer:close) refuse "$TRACKER is the tech lead's: a developer does not change the scope or the project's settings" ;;
       developer:*) ;;
     esac
     exit 0 ;;
-  *) echo "usage: persona.sh show|set|join|gate|account|env --repo R ..." >&2; exit 2 ;;
+  *) echo "usage: persona.sh show|set|gate|account|env --repo R ..." >&2; exit 2 ;;
 esac

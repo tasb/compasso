@@ -8,14 +8,13 @@ cm() { "$ROOT/bin/codex-models.sh" check --repo "$REPO" --catalog "$CAT" "$@"; }
   run cm
   [ "$status" -eq 3 ]
   [[ "$output" == *"security: 'gpt-6-astra' is not available to this Codex account -> gpt-9-terra (effort high, strong tier)"* ]] || false
-  [[ "$output" == *"builder: 'gpt-6-sol' is not available to this Codex account -> gpt-9-luna (effort medium, standard tier)"* ]] || false
-  [[ "$output" == *"shipper: 'gpt-6-luna' is not available to this Codex account -> gpt-9-luna (effort low, fast tier)"* ]] || false
+  [[ "$output" == *"tester: 'gpt-6-sol' is not available to this Codex account -> gpt-9-luna (effort medium, standard tier)"* ]] || false
 }
 
 @test "hidden models are never proposed; strong roles never get a fast-tier model" {
   run cm
   [[ "$output" != *"gpt-9-secret"* ]] || false
-  [ "$(grep -E '^(planner|security|approver|reviewer):' <<<"$output" | grep -c 'gpt-9-terra')" -eq 4 ]
+  [ "$(grep -E '^(planner|security|reviewer):' <<<"$output" | grep -c 'gpt-9-terra')" -eq 3 ]
 }
 
 @test "--apply writes the proposals, the result passes config validation, and a second check is clean" {

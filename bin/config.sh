@@ -2,7 +2,9 @@
 # Compasso project configuration: .compasso/project.yaml
 #
 #   config.sh init     --repo R [--project ns/name]   copy the template (refuses to overwrite)
-#   config.sh upgrade  --repo R                       add keys a newer Compasso introduced; never changes a value
+#   config.sh upgrade  --repo R                       add keys a newer Compasso introduced and drop the ones it no longer
+#                                                     reads (4.0.0: trust.mvp_approval becomes trust.verify_approval,
+#                                                     harden.images.a11y becomes prototype.image); never changes a kept value
 #   config.sh validate --repo R                       print every problem, exit 1 if any
 #   config.sh get      --repo R <yq-path>             print one value
 #
@@ -11,8 +13,8 @@ set -u
 case "${1:-}" in -h|--help) sed -n '2,/^set -u/s/^# \{0,1\}//p' "$0"; exit 0 ;; esac   # the header above is the help
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-ROLES="planner tester builder reviewer security approver shipper mutator finops"
-FLOOR_ROLES="security approver"   # may never run on a fast-tier model or low effort
+ROLES="planner tester reviewer security"
+FLOOR_ROLES="security"   # may never run on a fast-tier model or low effort
 
 CMD="${1:-}"; shift || true
 REPO="." PROJECT="" ARG=""
@@ -65,8 +67,6 @@ validate() {
   is_int "$weeks" && [ "$weeks" -ge 1 ] && [ "$weeks" -le 8 ] || err "sprint.weeks must be an integer from 1 to 8"
   is_int "$hpd" && [ "$hpd" -ge 1 ] && [ "$hpd" -le 24 ] || err "sprint.hours_per_day must be an integer from 1 to 24"
   is_int "$cap" && [ "$cap" -ge 1 ] || err "sprint.capacity_hours must be a positive integer"
-  v="$(val .sprint.parallel)"
-  [ -z "$v" ] || { is_int "$v" && [ "$v" -ge 1 ] && [ "$v" -le 8 ]; } || err "sprint.parallel must be an integer from 1 to 8"
 
   smax="$(val .limits.story_max_hours)"; star="$(val .limits.story_target_hours)"
   if is_int "$smax" && [ "$smax" -ge 1 ]; then
@@ -79,12 +79,6 @@ validate() {
   else
     err "limits.story_target_hours must be a positive integer"
   fi
-  for k in tester builder reviewer security approver shipper mutator finops total; do
-    v="$(val ".limits.agent_runs.$k")"
-    is_int "$v" && [ "$v" -gt 0 ] || err "limits.agent_runs.$k must be a positive integer (run: config.sh upgrade)"
-  done
-  v="$(val .limits.agent_runs.mvp_total)"   # added in 3.0.2: none is 40
-  [ -z "$v" ] || { is_int "$v" && [ "$v" -gt 0 ]; } || err "limits.agent_runs.mvp_total must be a positive integer"
 
   [ "$(yq -r '.test_paths | length' "$CFG" 2>/dev/null)" -ge 1 ] 2>/dev/null || err "test_paths must list at least one pattern (run: config.sh upgrade)"
 
@@ -99,32 +93,22 @@ validate() {
   [ "$(yq '[(.metrics.prices // {}) | to_entries | .[] | select((.value | tag) != "!!int" and (.value | tag) != "!!float")] | length' "$CFG")" = 0 ] ||
     err "metrics.prices must map each model to a number (price per million tokens)"
 
-  v="$(val .harden.environment.url)"
-  case "$v" in ""|http://*|https://*) ;; *) err "harden.environment.url must start with http:// or https://" ;; esac
-  v="$(val .harden.flaky_runs)"
-  [ -z "$v" ] || { is_int "$v" && [ "$v" -ge 2 ]; } || err "harden.flaky_runs must be a number of at least 2"
-
-  case "$(val .approvals.plan)" in human|auto) : ;; *) err "approvals.plan must be human or auto" ;; esac
-  case "$(val .approvals.merge)" in human|agent|risk) : ;; *) err "approvals.merge must be human, agent or risk" ;; esac
-  v="$(val .risk.max_changed_lines)"
-  [ -z "$v" ] || { is_int "$v" && [ "$v" -ge 1 ]; } || err "risk.max_changed_lines must be a positive number"
-  case "$(val .stage)" in ""|mvp|production) ;; *) err "stage must be mvp or production" ;; esac
-  case "$(yq -r '.trust.mvp_approval' "$CFG")" in true|false|null) ;; *) err "trust.mvp_approval must be true or false" ;; esac   # none is false
-  for k in sensitive_paths product_paths infra_paths production_paths; do
-    case "$(yq -r ".risk.$k | tag" "$CFG")" in '!!seq'|'!!null') ;; *) err "risk.$k must be a list of globs" ;; esac
+  case "$(val .approvals.plan)" in ""|human|auto) : ;; *) err "approvals.plan must be human or auto" ;; esac
+  case "$(val .stage)" in ""|mvp|harden|production) ;; *) err "stage must be mvp, harden or production" ;; esac
+  for k in lead_minutes dev_minutes job_minutes; do
+    v="$(val ".run.$k")"; [ -z "$v" ] || { is_int "$v" && [ "$v" -ge 1 ]; } || err "run.$k must be a whole number of minutes, at least 1"
   done
+  v="$(val .run.failures)"; [ -z "$v" ] || { is_int "$v" && [ "$v" -ge 1 ]; } || err "run.failures must be at least 1"
+  case "$(yq -r '.people.ask | tag' "$CFG")" in '!!seq'|'!!null') ;; *) err "people.ask must be a list of tracker logins" ;; esac
+  case "$(yq -r '.team.developers | tag' "$CFG")" in '!!seq'|'!!null') ;; *) err "team.developers must be a list of names" ;; esac
+  case "$(yq -r '.run.allow | tag' "$CFG")" in '!!seq'|'!!null') ;; *) err "run.allow must be a list of tool rules" ;; esac
+  case "$(yq -r '.trust.verify_approval' "$CFG")" in true|false|null) ;; *) err "trust.verify_approval must be true or false" ;; esac   # none is false
+  case "$(yq -r '.risk.sensitive_paths | tag' "$CFG")" in '!!seq'|'!!null') ;; *) err "risk.sensitive_paths must be a list of globs" ;; esac
 
   case "$(yq -r '.team.enabled' "$CFG")" in true|false) ;; *) err "team.enabled must be true or false (run: config.sh upgrade)" ;; esac
-  v="$(val .team.poll_minutes)"
-  is_int "$v" && [ "$v" -ge 1 ] && [ "$v" -le 1440 ] || err "team.poll_minutes must be an integer from 1 to 1440 (run: config.sh upgrade)"
-  v="$(val .team.lead_poll_minutes)"
-  is_int "$v" && [ "$v" -ge 1 ] && [ "$v" -le 1440 ] || err "team.lead_poll_minutes must be an integer from 1 to 1440 (run: config.sh upgrade)"
-  v="$(val .team.lead_merge_minutes)"   # added in 3.1.0: none is 15
-  [ -z "$v" ] || { is_int "$v" && [ "$v" -ge 1 ] && [ "$v" -le 1440 ]; } || err "team.lead_merge_minutes must be an integer from 1 to 1440"
   v="$(val .team.queue.target)"; m="$(val .team.queue.min)"
   is_int "$v" && [ "$v" -ge 1 ] || err "team.queue.target must be a positive integer (run: config.sh upgrade)"
   is_int "$m" && [ "$m" -ge 1 ] && { ! is_int "$v" || [ "$m" -le "$v" ]; } || err "team.queue.min must be at least 1 and at most team.queue.target"
-  [ "$(yq -r '.team.agents | tag' "$CFG")" = '!!seq' ] || err "team.agents must be a list of logins (run: config.sh upgrade)"
 
   [ "$(yq -r '.harnesses | length' "$CFG")" -ge 1 ] 2>/dev/null || err "harnesses must list claude and/or codex"
   for h in $(yq -r '.harnesses[]?' "$CFG"); do
@@ -137,11 +121,6 @@ validate() {
         case "$e" in low|minimal) err "models.$h.$r: effort '$e' is below the floor for $r" ;; esac
       esac
     done
-  done
-
-  # Security review is not configurable; refuse any attempt to add a switch for it.
-  for v in '.security' '.review.security' '.approvals.security'; do
-    [ "$(yq -r "$v // \"\"" "$CFG")" = "" ] || err "${v#.}: security review is mandatory and has no settings"
   done
 
   if [ -n "$errs" ]; then
@@ -163,6 +142,13 @@ case "$CMD" in
     need_cfg
     # a language chosen before `language` existed (test_guide.language) is kept, not replaced by the default
     yq -i 'select(has("language") | not) |= (.language = (.test_guide.language // "en")) | del(.test_guide.language)' "$CFG" || exit 1
+    # 4.0.0: renamed keys keep their value; keys nothing reads any more go
+    yq -i 'with(select(.trust.mvp_approval != null and .trust.verify_approval == null); .trust.verify_approval = .trust.mvp_approval)
+      | with(select(.harden.images.a11y != null and .prototype.image == null); .prototype.image = .harden.images.a11y)
+      | del(.trust.mvp_approval, .limits.agent_runs, .approvals.merge, .harden, .test_guide, .sprint.parallel,
+            .risk.max_changed_lines, .risk.product_paths, .risk.infra_paths, .risk.production_paths,
+            .team.poll_minutes, .team.lead_poll_minutes, .team.lead_merge_minutes, .team.agents)
+      | del(.models[] | (.builder, .approver, .shipper, .mutator, .finops))' "$CFG" || exit 1
     T="$ROOT/templates/project.yaml" yq -i '. *n load(strenv(T))' "$CFG" || exit 1
     echo "config: $CFG has every current key"
     ;;

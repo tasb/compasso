@@ -1,138 +1,77 @@
 #!/usr/bin/env bats
 load helper
 
-# Sprint S20 on GitHub (no Project): feature #6 with #8 (closed, still labelled in review),
-# #11 (runnable), #9 (waits on #11) and #10 (blocked by blocker #13, assigned to ana).
+# bin/status.sh: what bin/run.sh sees, read-only. The snapshot fixtures (tests/snapshot.bats): stories #10
+# and #11 are ana's (#11 depends on #10); #12 is rui's, waiting for a person on #20; bug #13 has merge
+# request !7 with a green pipeline; !8 is sent back for rework; !9 is a draft; main's last pipeline failed.
+F="$BATS_TEST_DIRNAME/fixtures/snapshot"
+
 setup() {
   setup_repo
-  cfg_set '.tracker.provider = "github" | .tracker.host = "github.com" | .tracker.github.project = 0'
-  export FAKE_GH="$BATS_TEST_TMPDIR/gh"; mkdir -p "$FAKE_GH"/{issues,parent,blocked}; : > "$FAKE_GH/calls.log"
-  export PATH="$ROOT/tests/fake:$PATH"
-  echo '[{"number":1,"title":"S20"}]' > "$FAKE_GH/milestones.json"
-  issue 6 "Invoice history" open '["type::feature"]'
-  issue 30 "S20: goal" open '["type::epic"]'
-  issue 8 "List API" closed '["owner::agent","compasso::in-review"]'
-  issue 11 "Year filter" open '["owner::agent"]' '**Verify:** x'
-  issue 9 "Status filter" open '["owner::agent"]'
-  issue 10 "PDF" open '["owner::agent","blocked"]'
-  issue 13 "Credentials" open '["type::blocker"]'
-  jq '.assignees = [{login: "ana"}]' "$FAKE_GH/issues/13.json" > "$FAKE_GH/t" && mv "$FAKE_GH/t" "$FAKE_GH/issues/13.json"
-  for n in 8 11 9 10; do echo 6 > "$FAKE_GH/parent/$n"; done
-  echo 11 > "$FAKE_GH/blocked/9"; echo 13 > "$FAKE_GH/blocked/10"
-  cd "$REPO" && git init -q -b main && git config user.email t@t && git config user.name t && git commit -q --allow-empty -m base
-}
-issue() { # number title state labels [body]
-  jq -n --argjson n "$1" --arg t "$2" --arg s "$3" --argjson l "$4" --arg b "${5:-}" \
-    '{number: $n, id: (1000 + $n), node_id: "I_\($n)", title: $t, state: $s, body: $b, labels: ($l | map({name: .})),
-      milestone: {number: 1, title: "S20"}, assignees: [], created_at: "2026-10-05T09:00:00Z", closed_at: null}' > "$FAKE_GH/issues/$1.json"
+  cfg_set '.stage = "mvp" | .team.enabled = true | .team.developers = ["ana", "rui"]'
+  setup_glab_stub
+  echo '{"default_branch":"main"}' | fixture api --hostname gitlab.com projects/acme%2Fapp
+  fixture api --hostname gitlab.com --paginate 'projects/acme%2Fapp/issues?state=opened&per_page=100' < "$F/gl-issues.json"
+  fixture api --hostname gitlab.com --paginate 'projects/acme%2Fapp/merge_requests?state=opened&per_page=100' < "$F/gl-mrs.json"
+  fixture api --hostname gitlab.com 'projects/acme%2Fapp/pipelines?per_page=100' < "$F/gl-pipelines.json"
+  "$ROOT/bin/persona.sh" set --repo "$REPO" --persona tech-lead >/dev/null
 }
 st() { "$ROOT/bin/status.sh" --repo "$REPO" "$@"; }
-R() { mkdir -p "$REPO/.compasso/runs/$1"; echo "$REPO/.compasso/runs/$1"; }
 
-@test "sprint: what can be built, what waits and on whom, and the features" {
-  run st --milestone S20
+@test "the stage, main, what waits for a person, the merge requests and each developer's work" {
+  run st
   [ "$status" -eq 0 ]
-  [[ "$output" == *"Build now: #11 Year filter"* ]] || false
-  [[ "$output" == *"Waiting: #9 on #11"* ]] || false
-  [[ "$output" == *"Blocked: #10 by #13 Credentials (@ana)"* ]] || false
-  [[ "$output" == *"Features: #6 Invoice history 1/4 done"* ]] || false
+  [[ "$output" == *"Stage: mvp"* ]] || false
+  [[ "$output" == *"Main: failed"* ]] || false
+  [[ "$output" == *"#20 "*"(holds #12)"* ]] || false
+  [[ "$output" == *"!7 #13 green, waits for review"* ]] || false
+  [[ "$output" == *"!8 "*"sent back for rework"* ]] || false
+  [[ "$output" == *"!9 "*"draft"* ]] || false
+  [[ "$output" == *"rui: "*"#12 waits for a person"* ]] || false
+  [[ "$output" == *"#11 blocked by #10"* ]] || false
 }
 
-@test "status changes nothing on the tracker, not even a stale label" {
-  st --milestone S20 >/dev/null
-  st --iid 11 >/dev/null
-  [ "$(grep -cE '^(POST|PATCH|PUT|DELETE)|ITEM' "$FAKE_GH/calls.log" || true)" -eq 0 ]
-  [ "$(jq -c '[.labels[].name]' "$FAKE_GH/issues/8.json")" = '["owner::agent","compasso::in-review"]' ]
-}
-
-@test "sprint: the plan on the default branch, as of the last fetch" {
-  cp "$ROOT/tests/fixtures/plan.yaml" .compasso/plan.yaml
-  [[ "$(st)" == *"Plan: not on the default branch (main"* ]] || false
-  git init -q --bare -b main "$BATS_TEST_TMPDIR/origin.git" && git remote add origin "$BATS_TEST_TMPDIR/origin.git"
-  git add .compasso/plan.yaml && git commit -qm plan && git push -q origin main && git remote set-head origin main
-  [[ "$(st)" == *"Plan: on the default branch (main"* ]] || false
-  echo "# re-planned" >> .compasso/plan.yaml
-  [[ "$(st)" == *"Plan: changed since the default branch"* ]] || false
-}
-
-@test "sprint: counts Verify commands not approved on this machine" {
-  cp "$ROOT/tests/fixtures/plan.yaml" .compasso/plan.yaml
-  [[ "$(st)" == *"Verify commands not approved here: 4"* ]] || false
-  "$ROOT/bin/trust.sh" approve --repo "$REPO" --plan >/dev/null
-  [[ "$(st)" != *"not approved"* ]] || false
-}
-
-@test "a story run's stage and next step come from the files it left" {
-  d="$(R 11)"; echo '{}' > "$d/story.json"
-  [ "$(st --iid 11 --json | jq -r .run.stage)" = "story read" ]
-  : > "$d/test-hashes"
-  [ "$(st --iid 11 --json | jq -r .run.next)" = "step 5: build" ]
-  echo '[{"status":"fail"},{"status":"pass"}]' > "$d/verify.json"
-  [ "$(st --iid 11 --json | jq -r .run.stage)" = "verify failing (1 of 2 commands)" ]
-  for i in 1 2 3; do echo '{"type":"verify-fail"}' >> "$d/events.jsonl"; done
-  [ "$(st --iid 11 --json | jq -r .run.next)" = "hand back: a person decides" ]
-  echo '[{"status":"pass"},{"status":"pass"}]' > "$d/verify.json"; echo '{}' > "$d/coverage.json"
-  [ "$(st --iid 11 --json | jq -r .run.next)" = "step 7: review and security review" ]
-  echo '[{"by":"reviewer","severity":"major","status":"open","summary":"x"}]' > "$d/findings.json"; echo '{"type":"round"}' >> "$d/events.jsonl"
-  [ "$(st --iid 11 --json | jq -r .run.stage)" = "review round 1: 1 open blocker or major" ]
-  echo '{"type":"round"}' >> "$d/events.jsonl"; echo '{"type":"round"}' >> "$d/events.jsonl"
-  [[ "$(st --iid 11 --json | jq -r .run.stage)" == "review still blocked after 3 rounds"* ]] || false
-  echo '[{"by":"reviewer","severity":"major","status":"fixed","summary":"x"}]' > "$d/findings.json"
-  [ "$(st --iid 11 --json | jq -r .run.next)" = "step 8: ship" ]
-  echo "- change" > "$d/changes.md"; mkdir -p .compasso/metrics && echo '{}' > .compasso/metrics/11.json
-  [ "$(st --iid 11 --json | jq -r .run.next)" = "step 9: push the branch and open the merge request" ]
-  echo body > "$d/mr.md"
-  [ "$(st --iid 11 --json | jq -r .run.step)" = 9 ]
-  issue 11 "Year filter" open '["owner::agent","compasso::in-review"]' '**Verify:** x'
-  [ "$(st --iid 11 --json | jq -r .run.stage)" = "merge request open, in review" ]
-}
-
-@test "story: dependencies, owner and what to do next" {
-  run st --iid 10
+@test "the job bin/run.sh would start next, for the tech lead and each developer" {
+  run st --json
   [ "$status" -eq 0 ]
-  [[ "$output" == *"Waits on: #13 Credentials (blocker)"* ]] || false
-  [[ "$output" == *"Next: wait for #13 to close"* ]] || false
-  run st --iid 11
-  [[ "$output" == *"State: new"*"owner agent"* ]] || false
-  [[ "$output" == *"Next: /compasso:story 11"* ]] || false
-  run st --iid 8
-  [[ "$output" == *"Next: nothing: the story is closed"* ]] || false
+  [ "$(jq -r '.next.lead.job' <<<"$output")" = red-main ]
+  [ "$(jq -c '.next | keys' <<<"$output")" = '["ana","lead","rui"]' ]
+  [ "$(jq -r '.next.rui' <<<"$output")" = null ]
+  run st
+  [[ "$output" == *"  lead: red-main"* ]] || false
+  [[ "$output" == *"  rui: nothing"* ]] || false
 }
 
-@test "sprint: local runs are listed with their stage" {
-  d="$(R 11)"; echo '{}' > "$d/story.json"; : > "$d/test-hashes"
-  mkdir -p .compasso/runs/plan-S20
-  run st --milestone S20
-  [[ "$output" == *"Local runs:"*"#11 failing tests written and committed → step 5: build"* ]] || false
-  [[ "$output" != *"plan-S20"* ]] || false
+@test "status changes nothing: only reads reach the tracker, and no runner file is written" {
+  st >/dev/null
+  ! grep -qE -- '-X (POST|PUT|DELETE)' "$GLAB_STUB_DIR/calls.log" || false
+  [ ! -e "$REPO/.compasso/runs/runner" ]
 }
 
-@test "when the tracker cannot be read, the local part is still shown and it exits 1" {
-  d="$(R 11)"; echo '{}' > "$d/story.json"
-  export FAKE_GH_FAIL='GET user'
-  run st --milestone S20
+@test "this machine's last runs, and the jobs skipped until a person answers" {
+  d="$REPO/.compasso/runs/runner"; mkdir -p "$d"
+  for i in 1 2 3 4 5 6; do echo "{\"at\":\"2026-11-1${i}T10:00:00Z\",\"role\":\"dev\",\"name\":\"ana\",\"job\":\"build\",\"key\":\"build:1$i\",\"result\":\"done\",\"seconds\":$i}" >> "$d/events.jsonl"; done
+  echo '{"build:11": 2, "review:7": 1}' > "$d/failures.json"
+  run st
+  [[ "$output" == *"Skipped until a person answers: build:11"* ]] || false
+  [[ "$output" != *"review:7"* ]] || false
+  [[ "$output" == *"2026-11-16T10:00:00Z dev ana build build:16 done 6s"* ]] || false
+  [[ "$output" != *"build:11 done"* ]] || false
+}
+
+@test "when the tracker cannot be read, this machine's runs are still shown and it exits 1" {
+  rm "$GLAB_STUB_DIR"/*issues_state_opened*
+  [ -z "$(ls "$GLAB_STUB_DIR" | grep issues_state_opened)" ]
+  d="$REPO/.compasso/runs/runner"; mkdir -p "$d"
+  echo '{"at":"2026-11-16T10:00:00Z","role":"lead","name":null,"job":null,"key":null,"result":"idle","seconds":1}' > "$d/events.jsonl"
+  run st
   [ "$status" -eq 1 ]
-  [[ "$output" == *"Tracker: github: not logged in"* ]] || false
-  [[ "$output" == *"#11 story read"* ]] || false
-}
-
-@test "--json is one JSON document" {
-  run st --milestone S20 --json
-  [ "$(jq -c '[.milestone, (.tracker.runnable | map(.iid))]' <<<"$output")" = '["S20",[11]]' ]
-}
-
-@test "a sprint whose descriptions add up to over 1 MB still gets its status" {
-  head -c 1100000 /dev/zero | tr '\0' x > "$BATS_TEST_TMPDIR/big.txt"
-  jq --rawfile big "$BATS_TEST_TMPDIR/big.txt" '.body += "\n\n" + $big' "$FAKE_GH/issues/11.json" > "$BATS_TEST_TMPDIR/i.json" && mv "$BATS_TEST_TMPDIR/i.json" "$FAKE_GH/issues/11.json"
-  run st --milestone S20
-  [ "$status" -eq 0 ]
-  [[ "$output" == *"Build now: #11 Year filter"* ]] || false
-  run st --iid 11
-  [ "$status" -eq 0 ]
+  [[ "$output" == *"Tracker: "* ]] || false
+  [[ "$output" == *"lead idle"*"idle 1s"* ]] || false
 }
 
 @test "status warns when these scripts are older than the newest Compasso installed" {
   d="$BATS_TEST_TMPDIR/cache/tasb/compasso/99.0.0/.claude-plugin"; mkdir -p "$d"; echo '{"version":"99.0.0"}' > "$d/plugin.json"
-  COMPASSO_PLUGIN_CACHE="$BATS_TEST_TMPDIR/cache" run st --local
+  COMPASSO_PLUGIN_CACHE="$BATS_TEST_TMPDIR/cache" run st
   [[ "$output" == *"but 99.0.0 is installed"* ]] || false
 }

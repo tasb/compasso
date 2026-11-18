@@ -7,6 +7,7 @@ md:
   planned: Planejado
   coverage: Cobertura
   features: Funcionalidades
+  feature: Funcionalidade
   risks: Riscos
   needed_for: Necessário para
   steps: Passos
@@ -28,10 +29,6 @@ md:
   so_that: para que
 text:
   qa_title: "**Perguntas e respostas** · rodada {round} · respondido por @{user} no agente, {date}"
-  plan_title: "**Plano** · {n} {stories} · {hours}h · caminho crítico {critical}h"
-  story_one: story
-  story_many: stories
-  plan_head: "| Story | h | Responsável | Depende de |"
   security: Segurança
   approved: Aprovado
   approved_by: "por @{who} no agente, {date}"
@@ -41,90 +38,56 @@ text:
   reviewer: Revisor
   coverage: Cobertura
   merge: Merge
-  findings_fixed: "{n} findings corrigidas"
-  minors_to: "menores → {list}"
-  n_open: "{n} em aberto"
-  no_findings: sem findings
-  fixed_verified: corrigida, verificada pela segurança
   open: em aberto
   cov_ok: "{p}% das linhas alteradas (mín. {min}%)"
   cov_below: "abaixo do mínimo: {p}% de {min}% · por cobrir: {list}"
-  cov_skipped: não medida no MVP
+  ask_need: "O que preciso:"
+  ask_story: "Story:"
+  ask_why: Por quê
+  ask_steps: Passos
+  ask_close: "Feche esta issue: é assim que o agente sabe que você terminou."
+  ask_meanwhile: "Enquanto isso:"
+  stuck_title: "Compasso: {key} não termina"
+  stuck_need: "Alguém que veja por que {key} não termina e depois corrija a causa ou mude o trabalho."
+  stuck_why_count: "{key} falhou {n} vezes seguidas; a última execução terminou como {result}."
+  stuck_why_log: "O log da execução está em {log} em {host} ({who})."
+  stuck_step_read: Leia o fim do log da execução.
+  stuck_step_fix: Corrija a causa, ou mude a story, a atribuição dela ou o merge request dela.
+  stuck_step_comment: Se o trabalho deve seguir como está, diga como em um comentário.
+  stuck_meanwhile: O runner pula este trabalho e passa para o próximo.
+  rework_footer: "Corrija estes bloqueios, faça push e depois remova a label compasso::rework. O resto do que a revisão viu foi para a lista de depois do MVP."
+  rework_conflict: "!{mr} tem conflitos com {branch}: faça rebase sobre {branch} e push, depois remova a label compasso::rework. Isto não conta como rodada de revisão."
+  rework_twice_title: "Compasso: !{mr} foi devolvido uma segunda vez"
+  rework_twice_need: "Uma decisão sobre o merge request !{mr}: o tech lead encontrou bloqueios de novo depois do rework."
+  rework_twice_why: "O rework não resolveu os bloqueios; os mais recentes estão no último comentário do tech lead em {url}"
+  rework_twice_step_read: "Leia os comentários do tech lead em !{mr}."
+  rework_twice_step_decide: "Decida: corrija e faça push, diga ao developer em um comentário o que mudar, ou feche o merge request e mude a story."
+  rework_twice_meanwhile: A story espera; os developers e o tech lead seguem com outro trabalho.
+  later_title: Depois do MVP
+  hardening_title: "Hardening: depois do MVP"
+  deliver_open: "Abra o staging: {url}"
+  deliver_done: "Entregue em staging; as pessoas testam em #{ask}. Um problema encontrado lá volta como bug."
+  red_title: "Reverte {sha}: {branch} está vermelho"
+  red_body: "Reverte {sha}, que deixou {branch} vermelho: {url}. As stories dele voltam para os developers."
+  red_story: "O merge dela deixou {branch} vermelho ({url}), por isso foi revertido em !{fix}. Corrija em um branch novo e abra um novo merge request."
+  red_ask_title: "Compasso: {branch} está vermelho e o revert não entra"
+  red_conflict_need: "Alguém que corrija {branch}: {sha} deixou ele vermelho e reverter dá conflito com o que entrou depois."
+  red_failed_need: "Alguém que corrija {branch}: {sha} deixou ele vermelho e o revert !{fix} também falhou no pipeline."
+  red_why: "O último pipeline em {branch} falhou: {url}"
+  red_step_fix: "Corrija {branch} em um branch seu e abra um merge request com a label compasso::fix-main."
+  red_step_merge: Faça o merge quando o pipeline estiver verde.
+  red_meanwhile: Os merge requests com pipeline verde continuam entrando; o runner não abre outra correção.
   not_measured: não medida
-  merge_low: "risco baixo, pode ser integrado sem uma pessoa ({lines} linhas alteradas em {files} arquivos, nada sensível)"
-  merge_low_sensitive: "risco baixo no MVP, pode ser integrado sem uma pessoa ({lines} linhas alteradas em {files} arquivos), mas mexe em caminhos sensíveis: {list}"
-  merge_person: "uma pessoa aprova: {reasons}"
-  risk_sensitive: "{file} é um caminho sensível ({glob})"
-  risk_build: "{file} altera o build, a pipeline, a configuração do Compasso ou as dependências"
-  risk_lines: "{lines} linhas alteradas, acima do limite de {max}"
-  risk_infra: "{file} altera a infraestrutura"
-  risk_production_path: "{file} é um caminho crítico em produção ({glob})"
-  risk_sensitive_content: "a segurança marcou a alteração como sensível: {what}"
-  risk_cost: "o relatório de custos diz {result}"
-  risk_cost_none: "{file} altera a infraestrutura e seu custo não foi avaliado"
-  risk_cov_below: a cobertura das linhas alteradas está abaixo do mínimo
-  risk_cov_none: a cobertura das linhas alteradas não foi medida
-  review_title: "**Revisão** · {n} findings"
-  no_findings_cap: Sem findings
-  data_for_lead: Dados para o tech lead
-  cost_title: "**Custo** · finops"
-  cost_result: Resultado
-  cost_month: "{amount} {currency} por mês"
-  cost_add: adicionado
-  cost_change: alterado
-  cost_remove: removido
-  cost_assumptions: Premissas
-  cost_sources: Fontes
-  approval_title: "**Uma pessoa aprova esta alteração** antes de o tech lead integrá-la:"
-  approval_how_github: "Aprove-a, ou peça alterações dizendo o que mudar. O tech lead a integra depois de uma aprovação."
-  approval_how_gitlab: "Aprove-a, ou escreva um comentário dizendo o que mudar. O tech lead a integra depois de uma aprovação."
   fix: correção
   blocks: Bloqueia
   "yes": sim
   "no": não
-  by_reviewer: revisor
-  by_security: segurança
-  sev_blocker: bloqueante
-  sev_major: grave
-  sev_minor: menor
   st_fixed: corrigida
   st_followup: seguimento
-  digest_title: "**Integrado sem uma pessoa** · desde {since}"
   nothing: Nada
-  claimed: "{name} está construindo isto."
   merged_at: "integrado {at}"
-  digest_footer: Cada um passou a revisão, a revisão de segurança obrigatória e a CI, e era de risco baixo. Para desfazer um, reverta o merge request.
-  digest_footer_github: Cada um passou pela revisão, pela revisão de segurança obrigatória e pela CI, e era de risco baixo. Para desfazer um, reverta o pull request.
-  harden_title: "**Robustez** · verificações {set} · {date}"
-  set_code: de código
-  set_live: em ambiente
-  set_all: de código e em ambiente
-  check_mutation: Testes de mutação
-  check_property: Testes baseados em propriedades
-  check_flaky: Testes instáveis
-  check_smells: Más práticas nos testes
-  check_fuzz: Fuzzing da API
-  check_zap: Análise de segurança (ZAP)
-  check_perf: Desempenho
-  check_a11y: Acessibilidade
-  not_run: não executado
-  results_title: "**Resultados dos testes** · {tester} · {date}"
   works: Funciona
-  doesnt_work: Não funciona
-  cant_test: Não foi possível testar
   not_tested: Não testado
-  bug_title: "{feature}: {scenario} não funciona"
-  found_in_value: "guia de testes {gid}"
-  by_value: "{tester} (teste de negócio, {date})"
-  evidence_line: "Reportado por {tester} no guia de testes {gid}, cenário \"{scenario}\""
-  followup_who: quem mantém o código
-  followup_want: esta finding resolvida
-  followup_so: "{summary} deixe de se aplicar"
-  legacy_closed: "Fechado: a aceitação deste follow-up (\"revisto de novo\") não é algo que um teste possa verificar. A finding veio de #{story}; se ainda valer a pena, uma pessoa a cria de novo como uma story com aceitação que um teste possa verificar."
-  minors_title: "Achados minor da #{story}: {title}"
-  minors_as: o time
-  minors_want: "os achados minor da #{story} corrigidos"
-  minors_so: o que a revisão encontrou durante o MVP não se perca
   rec_findings: Constatações
   rec_decisions: Decisões
   rec_takeaways: Aprendizados
@@ -354,4 +317,4 @@ ui:
     missingRoadmap: "Ainda não há sprints: o /compasso:roadmap distribui as funcionalidades por sprints."
     missingPlan: "Ainda nenhum sprint está planejado em stories: o /compasso:plan parte o próximo sprint."
     laterSprints: Os sprints seguintes são planejados em stories no fecho de cada sprint, com a velocidade alcançada.
-    nextSteps: Integre o merge request do plano e desenvolva o sprint com /compasso:sprint; o /compasso:status mostra em que ponto está.
+    nextSteps: Integre o merge request do plano; o runner desenvolve então o sprint, e o /compasso:status mostra o que ele faz a seguir.

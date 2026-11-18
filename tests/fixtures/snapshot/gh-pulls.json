@@ -1,0 +1,4 @@
+[
+ {"number":7,"title":"Login breaks","draft":false,"labels":[],"body":"Closes #13","user":{"login":"agent-rui"},"html_url":"https://github.com/acme/app/pull/7","head":{"ref":"fix/login","sha":"bbb"}},
+ {"number":8,"title":"Search","draft":false,"labels":[{"name":"compasso::rework"}],"body":null,"user":{"login":"agent-rui"},"html_url":"https://github.com/acme/app/pull/8","head":{"ref":"story/12-search","sha":"ccc"}}
+]

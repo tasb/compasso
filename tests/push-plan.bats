@@ -57,7 +57,7 @@ iid_of() { K="$1" yq -r '(.features[] | select(.key == strenv(K)) | .gitlab), (.
   [ "$(cat "$FAKE_GL/labels/$(iid_of S-4)")" = "owner::agent,blocked" ]
 }
 
-@test "the story description follows the approved format, with Depends on on Free" {
+@test "the story description follows the approved format: its feature, and Depends on on any tier" {
   push >/dev/null
   cat > "$BATS_TEST_TMPDIR/want" <<EOF
 **As** a customer **I want** an invoice list page **so that** I can find an invoice quickly.
@@ -68,6 +68,7 @@ iid_of() { K="$1" yq -r '(.features[] | select(.key == strenv(K)) | .gitlab), (.
 ## Verify
 - \`npx playwright test billing/list\`
 
+**Feature:** #$(iid_of F-1)\\
 **Tests:** unit, e2e\\
 **Touches:** \`src/billing/ui/**\`\\
 **Depends on:** #$(iid_of S-1)
@@ -82,6 +83,7 @@ EOF
   grep -qx '\*\*Coverage:\*\* 90%' "$FAKE_GL/desc/$(iid_of S-3).md"
   grep -qx '\*\*Depends on:\*\* #12\\' "$FAKE_GL/desc/$(iid_of S-4).md"
   grep -qx "\*\*Blocked by:\*\* #$(iid_of B-1)" "$FAKE_GL/desc/$(iid_of S-4).md"
+  grep -qx "\*\*Feature:\*\* #$(iid_of F-2)\\\\" "$FAKE_GL/desc/$(iid_of S-4).md"
   [ "$(grep -c 'Coverage\|Blocked\|Depends' "$FAKE_GL/desc/$(iid_of S-1).md")" -eq 0 ]
 }
 
@@ -136,6 +138,17 @@ EOF
   [ "$(calls 'query=mutation')" -eq 0 ]
   grep -q "PUT projects/acme%2Fapp/issues/$(iid_of S-2) remove_labels=owner::human,owner::either,blocked" "$FAKE_GL/calls.log"
   grep -q "PUT projects/acme%2Fapp/issues/$(iid_of S-4) remove_labels=owner::human,owner::either$" "$FAKE_GL/calls.log"
+}
+
+@test "a pushed feature is building; a second push keeps a state it moved past" {
+  push >/dev/null
+  [[ ",$(cat "$FAKE_GL/labels/$(iid_of F-1)")," == *",compasso::building,"* ]] || false
+  echo "type::feature,compasso::done" > "$FAKE_GL/labels/$(iid_of F-1)"
+  echo "type::feature,compasso::new" > "$FAKE_GL/labels/$(iid_of F-2)"
+  push >/dev/null
+  [ "$(cat "$FAKE_GL/labels/$(iid_of F-1)")" = "type::feature,compasso::done" ]
+  [[ ",$(cat "$FAKE_GL/labels/$(iid_of F-2)")," == *",compasso::building,"* ]] || false
+  [[ ",$(cat "$FAKE_GL/labels/$(iid_of F-2)")," != *",compasso::new,"* ]] || false
 }
 
 @test "a failed push keeps the ids already written, so the re-run resumes" {
@@ -238,8 +251,8 @@ EOF2
   cp "$ROOT/tests/fixtures/backlog.yaml" "$REPO/.compasso/backlog.yaml"
   run "$ROOT/bin/tracker/gitlab.sh" push-backlog --repo "$REPO"
   [ "$status" -eq 0 ]
-  [ "$(calls 'labels=type::feature,mvp')" -eq 4 ]
-  [ "$(grep 'POST projects/acme%2Fapp/issues title=Wishlist' "$FAKE_GL/calls.log" | grep -c 'labels=type::feature$' || true)" -eq 1 ]
+  [ "$(calls 'labels=type::feature,mvp,compasso::new')" -eq 4 ]
+  [ "$(grep 'POST projects/acme%2Fapp/issues title=Wishlist' "$FAKE_GL/calls.log" | grep -c 'labels=type::feature,compasso::new$' || true)" -eq 1 ]
   [ "$(grep 'POST projects/acme%2Fapp/issues ' "$FAKE_GL/calls.log" | grep -c milestone_id || true)" -eq 0 ]
   [ "$(yq '[.features[].gitlab] | map(select(. == null)) | length' "$REPO/.compasso/backlog.yaml")" = 0 ]
   "$ROOT/bin/tracker/gitlab.sh" push-backlog --repo "$REPO" >/dev/null
@@ -262,10 +275,9 @@ EOF2
 # ---------- team projects: dev:: labels in place of owner:: ----------
 
 team_plan() {
-  cfg_set '.team.enabled = true'
+  cfg_set '.team.enabled = true | .team.developers = ["ana", "rui"]'
   "$ROOT/bin/persona.sh" set --repo "$REPO" --persona tech-lead >/dev/null
   yq -i 'del(.features[].stories[].owner) | .features[0].dev = "ana" | .features[0].stories[2].dev = "rui"' "$PLAN"
-  mkdir -p "$FAKE_GL"; printf 'dev::ana\ndev::rui\n' > "$FAKE_GL/labels.txt"
 }
 
 @test "team: stories carry their developer's label and no owner label; a feature carries its own" {
@@ -277,7 +289,7 @@ team_plan() {
   [ "$(cat "$FAKE_GL/labels/$(iid_of S-3)")" = "dev::rui" ]
   [ "$(cat "$FAKE_GL/labels/$(iid_of S-1)")" = "" ]
   [ "$(cat "$FAKE_GL/labels/$(iid_of S-4)")" = "blocked" ]
-  [ "$(cat "$FAKE_GL/labels/$(iid_of F-1)")" = "type::feature,dev::ana" ]
+  [ "$(cat "$FAKE_GL/labels/$(iid_of F-1)")" = "type::feature,compasso::building,dev::ana" ]
 }
 
 @test "team: moving a story to another developer drops the previous label" {
@@ -293,6 +305,6 @@ team_plan() {
   yq -i '.features[0].stories[0].dev = "zed"' "$PLAN"
   run push
   [ "$status" -eq 1 ]
-  [[ "$output" == *"zed is not in the team"* ]] || false
+  [[ "$output" == *"zed is not in team.developers"* ]] || false
   [ "$(calls 'POST projects/acme%2Fapp/issues')" -eq 0 ]
 }

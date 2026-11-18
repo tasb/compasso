@@ -45,7 +45,7 @@ elif [ -z "$plan_n" ]; then
   first="$("$BIN/roadmap.sh" next --repo "$REPO" 2>/dev/null | jq -r '.number // empty')"
   stage=plan next="/compasso:plan" why="sprint S${first:-?} is next in the roadmap: split it into stories"
 else
-  stage=build next="/compasso:sprint" why="sprint S$plan_n is planned: build it (/compasso:status shows where it stands); at its close, /compasso:roadmap refines what is ahead and /compasso:plan plans the next sprint"
+  stage=build next="/compasso:status" why="sprint S$plan_n is planned: the runner builds it (cron starts bin/run.sh; /compasso:setup prints the line) and /compasso:status shows what it does next; /compasso:roadmap refines what is ahead"
 fi
 
 if [ "$JSON" -eq 1 ]; then

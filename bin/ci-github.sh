@@ -46,6 +46,10 @@ for k in test lint typecheck build; do
 done
 [ -n "$run_lines" ] || { echo "ci: no test, lint, typecheck or build command in .compasso/project.yaml" >&2; exit 1; }
 
+branch="$(git -C "$REPO" symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | sed 's#^origin/##')"
+[ -n "$branch" ] || branch="$(git -C "$REPO" symbolic-ref --short HEAD 2>/dev/null)"
+[ -n "$branch" ] || branch=main
+
 mkdir -p "$REPO/.github/workflows"
 out="$REPO/.github/workflows/compasso.yml"
 {
@@ -54,6 +58,8 @@ out="$REPO/.github/workflows/compasso.yml"
 name: compasso
 on:
   pull_request:
+  push:
+    branches: [$(yq_str "$branch")]
 permissions:
   contents: read
 
@@ -65,6 +71,26 @@ jobs:
       - uses: actions/checkout@v4
 $run_lines
 EOF
+  c="$(cfg .staging.deploy)"
+  if [ -n "$c" ]; then
+    cat <<EOF
+  # A push to the default branch deploys to staging, where people test what was delivered; one at a time.
+  compasso-deploy-staging:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    container: $(yq_str "$image")
+    needs: compasso-verify
+    concurrency:
+      group: staging
+    environment:
+      name: staging
+      url: $(yq_str "$(cfg .staging.url)")
+    steps:
+      - uses: actions/checkout@v4
+      - run: $(yq_str "$c")
+
+EOF
+  fi
   c="$(cfg .commands.e2e)"
   if [ -n "$c" ] && [ "$full" = 1 ]; then
     cat <<EOF
@@ -120,6 +146,7 @@ EOF
   # GitHub code scanning is not available on this repository: Compasso's scans run instead.
   # Any secret in the pull request's commits, or any high-severity Semgrep finding, blocks the merge.
   compasso-scan-gate:
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

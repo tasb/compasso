@@ -1,24 +1,18 @@
 # One idea, one feature
 
-**When:** the product exists and you have one new idea or one feature request, not a whole new product. For a new product built from one idea, see [Greenfield](greenfield.md).
+**When:** the product exists, the team is running, and you have one new idea or one feature request, not a whole new product. For a new product built from one idea, see [Greenfield](greenfield.md).
 
-**Bring:** the idea in a sentence, or the number of the tracker issue that describes it.
+**Bring:** the idea: who gets what, what is in scope, and how you will know it works.
 
 ## Steps
 
-1. **`/compasso:feature "<the idea>"`** or **`/compasso:feature <issue number>`.**
-   - The planner reads the code and the lessons for planning, then asks what it needs in this conversation: at most 5 short questions a round, at most 3 rounds. Anything still open becomes a written assumption.
-   - It splits the feature into one-day stories with dependencies, and adds blockers for anything outside the team: a credential, another team's API, a decision. Each blocker is assigned to a person, with step-by-step instructions.
-   - Security reviews the plan, and the tester checks each story can be tested.
-   *You decide:* the answers, the owners (agent, human or either), the Verify commands the stories may run, and approval of the plan.
+1. **File it as a Feature** from the Feature issue template: goal, scope and acceptance lines (Given/When/Then). It needs the labels `type::feature` and `compasso::new`; the GitLab template sets both, on GitHub add `compasso::new` yourself.
+2. **Put it in a sprint** by giving it that sprint's milestone (`S<n>`). The tech lead plans features from the earliest sprint first, and a later sprint's when nothing earlier is left.
+3. **The tech lead splits it** into stories when a developer runs short of ready work: vertical slices, each one merge request, with acceptance, Verify commands and test types. It then marks the feature `compasso::building`.
+4. **The developers build it** like any other story. When all its stories are merged and the default branch is green, the tech lead asks the people in `people.ask` to test it on staging, then closes it.
 
-2. **It joins the current sprint.** plan-check checks the sprint's capacity with the feature added; if it doesn't fit, you choose what moves out.
+## Good to know
 
-3. **The tracker gets the record:** the questions and answers and the plan are posted on the feature, and its stories are created.
-
-4. **It builds** straight away through the sprint flow, for this feature only. When all its stories are merged, the tester writes e2e tests for the feature's acceptance.
-
-## Tips
-
-- Without a sprint in `.compasso/plan.yaml`, run `/compasso:plan` first: a feature always lands in a sprint.
+- The tech lead decides how to split the feature. A question about scope, cost or a secret becomes a `needs::human` issue, and the feature waits for your answer.
 - An idea bigger than half a sprint is really several features. Put it through `/compasso:backlog` instead.
+- `/compasso:status` shows the tech lead's next job: `plan` with the feature's number once it is next.

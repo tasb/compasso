@@ -1,0 +1,97 @@
+[
+  {
+    "number": 10,
+    "title": "Export CSV",
+    "state": "open",
+    "labels": [
+      {
+        "name": "type::story"
+      },
+      {
+        "name": "compasso::backlog"
+      },
+      {
+        "name": "dev::ana"
+      }
+    ],
+    "body": "## Acceptance\n- [ ] Given a list, When exported, Then a CSV downloads\n",
+    "html_url": "https://github.com/acme/app/issues/10",
+    "milestone": {
+      "number": 3,
+      "title": "S2",
+      "due_on": "2026-11-27T23:59:59Z"
+    }
+  },
+  {
+    "number": 11,
+    "title": "Import CSV",
+    "state": "open",
+    "labels": [
+      {
+        "name": "compasso::backlog"
+      },
+      {
+        "name": "dev::ana"
+      }
+    ],
+    "body": "**Depends on:** #10 · **Tests:** unit",
+    "html_url": "https://github.com/acme/app/issues/11"
+  },
+  {
+    "number": 12,
+    "title": "Search",
+    "state": "open",
+    "labels": [
+      {
+        "name": "type::story"
+      },
+      {
+        "name": "compasso::building"
+      },
+      {
+        "name": "dev::rui"
+      },
+      {
+        "name": "needs::human"
+      }
+    ],
+    "body": null,
+    "html_url": "https://github.com/acme/app/issues/12"
+  },
+  {
+    "number": 7,
+    "title": "Login breaks",
+    "state": "open",
+    "labels": [],
+    "body": "Closes #13",
+    "html_url": "https://github.com/acme/app/pull/7",
+    "pull_request": {
+      "url": "x"
+    }
+  },
+  {
+    "number": 20,
+    "title": "Which region?",
+    "state": "open",
+    "labels": [
+      {
+        "name": "needs::human"
+      }
+    ],
+    "body": "<!-- compasso:ask story=12 key=region -->\nWhat I need",
+    "html_url": "https://github.com/acme/app/issues/20"
+  },
+  {
+    "number": 30,
+    "title": "After the MVP",
+    "state": "open",
+    "labels": [
+      {
+        "name": "compasso::after-mvp"
+      }
+    ],
+    "body": "<!-- compasso:after-mvp list -->",
+    "html_url": "https://github.com/acme/app/issues/30",
+    "milestone": null
+  }
+]

@@ -42,7 +42,6 @@ $items[0] as $items | $ext[0] as $ext
        + [$review[] | select(.iid != $w.iid and overlaps(.parsed.touches; $w.parsed.touches)) | .iid] | unique) as $waiting
     | . + {status:
         (if (.labels | index("compasso::in-review")) then "in-review"
-         elif $team and (.labels | index("needs::lead")) then "needs-lead"
          elif $team and ((.labels | index("owner::human")) | not) and (.missing | length) > 0 then "not-ready"
          elif ($blocked | length) > 0 then "blocked"
          elif $team and .dev == null then (if (.labels | index("owner::human")) then "human" else "unassigned" end)
@@ -84,7 +83,6 @@ $items[0] as $items | $ext[0] as $ext
   + (if $team then {team: {
         me: (if $me == "" then null else $me end),
         # the tech lead's queue: questions, work nobody has, and how much each developer holds
-        needs_lead: ($open | map(select(.labels | index("needs::lead")) | brief + {kind})),
         not_ready: ($open | map(select(.status == "not-ready") | brief + {kind, missing})),
         # what can start first, and what holds up the most open work, comes first
         unassigned: ([$open[] | .parsed | (.depends_on + .blocked_by)[]] as $deps

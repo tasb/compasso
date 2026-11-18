@@ -18,150 +18,6 @@ story() { # tests verify-command... (approved, as a person would after reading t
   jq -n --argjson t "$tests" '{story: {tests: $t, verify: $ARGS.positional}}' --args "$@" > "$BATS_TEST_TMPDIR/story.json"
   "$ROOT/bin/trust.sh" approve --repo "$REPO" --story "$BATS_TEST_TMPDIR/story.json" >/dev/null
 }
-findings() { echo "$1" > "$BATS_TEST_TMPDIR/f.json"; "$ROOT/bin/review-gate.sh" --findings "$BATS_TEST_TMPDIR/f.json" "${@:2}"; }
-
-# ---------- review-gate ----------
-
-@test "review-gate: open blocker or major findings block the review; minors do not" {
-  run findings '[{"by":"reviewer","severity":"minor","status":"open","summary":"naming"}]'
-  [ "$status" -eq 0 ]
-  run findings '[{"by":"reviewer","severity":"major","status":"open","summary":"off by one","file":"src/a.py","line":2}]'
-  [ "$status" -eq 1 ]
-  [[ "$output" == *"[reviewer/major] off by one (src/a.py:2)"* ]] || false
-}
-
-@test "review-gate: fixed findings no longer block" {
-  run findings '[{"by":"reviewer","severity":"blocker","status":"fixed","summary":"crash"}]'
-  [ "$status" -eq 0 ]
-}
-
-@test "review-gate: only security can resolve a security finding" {
-  run findings '[{"by":"security","severity":"major","status":"fixed","summary":"sql injection"}]'
-  [ "$status" -eq 1 ]
-  run findings '[{"by":"security","severity":"major","status":"fixed","verified_by":"security","summary":"sql injection"}]'
-  [ "$status" -eq 0 ]
-}
-
-@test "review-gate: a merge is blocked by any open security finding, even a minor one" {
-  run findings '[{"by":"security","severity":"minor","status":"open","summary":"verbose error"}]' --for review
-  [ "$status" -eq 0 ]
-  run findings '[{"by":"security","severity":"minor","status":"open","summary":"verbose error"}]' --for merge
-  [ "$status" -eq 1 ]
-}
-
-@test "review-gate: a merge waits for every finding to be fixed, minors too, unless its fix needs someone else" {
-  run findings '[{"by":"reviewer","severity":"minor","status":"open","summary":"naming"}]' --for merge
-  [ "$status" -eq 1 ]
-  [[ "$output" == *"[reviewer/minor] naming"* ]] || false
-  run findings '[{"by":"reviewer","severity":"minor","status":"open","needs":"the AWS organisation admin","summary":"no SCP","acceptance":"Given the account, When a member deletes the key, Then the SCP denies it"}]' --for merge
-  [ "$status" -eq 0 ]
-  run findings '[{"by":"reviewer","severity":"minor","status":"open","needs":"","summary":"naming"}]' --for merge
-  [ "$status" -eq 1 ]
-  run findings '[{"by":"reviewer","severity":"major","status":"open","needs":"a person","summary":"no certificate"}]' --for merge
-  [ "$status" -eq 1 ]
-  run findings '[{"by":"reviewer","severity":"minor","status":"followup","followup_iid":40,"summary":"filed before"}]' --for merge
-  [ "$status" -eq 0 ]
-}
-
-@test "review-gate: security may defer a minor finding whose fix needs someone else, and only security, never a blocker or major" {
-  run findings '[{"by":"security","severity":"minor","status":"followup","verified_by":"security","needs":"the AWS organisation admin","summary":"no SCP","acceptance":"Given the account, When a member deletes the key, Then the SCP denies it"}]' --for merge
-  [ "$status" -eq 0 ]
-  run findings '[{"by":"security","severity":"minor","status":"followup","verified_by":"security","summary":"verbose error"}]' --for merge
-  [ "$status" -eq 1 ]
-  run findings '[{"by":"security","severity":"minor","status":"followup","verified_by":"security","followup_iid":40,"summary":"filed before"}]' --for merge
-  [ "$status" -eq 0 ]
-  run findings '[{"by":"security","severity":"minor","status":"followup","needs":"a person","summary":"verbose error"}]' --for merge
-  [ "$status" -eq 1 ]
-  run findings '[{"by":"security","severity":"major","status":"followup","verified_by":"security","needs":"a person","summary":"sql injection"}]' --for merge
-  [ "$status" -eq 1 ]
-  [[ "$output" == *"[security/major] sql injection"* ]] || false
-  run findings '[{"by":"security","severity":"blocker","status":"followup","verified_by":"security","summary":"rce"}]' --for review
-  [ "$status" -eq 1 ]
-}
-
-@test "review-gate: in mvp a merge waits only for blocker and major findings; minors are left for after the MVP" {
-  cfg_set '.stage = "mvp"'
-  acc='"acceptance":"Given an unknown id, When GET /invoices/9, Then 404 with no stack trace"'
-  run findings "[{\"by\":\"reviewer\",\"severity\":\"minor\",\"status\":\"open\",\"summary\":\"naming\",$acc}]" --for merge --repo "$REPO"
-  [ "$status" -eq 0 ]
-  run findings "[{\"by\":\"security\",\"severity\":\"minor\",\"status\":\"open\",\"summary\":\"verbose error\",$acc}]" --for merge --repo "$REPO"
-  [ "$status" -eq 0 ]
-  run findings "[{\"by\":\"reviewer\",\"severity\":\"major\",\"status\":\"open\",\"summary\":\"off by one\",$acc}]" --for merge --repo "$REPO"
-  [ "$status" -eq 1 ]
-  run findings "[{\"by\":\"security\",\"severity\":\"major\",\"status\":\"fixed\",\"summary\":\"sql injection\",$acc}]" --for merge --repo "$REPO"
-  [ "$status" -eq 1 ]
-  # production still waits for every minor
-  cfg_set '.stage = "production"'
-  run findings "[{\"by\":\"reviewer\",\"severity\":\"minor\",\"status\":\"open\",\"summary\":\"naming\",$acc}]" --for merge --repo "$REPO"
-  [ "$status" -eq 1 ]
-}
-
-@test "review-gate: a finding left for later is filed only with its acceptance line" {
-  cfg_set '.stage = "mvp"'
-  run findings '[{"by":"reviewer","severity":"minor","status":"open","summary":"naming"}]' --for merge --repo "$REPO"
-  [ "$status" -eq 1 ]
-  [[ "$output" == *"[reviewer/minor] naming - needs an acceptance line (Given/When/Then) to be filed"* ]] || false
-  run findings '[{"by":"reviewer","severity":"minor","status":"open","summary":"naming","acceptance":"  "}]' --for merge --repo "$REPO"
-  [ "$status" -eq 1 ]
-  cfg_set '.stage = "production"'
-  run findings '[{"by":"reviewer","severity":"minor","status":"open","needs":"a person","summary":"no SCP"}]' --for merge --repo "$REPO"
-  [ "$status" -eq 1 ]
-  [[ "$output" == *"needs an acceptance line"* ]] || false
-  # one filed before keeps its issue
-  run findings '[{"by":"reviewer","severity":"minor","status":"followup","followup_iid":40,"summary":"filed before"}]' --for merge --repo "$REPO"
-  [ "$status" -eq 0 ]
-}
-
-@test "review-gate: malformed findings exit 2" {
-  run findings '[{"by":"someone","severity":"major","status":"open","summary":"x"}]'
-  [ "$status" -eq 2 ]
-  run findings '[{"by":"reviewer","severity":"major","status":"open"}]'
-  [ "$status" -eq 2 ]
-  run findings 'not json'
-  [ "$status" -eq 2 ]
-}
-
-# ---------- test-hashes ----------
-
-@test "test-hashes: unchanged tests pass" {
-  "$ROOT/bin/test-hashes.sh" record --repo . --run "$RUN" >/dev/null
-  echo "change" >> src/a.py
-  run "$ROOT/bin/test-hashes.sh" verify --repo . --run "$RUN"
-  [ "$status" -eq 0 ]
-}
-
-@test "test-hashes: a changed, removed or added test file is a violation, each named" {
-  echo "old" > src/b.test.js
-  "$ROOT/bin/test-hashes.sh" record --repo . --run "$RUN" >/dev/null
-  echo "weakened" >> tests/test_a.py
-  rm src/b.test.js
-  echo "new" > tests/test_new.py
-  run "$ROOT/bin/test-hashes.sh" verify --repo . --run "$RUN"
-  [ "$status" -eq 1 ]
-  [[ "$output" == *"- tests/test_a.py"* ]] || false
-  [[ "$output" == *"- src/b.test.js"* ]] || false
-  [[ "$output" == *"- tests/test_new.py"* ]] || false
-}
-
-@test "test-hashes: a root-level test file matches **/ patterns" {
-  echo "t" > root.spec.ts
-  run "$ROOT/bin/test-hashes.sh" record --repo . --run "$RUN"
-  [[ "$output" == *"recorded 2 test files"* ]] || false
-}
-
-@test "test-hashes: patterns are not expanded against the working directory" {
-  cfg_set '.test_paths = ["tests/**"]'
-  mkdir -p "$BATS_TEST_TMPDIR/elsewhere/tests" && cd "$BATS_TEST_TMPDIR/elsewhere"
-  touch tests/decoy
-  run "$ROOT/bin/test-hashes.sh" record --repo "$REPO" --run "$RUN"
-  [[ "$output" == *"recorded 1 test files"* ]] || false
-}
-
-@test "test-hashes: verify without a record exits 2" {
-  run "$ROOT/bin/test-hashes.sh" verify --repo . --run "$RUN"
-  [ "$status" -eq 2 ]
-}
-
 # ---------- verify ----------
 
 @test "verify: runs the repo's commands, then the story's, and passes when all pass" {
@@ -369,8 +225,8 @@ cov() { "$ROOT/bin/coverage.sh" --repo . --base main --run "$RUN" "$@"; }
   [[ "$output" == *"no changed lines"* ]] || false
 }
 
-@test "verify: an unapproved Verify command stops the gate before anything runs" {
-  cfg_set '.commands.test = "touch ran-test"'
+@test "verify: with trust.verify_approval, an unapproved Verify command stops the gate before anything runs" {
+  cfg_set '.commands.test = "touch ran-test" | .trust.verify_approval = true'
   jq -n '{story: {tests: ["unit"], verify: ["touch ran-verify"]}}' > "$BATS_TEST_TMPDIR/story.json"
   run "$ROOT/bin/verify.sh" --repo . --run "$RUN" --story "$BATS_TEST_TMPDIR/story.json"
   [ "$status" -eq 4 ]
@@ -380,7 +236,7 @@ cov() { "$ROOT/bin/coverage.sh" --repo . --base main --run "$RUN" "$@"; }
 }
 
 @test "verify: an approved command edited on the tracker needs approving again" {
-  cfg_set '.commands.test = "true"'
+  cfg_set '.commands.test = "true" | .trust.verify_approval = true'
   story '["unit"]' "true"
   "$ROOT/bin/verify.sh" --repo . --run "$RUN" --story "$BATS_TEST_TMPDIR/story.json" >/dev/null
   jq '.story.verify = ["true; touch pwned"]' "$BATS_TEST_TMPDIR/story.json" > "$BATS_TEST_TMPDIR/s2.json"

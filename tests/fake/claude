@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# A fake Claude Code CLI for bin/run.sh: logs its arguments, one call per line, to $FAKE_CLAUDE_LOG;
+# runs $FAKE_CLAUDE_DO (shell, e.g. to change the fake tracker as a real job would); sleeps
+# $FAKE_CLAUDE_SLEEP seconds; exits $FAKE_CLAUDE_EXIT (default 0).
+set -u
+printf '%s\n' "$*" >> "${FAKE_CLAUDE_LOG:-/dev/null}"
+[ -z "${FAKE_CLAUDE_DO:-}" ] || eval "$FAKE_CLAUDE_DO"
+[ -z "${FAKE_CLAUDE_SLEEP:-}" ] || sleep "$FAKE_CLAUDE_SLEEP"
+exit "${FAKE_CLAUDE_EXIT:-0}"

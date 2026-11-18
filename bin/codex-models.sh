@@ -7,9 +7,8 @@
 # use, with the reasoning efforts each supports, best first. A role whose model is not in it, or
 # whose effort that model does not support, is a problem. For each problem it proposes a model from
 # the catalog by the role's tier, never a hard-coded id:
-#   strong  (planner, security, approver, reviewer): the best model that is not a fast tier
-#   standard (tester, builder, mutator, finops):     the best model
-#   fast    (shipper):                               the best fast-tier model, else the best model
+#   strong  (planner, security, reviewer): the best model that is not a fast tier
+#   standard (tester):                     the best model
 # keeping the role's effort when that model supports it, else the model's default effort. When only
 # the effort is unsupported, the model stays and the effort becomes the model's default.
 # Fast tier is config.sh's rule (luna, mini, nano). --apply writes the proposals into models.codex.
@@ -44,12 +43,11 @@ models="$(jq -c '(.models // .) | map(select((.visibility // "list") == "list"))
 [ -n "$models" ] && [ "$(jq length <<<"$models")" -gt 0 ] || { echo "codex-models: the catalog lists no models" >&2; exit 1; }
 
 fast() { case "$1" in *luna*|*mini*|*nano*) return 0 ;; esac; return 1; }
-tier() { case "$1" in planner|security|approver|reviewer) echo strong ;; shipper) echo fast ;; *) echo standard ;; esac; }
+tier() { case "$1" in planner|security|reviewer) echo strong ;; *) echo standard ;; esac; }
 pick() { # tier -> slug
   local s
   case "$1" in
     strong) for s in $(jq -r '.[].slug' <<<"$models"); do fast "$s" || { echo "$s"; return; }; done ;;
-    fast) for s in $(jq -r '.[].slug' <<<"$models"); do fast "$s" && { echo "$s"; return; }; done; jq -r '.[0].slug' <<<"$models" ;;
     *) jq -r '.[0].slug' <<<"$models" ;;
   esac
 }

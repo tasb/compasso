@@ -102,7 +102,7 @@ footer { color: var(--muted); font-size: 13px; padding: 24px 0; border-top: 1px 
     missingRoadmap: 'No sprints yet: /compasso:roadmap places the features into sprints.',
     missingPlan: 'No sprint is planned into stories yet: /compasso:plan splits the next sprint.',
     laterSprints: 'Later sprints are planned into stories at each sprint close, with the velocity reached.',
-    nextSteps: 'Merge the plan merge request, then build the sprint with /compasso:sprint; /compasso:status shows where it stands.'
+    nextSteps: 'Merge the plan merge request; the runner then builds the sprint, and /compasso:status shows what it does next.'
   }, data.ui || {});
   document.documentElement.lang = data.lang || 'en';
   document.title = (data.name || 'Product') + ' · ' + ui.solution;

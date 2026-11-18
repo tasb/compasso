@@ -3,7 +3,7 @@
 # backlog is built from. The prototype is a reference only; the product is rebuilt test-first.
 #
 #   prototype.sh crawl     --repo R --url URL --out DIR [--max N]
-#       A running web app, public (no login). Playwright in Docker (the image of harden.images.a11y)
+#       A running web app, public (no login). Playwright in Docker (the image of prototype.image)
 #       visits every page reachable through same-origin links from URL, up to N pages (default 40).
 #       It only follows links: it never clicks buttons or submits forms, and skips links that look
 #       destructive (logout, delete, remove). Writes DIR/raw.json and a screenshot per page in DIR/screens/.
@@ -52,9 +52,9 @@ case "$CMD" in
     case "$URL" in http://*|https://*) ;; *) echo "prototype: --url must start with http:// or https://" >&2; exit 2 ;; esac
     case "$MAX" in ''|*[!0-9]*) echo "prototype: --max must be a number" >&2; exit 2 ;; esac
     command -v docker >/dev/null && docker info >/dev/null 2>&1 || { echo "prototype: the crawl needs Docker running" >&2; exit 1; }
-    image="$("$BIN/config.sh" get --repo "$REPO" .harden.images.a11y)"
+    image="$("$BIN/config.sh" get --repo "$REPO" .prototype.image)"
     version="$(printf '%s' "$image" | sed -nE 's#.*:v([0-9]+\.[0-9]+\.[0-9]+).*#\1#p')"
-    [ -n "$version" ] || { echo "prototype: harden.images.a11y must be a Playwright image tagged vX.Y.Z" >&2; exit 1; }
+    [ -n "$version" ] || { echo "prototype: prototype.image must be a Playwright image tagged vX.Y.Z" >&2; exit 1; }
     mkdir -p "$OUT/screens" && OUT="$(cd "$OUT" && pwd)"
     cp "$BIN/prototype-crawl.mjs" "$OUT/crawl.mjs"
     # localhost on the host is host.docker.internal from inside the container

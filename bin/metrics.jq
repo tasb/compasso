@@ -2,7 +2,8 @@
 # capacity_h, status}, $today (YYYY-MM-DD), $now (ISO), $items (issues in the
 # milestone, each with .label_events), $sync (sprint-sync output), $history
 # ([{sprint, done_h}] for past sprints), $files (story metrics files), $results
-# (testers' results files), $prices ({model: price per million tokens}), $currency.
+# (testers' results files), $events (the runners' events.jsonl lines: one per job, with its iids and, when the
+# harness reported them, tokens, cost_usd and model), $prices ({model: price per million tokens}), $currency.
 
 def ts: if . == null then null else sub("\\.[0-9]+"; "") | sub("\\+00:00$"; "Z") | fromdateiso8601 end;
 def hours($a; $b): (($b - $a) / 3600);
@@ -15,7 +16,7 @@ def est: ((.time_stats.time_estimate // 0) / 3600);
 def first_add($label): [.label_events[]? | select(.action == "add" and .label.name == $label) | .created_at | ts] | min;
 
 # the large inputs come with --slurpfile (one-element arrays): they can pass the 128 KB Linux allows one argument
-$items[0] as $items | $sync[0] as $sync | $history[0] as $history | $files[0] as $files | $results[0] as $results
+$items[0] as $items | $sync[0] as $sync | $history[0] as $history | $files[0] as $files | $results[0] as $results | $events[0] as $events
 | ($now | ts) as $nowts
 | ($items | map(. + {kind: kind})) as $all
 | ($all | map({key: (.iid | tostring), value: .}) | from_entries) as $by
@@ -25,9 +26,17 @@ $items[0] as $items | $sync[0] as $sync | $history[0] as $history | $files[0] as
 | ([$sprint.start, (if $today < $sprint.end then $today else $sprint.end end)]) as [$from, $to]
 | ([range(($from + "T00:00:00Z" | ts); ($to + "T00:00:00Z" | ts) + 1; 86400)] | map(todate[0:10])) as $days
 | ($files | map({key: (.iid | tostring), value: .}) | from_entries) as $fby
-| [$files[].agents[]?] as $runs
-| def cost($a): if ($prices[$a.model] | type) == "number" and ($a.tokens | type) == "number"
-                then $a.tokens / 1e6 * $prices[$a.model] else null end;
+| [$all[].iid] as $in
+# a runner job counts when it worked on this sprint's items; a job over several items is shared out evenly among them
+| [$events[] | select(((.iids // []) | any(. as $i | $in | index($i))))
+   | {role: .job, model: (.model // "unknown"), iids, n: ((.iids | length) | if . == 0 then 1 else . end)}
+     + (if .tokens then {tokens} else {} end) + {ms: ((.seconds // 0) * 1000)} + (if .cost_usd then {cost_usd} else {} end)] as $jobs
+| ([$files[].agents[]?] + $jobs) as $runs
+| def cost($a): if ($prices | length) > 0
+                then (if ($prices[$a.model] | type) == "number" and ($a.tokens | type) == "number" then $a.tokens / 1e6 * $prices[$a.model] else null end)
+                else $a.cost_usd end;
+  def share($a): $a + {tokens: (if $a.tokens then $a.tokens / $a.n else null end), ms: ($a.ms / $a.n)}
+                 + (if $a.cost_usd then {cost_usd: ($a.cost_usd / $a.n)} else {} end);
 {
   sprint: ($sprint + {generated: $today}),
   delivery: {
@@ -79,12 +88,14 @@ $items[0] as $items | $sync[0] as $sync | $history[0] as $history | $files[0] as
     by_role: ($runs | group_by(.role) | map({
       role: .[0].role, model: (map(.model) | group_by(.) | max_by(length) | .[0]), runs: length,
       tokens: (map(.tokens // 0) | add), minutes: ((map(.ms // 0) | add) / 60000 | r1)})),
-    stories: [$files[] | select((.agents | length) > 0) | {
-      title, estimate_h: ((.estimate_h // 0) | r1),
-      agent_minutes: (([.agents[].ms // 0] | add) / 60000 | r1),
-      tokens: ([.agents[].tokens // 0] | add),
-      cost: ([.agents[] | cost(.)] | if ($prices | length) == 0 or any(. == null) then null else add end)}],
-    cost: (if ($prices | length) == 0 then null else {currency: $currency,
-      total: ([$runs[] | cost(.) // 0] | add // 0)} end)
+    stories: [$work[] | . as $w
+      | (($fby[$w.iid | tostring].agents // []) + [$jobs[] | select(.iids | index($w.iid)) | share(.)]) as $a
+      | select(($a | length) > 0) | {
+      title, estimate_h: (($fby[$w.iid | tostring].estimate_h // est) | r1),
+      agent_minutes: (([$a[].ms // 0] | add) / 60000 | r1),
+      tokens: ([$a[].tokens // 0] | add | round),
+      cost: ([$a[] | cost(.)] | if any(. == null) then null else add end)}],
+    cost: (if ($prices | length) == 0 and ([$runs[] | select(.cost_usd)] | length) == 0 then null
+           else {currency: (if ($prices | length) > 0 then $currency else "USD" end), total: ([$runs[] | cost(.) // 0] | add // 0)} end)
   }
 }

@@ -2,11 +2,10 @@
 # Compasso's hooks, one entry point for every event (hooks/hooks.json on Claude Code,
 # .codex/hooks.json on Codex). The event's JSON arrives on stdin.
 #
-#   hook.sh pre-tool        PreToolUse: role guard, budget guard, command guard (they deny)
+#   hook.sh pre-tool        PreToolUse: role guard and command guard (they deny)
 #   hook.sh post-agent      PostToolUse on Agent: binds the agent to its role and run; records its metrics
 #   hook.sh subagent-start  SubagentStart: when each agent (re)started
 #   hook.sh subagent-stop   SubagentStop: records a continued agent's run
-#   hook.sh resume          SessionStart on compact or resume: which local runs are in progress
 #
 # - Outside a repository with .compasso/project.yaml every hook exits at once, doing nothing:
 #   plugin hooks fire in every repository on the machine.
@@ -20,16 +19,9 @@
 #   tee, sed -i, cp, mv, rm, touch, mkdir), for Compasso's agents only:
 #   paths in a story's worktree (.compasso/worktrees/<iid>/) are judged as if that worktree were the repository
 #   every role: never outside the repository, never .compasso/project.yaml, .compasso/runs/.agents.json,
-#     the working marker, a budget ledger, .claude/, .codex/ or .git/
-#   builder: anywhere else except test_paths | tester: test_paths, manifests and test configs, the run
-#   folder | reviewer: docs/learnings/ | shipper: docs/releases/ and the run folder | mutator: the run
-#   folder | security, approver, anything else: nothing
-# Budget guard. Claude Code (Agent, Task, SendMessage): dispatching or continuing a compasso:<role>
-#   agent claims a run from the budget of the run folder its prompt names (bin/budget.sh); no run
-#   folder, or no budget left, is a denial. A continuation uses the run the agent was dispatched for,
-#   or, when its dispatch was never bound to one, the run folder the message names. Codex (spawn_agent): its messages are encrypted, so the flow
-#   claims with budget.sh first, and spawning compasso-<role> needs a claim for that role made in the
-#   last 10 minutes and not used yet; it uses it.
+#     .claude/, .codex/ or .git/
+#   tester: test_paths, manifests and test configs, the run folder | reviewer: docs/learnings/ |
+#   security, planner, anything else: nothing
 # Command guard (Bash; Read), for everyone: force-pushing the default branch, rm -r outside the repository
 #   and temporary folders, reading secrets (.env, private keys, credential files), piping a download
 #   into a shell.
@@ -83,7 +75,7 @@ relpath() { # absolute or cwd-relative path -> path inside the repository, or ""
   done
   echo "$out"
 }
-matches() { # path glob... ; * crosses "/", as test-hashes.sh matches test_paths
+matches() { # path glob... ; * crosses "/"
   local f="$1" g; shift
   for g in "$@"; do case "$f" in $g) return 0 ;; esac; case "/$f" in $g) return 0 ;; esac; done
   return 1
@@ -108,19 +100,16 @@ role_guard() {
     [ -n "$p" ] || continue
     rel="$(relpath "$p")"
     [ -n "$rel" ] || { verdict "the $role may only write inside the repository, not $p"; return 0; }
-    # a story's worktree (the sprint builds stories side by side) is judged as the repository itself
+    # a worktree (bin/lead.sh red-main) is judged as the repository itself
     case "$rel" in .compasso/worktrees/*/*) rel="${rel#.compasso/worktrees/*/}" ;; esac
-    if matches "$rel" '.compasso/project.yaml' '.compasso/runs/.agents.json' '.compasso/runs/.working' '.compasso/runs/*/budget.jsonl' '.claude/*' '.codex/*' '.git/*'; then
-      verdict "no agent may change $rel: it holds Compasso's settings, budget or git state"; return 0
+    if matches "$rel" '.compasso/project.yaml' '.compasso/runs/.agents.json' '.claude/*' '.codex/*' '.git/*'; then
+      verdict "no agent may change $rel: it holds Compasso's settings or git state"; return 0
     fi
     # shellcheck disable=SC2086
     case "$role" in
-      builder) matches "$rel" $tests && { verdict "the builder may not change tests ($rel is under test_paths); if a test looks wrong, stop and say why: the tester decides"; return 0; } ;;
       tester) matches "$rel" $tests '.compasso/runs/*' '*package.json' '*package-lock.json' '*pnpm-lock.yaml' '*yarn.lock' '*pyproject.toml' '*requirements*.txt' '*setup.cfg' '*tox.ini' '*pytest.ini' '*conftest.py' '*go.mod' '*go.sum' '*pom.xml' '*build.gradle' '*build.gradle.kts' '*settings.gradle*' '*.csproj' '*Directory.Packages.props' '*Gemfile' '*Gemfile.lock' '*.rspec' '*composer.json' '*composer.lock' '*phpunit.xml*' '*Cargo.toml' '*Cargo.lock' '*playwright.config.*' '*vitest.config.*' '*jest.config.*' '*cypress.config.*' '*.mocharc*' ||
-          { verdict "the tester writes tests, test configs and manifests only; $rel is product code, which is the builder's"; return 0; } ;;
+          { verdict "the tester writes tests, test configs and manifests only; $rel is product code, which is the developer's"; return 0; } ;;
       reviewer) matches "$rel" 'docs/learnings/*' || { verdict "the reviewer only writes lessons in docs/learnings/, not $rel"; return 0; } ;;
-      shipper) matches "$rel" 'docs/releases/*' '.compasso/runs/*' || { verdict "the shipper only writes the test guide in docs/releases/, not $rel"; return 0; } ;;
-      mutator) matches "$rel" '.compasso/runs/*' || { verdict "the mutator only writes mutants in the run folder, not $rel"; return 0; } ;;
       *) verdict "the $role only reads; it may not write $rel"; return 0 ;;
     esac
   done <<EOF
@@ -146,58 +135,6 @@ shell_writes() { # a shell command -> the files it writes, one per line (redirec
       sed|perl) case " $* " in *" -i"*|*" --in-place"*) last=""; for w in "$@"; do last="$w"; done; echo "$last" ;; esac ;;
     esac
   done
-}
-
-# ---------- budget guard ----------
-budget_guard() {
-  local tool role run id info out rc
-  tool="$(jq -r '.tool_name' <<<"$INPUT")"
-  case "$tool" in
-    *spawn_agent)
-      role="$(jq -r '.tool_input.agent_type // ""' <<<"$INPUT")"
-      case "$role" in compasso-*) role="${role#compasso-}" ;; *) return 0 ;; esac
-      codex_claim "$role"; return 0 ;;
-    Agent|Task)
-      role="$(jq -r '.tool_input.subagent_type // ""' <<<"$INPUT")"
-      case "$role" in compasso:*) role="${role#compasso:}" ;; *) return 0 ;; esac
-      run="$(run_of "$(jq -r '.tool_input.prompt // ""' <<<"$INPUT")")"
-      [ -n "$run" ] || deny "dispatch compasso:$role with its run folder (.compasso/runs/<run>) in the prompt, so its budget can be claimed" ;;
-    SendMessage)
-      id="$(jq -r '.tool_input.to // ""' <<<"$INPUT")"
-      info="$(state | jq -c --arg id "$id" '.[$id] // empty')"
-      role="$(jq -r '.role // empty' <<<"$info")"
-      [ -n "$role" ] || return 0
-      run="$(jq -r '.run // empty' <<<"$info")"
-      [ -n "$run" ] || run="$(run_of "$(jq -r '.tool_input.message // ""' <<<"$INPUT")")"
-      [ -n "$run" ] || deny "continue compasso:$role with its run folder (.compasso/runs/<run>) in the message, so its budget can be claimed" ;;
-    *) return 0 ;;
-  esac
-  out="$("$BIN/budget.sh" claim --repo "$ROOT" --run "$ROOT/$run" --role "$role" --hook 2>&1)"; rc=$?
-  case "$rc" in
-    0) return 0 ;;
-    3) deny "${out#budget: }" ;;
-    *) deny "the budget could not be claimed for $role in $run: $out" ;;
-  esac
-}
-
-codex_claim() { # role: use a fresh claim of this role, or deny
-  local role="$1" since f n key claim
-  since="$(date -u -v-10M +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date -u -d '10 minutes ago' +%Y-%m-%dT%H:%M:%SZ)"
-  for f in "$ROOT"/.compasso/runs/*/budget.jsonl; do
-    [ -f "$f" ] || continue
-    n=0
-    while IFS= read -r claim; do
-      n=$((n + 1))
-      [ "$(jq -r .role <<<"$claim")" = "$role" ] || continue
-      [[ "$(jq -r .at <<<"$claim")" > "$since" ]] || [ "$(jq -r .at <<<"$claim")" = "$since" ] || continue
-      key="${f#"$ROOT"/}:$n"
-      state | jq -e --arg k "$key" '.__used // [] | index($k)' >/dev/null && continue
-      run="$(dirname "${f#"$ROOT"/}")"
-      state_set '.__used = ((.__used // []) + [$k]) | .__pending = ((.__pending // []) + [{role: $role, run: $run}])' --arg k "$key" --arg role "$role" --arg run "$run" || return 1
-      return 0
-    done < "$f"
-  done
-  deny "claim compasso-$role first (bin/budget.sh claim --run <run folder> --role $role): spawning needs an unused claim from the last 10 minutes"
 }
 
 # ---------- command guard ----------
@@ -259,12 +196,8 @@ record() { # run role model tokens ms
 
 case "$EVENT" in
   pre-tool)
-    # a team's poll is skipped while this checkout works: every tool call keeps the marker fresh (bin/team.sh)
-    # the marker is the repository's: an agent in a story's worktree keeps it fresh too
-    wm="$ROOT"; case "$ROOT" in */.compasso/worktrees/*) wm="${ROOT%/.compasso/worktrees/*}" ;; esac
-    [ -f "$wm/.compasso/runs/.working" ] && touch "$wm/.compasso/runs/.working" 2>/dev/null
     err="$(mktemp)"
-    out="$( { role_guard && budget_guard && command_guard; } 2>"$err")"; rc=$?
+    out="$( { role_guard && command_guard; } 2>"$err")"; rc=$?
     msg="$(tail -3 "$err")"; rm -f "$err"
     if [ "$rc" -ne 0 ]; then deny "a guard failed, so the action is denied (${msg:-exit $rc}). Fix it, or a person sets COMPASSO_HOOKS=off."; fi
     [ -n "$msg" ] && echo "$msg" >&2
@@ -287,11 +220,6 @@ case "$EVENT" in
       atype="$(jq -r '.agent_type // ""' <<<"$INPUT")"; id="$(jq -r .agent_id <<<"$INPUT")"
       case "$atype" in
         compasso:*) state_set '.[$id] = ((.[$id] // {}) + {started: ($now | tonumber), role: $role})' --arg id "$id" --arg now "$(date +%s)" --arg role "${atype#compasso:}" ;;
-        compasso-*)   # Codex: bind the agent to the oldest spawn of its role that is waiting for one
-          state_set '(.__pending // []) as $p | ([$p | to_entries[] | select(.value.role == $role)][0]) as $m
-            | .[$id] = ((.[$id] // {}) + {started: ($now | tonumber)} + (if .[$id].run then {} elif $m then {role: $role, run: $m.value.run, codex: true} else {} end))
-            | if $m and (.[$id].codex) then .__pending = ($p | del(.[$m.key])) else . end' \
-            --arg id "$id" --arg now "$(date +%s)" --arg role "${atype#compasso-}" ;;
       esac
     } >/dev/null 2>&1
     exit 0 ;;
@@ -304,18 +232,11 @@ case "$EVENT" in
       t="$(jq -r '.agent_transcript_path // ""' <<<"$INPUT")"
       tokens=""
       if [ -f "$t" ]; then
-        if [ "$(jq -r '.codex // false' <<<"$info")" = true ]; then   # Codex: the last total_token_usage in its rollout
-          tokens="$(grep -o '"total_token_usage":{[^}]*}' "$t" | tail -1 | sed 's/^"total_token_usage"://' | jq -r '.total_tokens // empty' 2>/dev/null)"
-        else
-          tokens="$(jq -s '[.[] | select(.message.usage) | .message.usage] | last // empty | (.input_tokens + (.cache_creation_input_tokens // 0) + (.cache_read_input_tokens // 0) + .output_tokens)' "$t" 2>/dev/null)"
-        fi
+        tokens="$(jq -s '[.[] | select(.message.usage) | .message.usage] | last // empty | (.input_tokens + (.cache_creation_input_tokens // 0) + (.cache_read_input_tokens // 0) + .output_tokens)' "$t" 2>/dev/null)"
       fi
       started="$(jq -r '.started // empty' <<<"$info")"; ms=""; [ -n "$started" ] && ms=$(( ($(date +%s) - started) * 1000 ))
       record "$(jq -r .run <<<"$info")" "$(jq -r .role <<<"$info")" "$(jq -r --arg m "$(jq -r '.model // ""' <<<"$INPUT")" '.model // (if $m == "" then "unknown" else $m end)' <<<"$info")" "$tokens" "$ms"
     } >/dev/null 2>&1
-    exit 0 ;;
-  resume)
-    { "$BIN/status.sh" --repo "$ROOT" --local 2>/dev/null | head -8; } || true
     exit 0 ;;
   *) exit 0 ;;
 esac

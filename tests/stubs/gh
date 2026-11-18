@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# Test double for gh. Each call is logged to $GH_STUB_DIR/calls.log and
+# answered from $GH_STUB_DIR/<key>, where <key> is the arguments with every
+# non-alphanumeric run turned into '_'. A missing fixture fails like a 404;
+# <key>.exit overrides the exit code. With GH_STUB_POST_OK set, an
+# unmatched POST succeeds with '{}'.
+key="$(printf '%s ' "$@" | sed -E 's/[^A-Za-z0-9]+/_/g; s/_$//')"
+printf '%s\n' "$*" >> "$GH_STUB_DIR/calls.log"
+if [ -f "$GH_STUB_DIR/$key" ]; then
+  cat "$GH_STUB_DIR/$key"
+  exit "$(cat "$GH_STUB_DIR/$key.exit" 2>/dev/null || echo 0)"
+fi
+case " $* " in
+  *" -X POST "*) [ -n "${GH_STUB_POST_OK:-}" ] && { echo '{}'; exit 0; } ;;
+esac
+echo '{"message":"404 Not Found"}'
+exit 1

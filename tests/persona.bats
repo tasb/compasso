@@ -39,27 +39,14 @@ team_on() { cfg_set '.team.enabled = true'; }
   [ "$status" -eq 2 ]
 }
 
-@test "join prints the developer's JSON, with no secret; only a developer joins" {
-  run p join
-  [ "$status" -eq 1 ]
-  p set --persona developer --name ana >/dev/null
-  run p join
-  [ "$status" -eq 0 ]
-  [ "$(jq -c '[.compasso, .name, .project, .harness]' <<<"$output")" = '["join","ana","acme/app","claude"]' ]
-  [ "$(jq -r '.checkout | length' <<<"$output")" = 12 ]
-  [ "$(jq -c 'keys' <<<"$output")" = '["checkout","compasso","harness","name","project"]' ]
-}
-
-@test "gate: without a team, default does everything except the poll" {
-  for s in setup plan story sprint review harden; do p gate --skill "$s"; done
-  for c in push-plan set-state open-mr sprint-sync followup; do p gate --tracker "$c"; done
-  run p gate --skill work
-  [ "$status" -eq 6 ]
+@test "gate: without a team, default does everything" {
+  for s in setup plan build lead; do p gate --skill "$s"; done
+  for c in push-plan set-state open-mr sprint-sync mr-merge; do p gate --tracker "$c"; done
 }
 
 @test "gate: a persona in a project with no team is refused, and told why" {
   p set --persona developer --name ana >/dev/null
-  run p gate --skill story
+  run p gate --skill build
   [ "$status" -eq 6 ]
   [[ "$output" == *"team.enabled is false"* ]] || false
 }
@@ -67,51 +54,39 @@ team_on() { cfg_set '.team.enabled = true'; }
 @test "gate: in a team project the default persona only reads" {
   team_on
   for s in setup start status report present; do p gate --skill "$s"; done
-  for s in plan story sprint review work harden; do run p gate --skill "$s"; [ "$status" -eq 6 ]; done
-  for c in check story sprint-items labels comments mr-checks main-pipeline; do p gate --tracker "$c"; done
+  for s in plan build lead; do run p gate --skill "$s"; [ "$status" -eq 6 ]; done
+  for c in check story sprint-items comments mr-checks main-pipeline snapshot; do p gate --tracker "$c"; done
   p gate --tracker sprint-sync --read-only
-  for c in sprint-sync push-plan set-state open-mr followup comment merge; do run p gate --tracker "$c"; [ "$status" -eq 6 ]; done
+  for c in sprint-sync push-plan set-state open-mr comment mr-merge; do run p gate --tracker "$c"; [ "$status" -eq 6 ]; done
+}
+
+@test "gate: the runner's jobs - a developer runs build, the tech lead runs lead, neither the other's" {
+  team_on; p set --persona developer --name ana >/dev/null
+  p gate --skill build
+  run p gate --skill lead
+  [ "$status" -eq 6 ]
+  p set --persona tech-lead >/dev/null
+  p gate --skill lead
+  run p gate --skill build
+  [ "$status" -eq 6 ]
+  [[ "$output" == *"the tech lead never builds"* ]] || false
 }
 
 @test "gate: the tech lead plans and closes, and never builds a story" {
   team_on; p set --persona tech-lead >/dev/null
-  for s in setup discover backlog architect roadmap plan feature review status report present harden sprint work; do p gate --skill "$s"; done
-  run p gate --skill story
+  for s in setup discover backlog architect roadmap plan status report present lead; do p gate --skill "$s"; done
+  run p gate --skill build
   [ "$status" -eq 6 ]
   [[ "$output" == *"never builds"* ]] || false
-  for c in push-plan push-backlog ensure-labels protect set-state open-mr followup comment sprint-sync; do p gate --tracker "$c"; done
+  for c in push-plan push-backlog ensure-labels protect set-state open-mr comment sprint-sync mr-merge add-story; do p gate --tracker "$c"; done
 }
 
-@test "gate: a developer builds and reviews, and never changes the scope" {
+@test "gate: a developer builds, and never merges or changes the scope" {
   team_on; p set --persona developer --name ana >/dev/null
-  for s in setup start status story sprint review work; do p gate --skill "$s"; done
-  for s in discover backlog architect roadmap plan feature harden report present; do run p gate --skill "$s"; [ "$status" -eq 6 ]; done
-  for c in set-state open-mr followup comment sprint-sync story; do p gate --tracker "$c"; done
-  for c in push-plan push-backlog ensure-labels protect; do run p gate --tracker "$c"; [ "$status" -eq 6 ]; done
-}
-
-@test "gate: the label and comment-delete primitives are never run through tracker.sh, by any persona" {
-  for c in label label-create comment-delete comment-edit; do run p gate --tracker "$c"; [ "$status" -eq 6 ]; done
-  team_on; p set --persona tech-lead >/dev/null
-  for c in label label-create comment-delete comment-edit; do run p gate --tracker "$c"; [ "$status" -eq 6 ]; done
-}
-
-@test "gate: in a team project nobody merges through tracker.sh: the tech lead merges through team.sh; elsewhere merge is open" {
-  run p gate --tracker merge
-  [ "$status" -eq 0 ]
-  team_on
-  for who in "tech-lead" "developer --name ana"; do
-    p set --persona $who >/dev/null
-    run p gate --tracker merge
-    [ "$status" -eq 6 ]
-    [[ "$output" == *"team.sh merge"* ]] || false
-    run p gate --tracker mr-update
-    [ "$status" -eq 6 ]
-    run p gate --tracker disarm
-    [ "$status" -eq 6 ]
-    [[ "$output" == *"team.sh main"* ]] || false
-  done
-  for c in mr-of mr-events; do run p gate --tracker "$c"; [ "$status" -eq 0 ]; done
+  for s in setup start status build; do p gate --skill "$s"; done
+  for s in discover backlog architect roadmap plan report present lead; do run p gate --skill "$s"; [ "$status" -eq 6 ]; done
+  for c in set-state open-mr comment sprint-sync story mr-label; do p gate --tracker "$c"; done
+  for c in push-plan push-backlog ensure-labels protect mr-merge add-story; do run p gate --tracker "$c"; [ "$status" -eq 6 ]; done
 }
 
 @test "tracker.sh applies the gate before it reaches the tracker" {
@@ -125,15 +100,15 @@ team_on() { cfg_set '.team.enabled = true'; }
   [ "$status" -eq 0 ]
 }
 
-@test "config: team.enabled and team.poll_minutes are validated" {
+@test "config: team.enabled and team.queue are validated" {
   "$ROOT/bin/config.sh" validate --repo "$REPO"
   cfg_set '.team.enabled = "yes"'
   run "$ROOT/bin/config.sh" validate --repo "$REPO"
   [ "$status" -eq 1 ]
   [[ "$output" == *"team.enabled"* ]] || false
-  cfg_set '.team.enabled = true | .team.poll_minutes = 0'
+  cfg_set '.team.enabled = true | .team.queue.min = 0'
   run "$ROOT/bin/config.sh" validate --repo "$REPO"
-  [[ "$output" == *"team.poll_minutes"* ]] || false
+  [[ "$output" == *"team.queue.min"* ]] || false
 }
 
 @test "config upgrade adds the team keys to an older configuration" {

@@ -1,0 +1,5 @@
+[
+ {"iid":7,"title":"Login breaks","source_branch":"story/13-login","draft":false,"labels":[],"description":"Closes #13","author":{"username":"agent-rui"},"web_url":"https://gitlab.com/acme/app/-/merge_requests/7","sha":"bbb"},
+ {"iid":8,"title":"Search","source_branch":"story/12-search","draft":false,"labels":["compasso::rework"],"description":"","author":{"username":"agent-rui"},"web_url":"https://gitlab.com/acme/app/-/merge_requests/8","sha":"ccc"},
+ {"iid":9,"title":"Tidy","source_branch":"chore/tidy","draft":true,"labels":[],"description":"","author":{"username":"tiago"},"web_url":"https://gitlab.com/acme/app/-/merge_requests/9","sha":"ddd"}
+]

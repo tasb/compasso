@@ -14,7 +14,7 @@ job() { yq -r "$1" "$OUT"; }
   [ "$status" -eq 0 ]
   [ -f "$OUT" ]
   [ ! -e "$REPO/.gitlab" ]
-  [ "$(job '.on | keys | join(",")')" = pull_request ]
+  [ "$(job '.on | keys | join(",")')" = pull_request,push ]
   [ "$(job '.permissions.contents')" = read ]
 }
 
@@ -87,4 +87,24 @@ gate_step() { # step-name report-file report-json -> runs the step in a temp che
   [[ "$output" == *"[high] sqli (db.js:9)"* ]] || false
   run gate_step "Code (Semgrep)" semgrep.json '{"results":[{"check_id":"style","path":"a.js","start":{"line":1},"extra":{"severity":"WARNING"}}]}'
   [ "$status" -eq 0 ]
+}
+
+@test "pushes to the default branch run the workflow too; the pull request scan gate stays on pull requests" {
+  git -C "$REPO" init -q -b trunk
+  ci --scans compasso >/dev/null
+  [ "$(job '.on.push.branches | join(",")')" = trunk ]
+  [ "$(job '.jobs.compasso-scan-gate.if')" = "github.event_name == 'pull_request'" ]
+}
+
+@test "staging: a push to the default branch deploys, after verify, one deploy at a time" {
+  ci --scans github >/dev/null
+  [ "$(job '.jobs.compasso-deploy-staging')" = null ]
+  cfg_set '.staging.deploy = "make deploy ENV=staging" | .staging.url = "https://staging.acme.test"'
+  ci --scans compasso >/dev/null
+  [ "$(job '.jobs.compasso-deploy-staging.if')" = "github.event_name == 'push'" ]
+  [ "$(job '.jobs.compasso-deploy-staging.needs')" = compasso-verify ]
+  [ "$(job '.jobs.compasso-deploy-staging.environment.name')" = staging ]
+  [ "$(job '.jobs.compasso-deploy-staging.environment.url')" = https://staging.acme.test ]
+  [ "$(job '.jobs.compasso-deploy-staging.concurrency.group')" = staging ]
+  [ "$(job '[.jobs.compasso-deploy-staging.steps[] | select(.run) | .run] | join(" | ")')" = "make deploy ENV=staging" ]
 }

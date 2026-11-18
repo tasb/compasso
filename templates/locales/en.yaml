@@ -10,6 +10,7 @@ md:
   planned: Planned
   coverage: Coverage
   features: Features
+  feature: Feature
   risks: Risks
   needed_for: Needed for
   steps: Steps
@@ -31,10 +32,6 @@ md:
   so_that: so that
 text:
   qa_title: "**Questions and answers** · round {round} · answered by @{user} in the agent, {date}"
-  plan_title: "**Plan** · {n} {stories} · {hours}h · critical path {critical}h"
-  story_one: story
-  story_many: stories
-  plan_head: "| Story | h | Owner | Depends on |"
   security: Security
   approved: Approved
   approved_by: "by @{who} in the agent, {date}"
@@ -44,90 +41,56 @@ text:
   reviewer: Reviewer
   coverage: Coverage
   merge: Merge
-  findings_fixed: "{n} findings fixed"
-  minors_to: "minors → {list}"
-  n_open: "{n} open"
-  no_findings: no findings
-  fixed_verified: fixed, verified by security
   open: open
   cov_ok: "{p}% of changed lines (min {min}%)"
   cov_below: "below min: {p}% of {min}% · uncovered: {list}"
-  cov_skipped: not measured in the MVP
+  ask_need: "What I need:"
+  ask_story: "Story:"
+  ask_why: Why
+  ask_steps: Steps
+  ask_close: "Close this issue: that is how the agent knows you are done."
+  ask_meanwhile: "Meanwhile:"
+  stuck_title: "Compasso: {key} does not finish"
+  stuck_need: "Someone to look at why {key} does not finish, then fix the cause or change the work."
+  stuck_why_count: "{key} failed {n} times in a row; the last run ended as {result}."
+  stuck_why_log: "The run log is {log} on {host} ({who})."
+  stuck_step_read: Read the end of the run log.
+  stuck_step_fix: Fix the cause, or change the story, its assignment or its merge request.
+  stuck_step_comment: If the work should move on as it is, say how in a comment.
+  stuck_meanwhile: The runner skips this job and takes the next one.
+  rework_footer: "Fix these blockers, push, then remove the compasso::rework label. Anything else the review saw went to the after-MVP list."
+  rework_conflict: "!{mr} conflicts with {branch}: rebase it onto {branch} and push, then remove the compasso::rework label. This is not a review round."
+  rework_twice_title: "Compasso: !{mr} was sent back a second time"
+  rework_twice_need: "A decision on merge request !{mr}: the tech lead found blockers in it again after its rework."
+  rework_twice_why: "The rework did not clear the blockers; the latest are in the tech lead's last comment on {url}"
+  rework_twice_step_read: "Read the tech lead's comments on !{mr}."
+  rework_twice_step_decide: "Decide: fix it yourself and push, tell the developer in a comment what to change, or close the merge request and change the story."
+  rework_twice_meanwhile: The story waits; the developers and the tech lead go on with other work.
+  later_title: After the MVP
+  hardening_title: "Hardening: after the MVP"
+  deliver_open: "Open staging: {url}"
+  deliver_done: "Delivered to staging; people test it in #{ask}. A problem found there comes back as a bug."
+  red_title: "Revert {sha}: {branch} is red"
+  red_body: "Reverts {sha}, which turned {branch} red: {url}. Its stories go back to their developers."
+  red_story: "Its merge turned {branch} red ({url}), so it was reverted in !{fix}. Fix it on a new branch and open a new merge request."
+  red_ask_title: "Compasso: {branch} is red and the revert does not merge"
+  red_conflict_need: "Someone to fix {branch}: {sha} turned it red, and reverting it conflicts with what was merged after it."
+  red_failed_need: "Someone to fix {branch}: {sha} turned it red, and its revert !{fix} failed its pipeline too."
+  red_why: "The last pipeline on {branch} failed: {url}"
+  red_step_fix: "Fix {branch} on a branch of your own and open a merge request with the compasso::fix-main label."
+  red_step_merge: Merge it once its pipeline is green.
+  red_meanwhile: Merge requests with a green pipeline keep merging; the runner opens no other fix.
   not_measured: not measured
-  merge_low: "low risk, may merge without a person ({lines} changed lines in {files} files, nothing sensitive)"
-  merge_low_sensitive: "low risk in the MVP, may merge without a person ({lines} changed lines in {files} files), but it touches sensitive paths: {list}"
-  merge_person: "a person approves: {reasons}"
-  risk_sensitive: "{file} is a sensitive path ({glob})"
-  risk_build: "{file} changes the build, the pipeline, the Compasso config or dependencies"
-  risk_lines: "{lines} changed lines, over the {max}-line limit"
-  risk_infra: "{file} changes infrastructure"
-  risk_production_path: "{file} is a production-critical path ({glob})"
-  risk_sensitive_content: "security marked the change sensitive: {what}"
-  risk_cost: "the cost report says {result}"
-  risk_cost_none: "{file} changes infrastructure and its cost was not assessed"
-  risk_cov_below: changed-line coverage is below its minimum
-  risk_cov_none: changed-line coverage was not measured
-  review_title: "**Review** · {n} findings"
-  no_findings_cap: No findings
-  data_for_lead: Data for the tech lead
-  cost_title: "**Cost** · finops"
-  cost_result: Result
-  cost_month: "{amount} {currency} a month"
-  cost_add: added
-  cost_change: changed
-  cost_remove: removed
-  cost_assumptions: Assumptions
-  cost_sources: Sources
-  approval_title: "**A person approves this change** before the tech lead merges it:"
-  approval_how_github: "Approve it, or request changes saying what to change. The tech lead merges it after an approval."
-  approval_how_gitlab: "Approve it, or write a comment saying what to change. The tech lead merges it after an approval."
   fix: fix
   blocks: Blocks
   "yes": "yes"
   "no": "no"
-  by_reviewer: reviewer
-  by_security: security
-  sev_blocker: blocker
-  sev_major: major
-  sev_minor: minor
   st_fixed: fixed
   st_followup: follow-up
-  digest_title: "**Merged without a person** · since {since}"
   nothing: Nothing
-  claimed: "{name} is building this."
   merged_at: "merged {at}"
-  digest_footer: Each one passed review, the mandatory security review and CI, and was low risk. To undo one, revert its merge request.
-  digest_footer_github: Each one passed review, the mandatory security review and CI, and was low risk. To undo one, revert its pull request.
-  harden_title: "**Hardening** · {set} checks · {date}"
-  set_code: code
-  set_live: live
-  set_all: code and live
-  check_mutation: Mutation testing
-  check_property: Property-based tests
-  check_flaky: Flaky tests
-  check_smells: Test smells
-  check_fuzz: API fuzzing
-  check_zap: Security scan (ZAP)
-  check_perf: Performance
-  check_a11y: Accessibility
-  not_run: not run
-  results_title: "**Test results** · {tester} · {date}"
   works: Works
-  doesnt_work: Doesn't work
-  cant_test: Can't test
   not_tested: Not tested
-  bug_title: "{feature}: {scenario} does not work"
-  found_in_value: "{gid} test guide"
-  by_value: "{tester} (business test, {date})"
-  evidence_line: "Reported by {tester} in the {gid} test guide, scenario \"{scenario}\""
-  followup_who: a maintainer
-  followup_want: this finding addressed
-  followup_so: "{summary} no longer applies"
-  legacy_closed: "Closed: this follow-up's acceptance (\"reviewed again\") is not something a test can check. Its finding came from #{story}; if it is still worth doing, a person files it again as a story whose acceptance a test can check."
-  minors_title: "Minor findings of #{story}: {title}"
-  minors_as: the team
-  minors_want: "the minor findings of #{story} fixed"
-  minors_so: what the review found during the MVP is not lost
   rec_findings: Findings
   rec_decisions: Decisions
   rec_takeaways: Takeaways
@@ -139,7 +102,7 @@ text:
   rec_run_by: "Run by @{who}"
   plan_pr_intro: "The approved plan for {sprint} and what was found and decided while planning it."
   plan_pr_outro: Merging this keeps these files in the repository, where the next steps read them.
-  labels:                       # the counts hardening checks report
+  labels: # the counts hardening checks report
     mutants: mutants
     caught: caught
     no observable effect: no observable effect
@@ -357,4 +320,4 @@ ui:
     missingRoadmap: "No sprints yet: /compasso:roadmap places the features into sprints."
     missingPlan: "No sprint is planned into stories yet: /compasso:plan splits the next sprint."
     laterSprints: Later sprints are planned into stories at each sprint close, with the velocity reached.
-    nextSteps: Merge the plan merge request, then build the sprint with /compasso:sprint; /compasso:status shows where it stands.
+    nextSteps: Merge the plan merge request; the runner then builds the sprint, and /compasso:status shows what it does next.

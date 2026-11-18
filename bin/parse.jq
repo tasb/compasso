@@ -1,11 +1,11 @@
 # Parse a Compasso work-item description (the approved formats) back into fields.
 # Input: the description as a string. Output:
-#   {key, goal, scope, acceptance, decisions, expected, verify, tests, touches, depends_on, blocked_by, coverage}
-# depends_on / blocked_by are tracker numbers; coverage is a number or null.
+#   {key, goal, scope, acceptance, decisions, expected, verify, tests, touches, depends_on, blocked_by, coverage, feature}
+# depends_on / blocked_by are tracker numbers; feature is the story's feature number or null; coverage is a number or null.
 # Section and field names are read in every language Compasso ships: pass --argjson N with
 # bin/locale.sh --names; without it, English only.
 
-def names($k): ($ARGS.named.N[$k] // null) as $n | if $n then $n else [{goal: "Goal", scope: "Scope", acceptance: "Acceptance", decisions: "Decisions", expected: "Expected", verify: "Verify", tests: "Tests", touches: "Touches", depends_on: "Depends on", blocked_by: "Blocked by", coverage: "Coverage"}[$k]] end;
+def names($k): ($ARGS.named.N[$k] // null) as $n | if $n then $n else [{goal: "Goal", scope: "Scope", acceptance: "Acceptance", decisions: "Decisions", expected: "Expected", verify: "Verify", tests: "Tests", touches: "Touches", depends_on: "Depends on", blocked_by: "Blocked by", coverage: "Coverage", feature: "Feature"}[$k]] end;
 def esc: gsub("(?<c>[.*+?^${}()|\\[\\]\\\\])"; "\\\(.c)");
 def lines: split("\n") | map(sub("\\\\$"; "") | sub("\\s+$"; ""));
 def section($k):      # bullet items under "## <name>" (the name in any language), up to the next heading
@@ -35,5 +35,6 @@ lines as $l
     touches: ($l | field("touches") | list),
     depends_on: ($l | field("depends_on") | iids),
     blocked_by: ($l | field("blocked_by") | iids),
+    feature: ($l | field("feature") | iids | .[0]),
     coverage: ($l | field("coverage") | if . == null then null else ([scan("[0-9]+")][0] | if . == null then null else tonumber end) end)
   }

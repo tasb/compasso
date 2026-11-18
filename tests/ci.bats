@@ -144,3 +144,24 @@ report() { # file severity...
   [ "$status" -eq 0 ]
   [[ "$output" == *"no SAST report"* ]] || false
 }
+
+@test "main runs verify and the scans too, so a red main is seen (bin/run.sh's red-main job)" {
+  ci >/dev/null
+  [ "$(job '.".compasso-mr".rules[1].if')" = '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH' ]
+}
+
+@test "staging: a green main deploys itself, once the checks and the scans pass, one deploy at a time" {
+  ci >/dev/null
+  [ "$(job '.compasso-deploy-staging')" = null ]
+  cfg_set '.staging.deploy = "make deploy ENV=staging" | .staging.url = "https://staging.acme.test"'
+  ci >/dev/null
+  [ "$(job '.compasso-deploy-staging.script | join(" | ")')" = "make deploy ENV=staging" ]
+  [ "$(job '.compasso-deploy-staging.rules[0].if')" = '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH' ]
+  [ "$(job '.compasso-deploy-staging.rules | length')" = 1 ]
+  [ "$(job '.compasso-deploy-staging.stage')" = .post ]
+  [ "$(job '.compasso-deploy-staging.needs | join(",")')" = compasso-verify,compasso-scan-gate ]
+  [ "$(job '.compasso-deploy-staging.environment.name')" = staging ]
+  [ "$(job '.compasso-deploy-staging.environment.url')" = https://staging.acme.test ]
+  [ "$(job '.compasso-deploy-staging.resource_group')" = staging ]
+  [ "$(job '.compasso-deploy-staging.image')" = node:22 ]
+}

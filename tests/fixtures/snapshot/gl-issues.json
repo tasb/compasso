@@ -1,0 +1,104 @@
+[
+  {
+    "iid": 10,
+    "title": "Export CSV",
+    "state": "opened",
+    "labels": [
+      "type::story",
+      "compasso::backlog",
+      "dev::ana"
+    ],
+    "description": "## Acceptance\n- [ ] Given a list, When exported, Then a CSV downloads\n\n**Feature:** #5",
+    "web_url": "https://gitlab.com/acme/app/-/issues/10",
+    "milestone": {
+      "id": 501,
+      "title": "S2",
+      "due_date": "2026-11-27"
+    },
+    "issue_type": "task"
+  },
+  {
+    "iid": 11,
+    "title": "Import CSV",
+    "state": "opened",
+    "labels": [
+      "compasso::backlog",
+      "dev::ana"
+    ],
+    "description": "**Depends on:** #10 · **Tests:** unit",
+    "web_url": "https://gitlab.com/acme/app/-/issues/11",
+    "issue_type": "task"
+  },
+  {
+    "iid": 12,
+    "title": "Search",
+    "state": "opened",
+    "labels": [
+      "type::story",
+      "compasso::building",
+      "dev::rui",
+      "needs::human"
+    ],
+    "description": "**Bloqueado por:** #99",
+    "web_url": "https://gitlab.com/acme/app/-/issues/12",
+    "issue_type": "task"
+  },
+  {
+    "iid": 13,
+    "title": "Login breaks",
+    "state": "opened",
+    "labels": [
+      "type::bug",
+      "compasso::in-review",
+      "dev::rui"
+    ],
+    "description": null,
+    "web_url": "https://gitlab.com/acme/app/-/issues/13",
+    "issue_type": "task"
+  },
+  {
+    "iid": 5,
+    "title": "Invoices",
+    "state": "opened",
+    "labels": [
+      "type::feature",
+      "compasso::delivering"
+    ],
+    "description": "**Goal:** g",
+    "web_url": "https://gitlab.com/acme/app/-/issues/5",
+    "issue_type": "issue"
+  },
+  {
+    "iid": 20,
+    "title": "Which region?",
+    "state": "opened",
+    "labels": [
+      "needs::human"
+    ],
+    "description": "<!-- compasso:ask story=12 key=region -->\nWhat I need",
+    "web_url": "https://gitlab.com/acme/app/-/issues/20",
+    "issue_type": "issue"
+  },
+  {
+    "iid": 30,
+    "title": "After the MVP",
+    "state": "opened",
+    "labels": [
+      "compasso::after-mvp"
+    ],
+    "description": "<!-- compasso:after-mvp list -->",
+    "web_url": "https://gitlab.com/acme/app/-/issues/30",
+    "issue_type": "task",
+    "milestone": null
+  },
+  {
+    "iid": 31,
+    "title": "Unassigned story",
+    "state": "opened",
+    "labels": [],
+    "description": "",
+    "web_url": "https://gitlab.com/acme/app/-/issues/31",
+    "issue_type": "task",
+    "milestone": null
+  }
+]

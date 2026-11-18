@@ -1,0 +1,7 @@
+{"workflow_runs":[
+ {"head_sha":"ccc","head_branch":"story/12-search","event":"pull_request","status":"in_progress","conclusion":null},
+ {"head_sha":"m2","head_branch":"main","event":"push","status":"completed","conclusion":"failure"},
+ {"head_sha":"m2","head_branch":"main","event":"push","status":"completed","conclusion":"success"},
+ {"head_sha":"bbb","head_branch":"fix/login","event":"pull_request","status":"completed","conclusion":"success"},
+ {"head_sha":"m1","head_branch":"main","event":"push","status":"completed","conclusion":"success"}
+]}

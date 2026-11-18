@@ -13,11 +13,7 @@ load helper
   done
 }
 
-@test "tracker.sh points a team command to team.sh, and an unknown one to its list" {
-  setup_repo
-  run "$ROOT/bin/tracker.sh" release --repo "$REPO" --iid 4
-  [ "$status" -eq 2 ]
-  [[ "$output" == *"release is a bin/team.sh command"* ]] || false
+@test "tracker.sh --help lists the adapters' commands" {
   run "$ROOT/bin/tracker.sh" --help
   [[ "$output" == *"sprint-sync"* ]] || false
 }

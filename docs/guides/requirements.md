@@ -14,7 +14,7 @@
    - Acceptance lines come from the document's rules and examples.
    *You decide:* the MVP line. A requirements document rarely says what can wait; Compasso asks.
 
-3. **`/compasso:roadmap`**, **`/compasso:plan`**, **`/compasso:sprint`**, as in [Greenfield](greenfield.md).
+3. **`/compasso:roadmap`**, **`/compasso:plan`** and the team's runner, as in [Greenfield](greenfield.md).
 
 ## Tips
 

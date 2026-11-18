@@ -2,6 +2,21 @@
 
 Versions follow `version` in `.claude-plugin/plugin.json`. Claude Code updates an installed plugin only when this version changes, so every change users should receive ships in a new version.
 
+## 4.0.0 (2026-11-18)
+
+A rebuild, from one team's month in `mvp`: 0 of 35 features closed, 77% of the tech lead's polls idle, 261 questions to the person, and sessions that ran for weeks. The MVP is now fast and fails fast; the heavy checks wait for `production`. Upgrade notes for the agent: [docs/releases/4.0.0.md](docs/releases/4.0.0.md).
+
+- **A runner replaces the polls.** Cron starts `bin/run.sh` on each agent's machine; it reads the tracker once and runs one job in a fresh session, or none. Questions answered, a red default branch (reverted) and assignments run without a model. `bin/cron.sh` prints the crontab line.
+- **Stages.** `mvp`: pipeline scans and a blocker-only review by the tech lead; the rest goes to one after-MVP list. `harden`: one audit of the whole code, and the list drained into stories. `production`: reviewer and security on every merge request, one rework round, tests from the tester.
+- **No prompts:** `mvp` and `harden` jobs run with permissions bypassed, `production` jobs with an allowlist. Verify commands need approval only with `trust.verify_approval: true` (was `trust.mvp_approval`).
+- **A person is asked through a `needs::human` issue** with the evidence, numbered steps and what the agents do meanwhile; a job that fails twice asks the same way.
+- **Bugs first,** then the earliest sprint; a later sprint's stories may start before the current one ends. The tech lead writes stories straight on the tracker, delivers each finished feature on staging and asks people to test it there.
+- **Removed:** `/compasso:work`, `sprint`, `story`, `feature`, `review` and the manual `harden`; the approver, shipper, mutator, finops and builder agents; the agent-run budget; `team.sh`, follow-ups, the digest and risk-based merges. `config.sh upgrade` drops their keys.
+- `/compasso:status` shows what the runner will do next for each role, what waits for a person, and this machine's last runs.
+- **Each run starts on the latest default branch,** so a stage change merged there reaches every agent at its next run. Each job records its stories and the session's tokens and cost; `/compasso:report` reads them (`metrics.sh collect --events`, one file per machine).
+- **Lessons come from rework:** a blocker a rule would have prevented ends the tech lead's comment with a `Lesson:` line; the developer commits it to `docs/learnings/` with the fix and recalls lessons before each story.
+- On GitHub the Feature template adds `compasso::new`, as on GitLab.
+
 ## 3.3.0 (2026-10-27)
 
 Balanced tests, from the GoSales sprint 1 report: the tester was the costliest role (16.7M tokens, 829 agent minutes, more than the builder), and an acceptance line was often tested three times. Upgrade notes for the agent: [docs/releases/3.3.0.md](docs/releases/3.3.0.md).

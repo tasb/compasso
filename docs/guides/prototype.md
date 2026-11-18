@@ -35,9 +35,9 @@
 
 4. **`/compasso:architect`.** The technical solution: stack, components, integrations, data, environments and decisions. With an observability prototype, its screens become the dashboards and alerts to build.
 
-5. **`/compasso:roadmap`**, then **`/compasso:plan`** and **`/compasso:sprint`**, as in [Greenfield](greenfield.md). At any point, **`/compasso:present`** builds one HTML presentation of the solution, the sprints and the next sprint's stories, to share with the team or the client.
+5. **`/compasso:roadmap`**, then **`/compasso:plan`** and the team's runner, as in [Greenfield](greenfield.md). At any point, **`/compasso:present`** builds one HTML presentation of the solution, the sprints and the next sprint's stories, to share with the team or the client.
 
-6. **UI stories point at the screen** they rebuild, so the builder matches its fields and wording, and the e2e tests follow its flow.
+6. **UI stories point at the screen** they rebuild, so the developer matches its fields and wording, and the e2e tests follow its flow.
 
 ## Tips
 

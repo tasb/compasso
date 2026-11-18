@@ -112,92 +112,9 @@ calls() { grep -c -- "$1" "$FAKE_GL/calls.log" || true; }
 
 # ---------- followup ----------
 
-@test "followup: a task in the parent's sprint, owned by either, attached to the parent" {
-  echo "**As** a dev **I want** x **so that** y." > "$BATS_TEST_TMPDIR/f.md"
-  run gl followup --parent 6 --title "Rename helper" --body-file "$BATS_TEST_TMPDIR/f.md"
-  [ "$status" -eq 0 ]
-  grep -q "POST projects/acme%2Fapp/issues title=Rename helper milestone_id=501 issue_type=task labels=owner::either" "$FAKE_GL/calls.log"
-  [ "$(cat "$FAKE_GL/parent/$((1000 + output))")" = 1006 ]
-}
-
-@test "followup: a story's follow-up goes to the story's feature: GitLab allows no Task under a Task" {
-  echo "x" > "$BATS_TEST_TMPDIR/f.md"
-  run gl followup --parent 8 --title "Rename helper" --body-file "$BATS_TEST_TMPDIR/f.md"
-  [ "$status" -eq 0 ]
-  [ "$(cat "$FAKE_GL/parent/$((1000 + output))")" = 1006 ]
-}
-
-@test "followup: a story with no feature: the follow-up goes to the sprint's epic" {
-  issue 9 task "Loose story" opened "x"; issue 12 issue "S20: goal" opened "**Goal:** g"
-  echo "x" > "$BATS_TEST_TMPDIR/f.md"
-  run gl followup --parent 9 --title "Rename helper" --body-file "$BATS_TEST_TMPDIR/f.md"
-  [ "$status" -eq 0 ]
-  [ "$(cat "$FAKE_GL/parent/$((1000 + output))")" = 1012 ]
-}
-
-@test "followup: with no issue to attach to, it is linked to the story, said, and its iid still returned" {
-  issue 9 task "Loose story" opened "x"; echo '[]' > "$FAKE_GL/epic-query.json"
-  echo "x" > "$BATS_TEST_TMPDIR/f.md"
-  run gl followup --parent 9 --title "Rename helper" --body-file "$BATS_TEST_TMPDIR/f.md"
-  [ "$status" -eq 0 ]
-  n="$(tail -1 <<<"$output")"
-  [ ! -e "$FAKE_GL/parent/$((1000 + n))" ]
-  grep -q "POST projects/acme%2Fapp/issues/$n/links target_project_id=7 target_issue_iid=9 link_type=relates_to" "$FAKE_GL/calls.log"
-  [[ "$output" == *"#9 has no feature or epic to attach #$n to; linked to #9 instead"* ]] || false
-}
-
-@test "followup: a failed attach is tried again; when it keeps failing, GitLab's error is shown and the follow-up is linked instead" {
-  echo "x" > "$BATS_TEST_TMPDIR/f.md"
-  FAKE_GL_FAIL_ONCE="POST graphql" run gl followup --parent 6 --title "Rename helper" --body-file "$BATS_TEST_TMPDIR/f.md"
-  [ "$status" -eq 0 ]
-  [ "$(cat "$FAKE_GL/parent/$((1000 + output))")" = 1006 ]
-  FAKE_GL_GQL_ERROR="Internal server error" run gl followup --parent 6 --title "Again" --body-file "$BATS_TEST_TMPDIR/f.md"
-  [ "$status" -eq 0 ]
-  n="$(tail -1 <<<"$output")"
-  [[ "$output" == *"could not attach #$n to #6 (Internal server error); linked to #6 instead"* ]] || false
-  grep -q "POST projects/acme%2Fapp/issues/$n/links target_project_id=7 target_issue_iid=6 link_type=relates_to" "$FAKE_GL/calls.log"
-}
-
 # ---------- merge ----------
 
 findings() { echo "$1" > "$BATS_TEST_TMPDIR/findings.json"; }
-
-@test "merge: refused while approvals.merge is human" {
-  findings '[]'
-  run gl merge --mr 31 --body-file "$BATS_TEST_TMPDIR/findings.json"
-  [ "$status" -eq 1 ]
-  [[ "$output" == *"a person merges"* ]] || false
-  [ "$(calls '/merge ')" -eq 0 ]
-}
-
-@test "merge: an agent never merges with an open security finding" {
-  cfg_set '.approvals.merge = "agent"'
-  findings '[{"by":"security","severity":"minor","status":"open","summary":"verbose error"}]'
-  run gl merge --mr 31 --body-file "$BATS_TEST_TMPDIR/findings.json"
-  [ "$status" -eq 1 ]
-  [ "$(grep -c 'merge_requests/31/merge' "$FAKE_GL/calls.log" || true)" -eq 0 ]
-}
-
-@test "merge: an agent merges when the pipeline succeeds once review is clear" {
-  cfg_set '.approvals.merge = "agent"'
-  findings '[{"by":"reviewer","severity":"minor","status":"followup","summary":"naming"}]'
-  echo '{"iid":31,"has_conflicts":false,"head_pipeline":{"status":"running"}}' > "$FAKE_GL/mr-31.json"
-  run gl merge --mr 31 --body-file "$BATS_TEST_TMPDIR/findings.json"
-  [ "$status" -eq 0 ]
-  grep -q "PUT projects/acme%2Fapp/merge_requests/31/merge merge_when_pipeline_succeeds=true" "$FAKE_GL/calls.log"
-}
-
-@test "merge: never when the pipeline of its last commit failed" {
-  cfg_set '.approvals.merge = "agent"'
-  findings '[]'
-  for st in failed canceled; do
-    echo "{\"iid\":31,\"has_conflicts\":false,\"head_pipeline\":{\"status\":\"$st\"}}" > "$FAKE_GL/mr-31.json"
-    run gl merge --mr 31 --body-file "$BATS_TEST_TMPDIR/findings.json"
-    [ "$status" -eq 1 ]
-    [[ "$output" == *"its pipeline failed"* ]] || false
-  done
-  [ "$(grep -c 'merge_requests/31/merge' "$FAKE_GL/calls.log" || true)" -eq 0 ]
-}
 
 @test "mr-checks: the pipeline of the last commit and whether it conflicts with its target" {
   for p in 'success:success' 'failed:failed' 'canceled:failed' 'running:running' 'pending:running' 'created:running'; do
@@ -208,12 +125,6 @@ findings() { echo "$1" > "$BATS_TEST_TMPDIR/findings.json"; }
   [ "$(gl mr-checks --mr 31 | jq -c .)" = '{"pipeline":"none","conflicts":true}' ]
   run gl mr-checks --mr 32
   [ "$status" -eq 1 ]
-}
-
-@test "mr-update: rebases the merge request onto its target" {
-  run gl mr-update --mr 31
-  [ "$status" -eq 0 ]
-  grep -q "PUT projects/acme%2Fapp/merge_requests/31/rebase" "$FAKE_GL/calls.log"
 }
 
 @test "main-pipeline: the last finished pipeline on the default branch; when it failed, the merge request that broke it" {
@@ -229,21 +140,6 @@ findings() { echo "$1" > "$BATS_TEST_TMPDIR/findings.json"; }
   [ "$(gl main-pipeline | jq -c .)" = '{"pipeline":"failed","sha":"c3","web_url":"u3","broken_by":{"sha":"c2","mr":30,"closes":[8]}}' ]
   echo '[]' > "$FAKE_GL/commit-mrs/c2.json"   # pushed by a person: no merge request
   [ "$(gl main-pipeline | jq -c .broken_by)" = '{"sha":"c2","mr":null,"closes":[]}' ]
-}
-
-@test "disarm: turns off auto-merge on every open merge request to the default branch that has it" {
-  echo '[{"iid":31,"merge_when_pipeline_succeeds":true},{"iid":32,"merge_when_pipeline_succeeds":false}]' > "$FAKE_GL/mr-query.json"
-  [ "$(gl disarm | jq -c .)" = '[31]' ]
-  grep -q 'GET projects/acme%2Fapp/merge_requests?state=opened&target_branch=main' "$FAKE_GL/calls.log"
-  grep -q 'POST projects/acme%2Fapp/merge_requests/31/cancel_merge_when_pipeline_succeeds' "$FAKE_GL/calls.log"
-  ! grep -q 'merge_requests/32/cancel' "$FAKE_GL/calls.log"
-}
-
-@test "merge: without the findings it is refused" {
-  cfg_set '.approvals.merge = "agent"'
-  run gl merge --mr 31
-  [ "$status" -eq 1 ]
-  [[ "$output" == *"needs --body-file with the review findings"* ]] || false
 }
 
 # ---------- mr-info and comment ----------

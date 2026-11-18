@@ -79,10 +79,21 @@ gl() { "$ROOT/bin/tracker/gitlab.sh" "$@" --repo "$REPO"; }
   export GLAB_STUB_POST_OK=1
   run gl ensure-labels
   [ "$status" -eq 0 ]
-  [[ "$output" == *"23 created, 1 already present"* ]] || false
-  [ "$(grep -c -- '-X POST' "$GLAB_STUB_DIR/calls.log")" -eq 23 ]
+  [[ "$output" == *"22 created, 1 already present"* ]] || false
+  [ "$(grep -c -- '-X POST' "$GLAB_STUB_DIR/calls.log")" -eq 22 ]
   [ "$(grep -c 'name=compasso::new ' "$GLAB_STUB_DIR/calls.log")" -eq 0 ]
   grep -q 'name=blocked ' "$GLAB_STUB_DIR/calls.log"
+}
+
+@test "ensure-labels in a team: each of team.developers gets its dev:: label" {
+  gitlab_world 30 free
+  echo '[]' | fixture api --hostname gitlab.com --paginate 'projects/acme%2Fapp/labels?per_page=100'
+  export GLAB_STUB_POST_OK=1
+  cfg_set '.team.enabled = true | .team.developers = ["ana", "rui"]'
+  gl ensure-labels >/dev/null
+  grep -q 'name=dev::ana ' "$GLAB_STUB_DIR/calls.log"
+  grep -q 'name=dev::rui ' "$GLAB_STUB_DIR/calls.log"
+  [ "$(grep -c 'name=dev::' "$GLAB_STUB_DIR/calls.log")" -eq 2 ]
 }
 
 @test "ensure-labels stops when a label cannot be created" {

@@ -32,9 +32,9 @@ toml() { python3 -c 'import tomllib,sys,json; print(json.dumps(tomllib.load(open
   engine >/dev/null
   [ "$(cat "$SK"/*/SKILL.md | grep -c 'CLAUDE_PLUGIN_ROOT')" -eq 0 ]
   [ "$(cat "$SK"/*/SKILL.md | grep -c '/compasso:')" -eq 0 ]
-  grep -q "bash $H/engine/bin/tracker.sh check" "$SK/compasso-story/SKILL.md"
-  grep -q '\$compasso-plan' "$SK/compasso-feature/SKILL.md"
-  grep -q 'custom agent `compasso-<role>`' "$SK/compasso-story/SKILL.md"
+  grep -q "bash $H/engine/bin/tracker.sh story" "$SK/compasso-build/SKILL.md"
+  grep -q '\$compasso-build' "$SK/compasso-build/SKILL.md"
+  grep -q 'custom agent `compasso-<role>`' "$SK/compasso-build/SKILL.md"
 }
 
 @test "re-installing converges and removes skills that no longer exist" {
@@ -66,7 +66,7 @@ toml() { python3 -c 'import tomllib,sys,json; print(json.dumps(tomllib.load(open
 
 @test "per project: one valid Codex agent per role with the configured model and effort" {
   engine >/dev/null
-  cfg_set '.models.codex.builder = {"model": "gpt-6-luna", "effort": "low"}'
+  cfg_set '.models.codex.tester = {"model": "gpt-6-luna", "effort": "low"}'
   run agents
   [ "$status" -eq 0 ]
   for r in "$ROOT"/roles/*.md; do
@@ -76,7 +76,7 @@ toml() { python3 -c 'import tomllib,sys,json; print(json.dumps(tomllib.load(open
     [ -n "$(jq -r .description <<<"$j")" ]
     [[ "$(jq -r .developer_instructions <<<"$j")" == *"$H/engine/bin"* ]] || false
   done
-  [ "$(toml "$REPO/.codex/agents/compasso-builder.toml" | jq -c '[.model, .model_reasoning_effort]')" = '["gpt-6-luna","low"]' ]
+  [ "$(toml "$REPO/.codex/agents/compasso-tester.toml" | jq -c '[.model, .model_reasoning_effort]')" = '["gpt-6-luna","low"]' ]
   [ "$(toml "$REPO/.codex/agents/compasso-security.toml" | jq -c '[.model, .model_reasoning_effort]')" = '["gpt-6-astra","high"]' ]
 }
 
@@ -103,7 +103,7 @@ toml() { python3 -c 'import tomllib,sys,json; print(json.dumps(tomllib.load(open
   engine >/dev/null
   agents >/dev/null
   j="$REPO/.codex/hooks.json"
-  [ "$(jq -r '[.hooks | keys[]] | sort | join(",")' "$j")" = "PreToolUse,SessionStart,SubagentStart,SubagentStop" ]
+  [ "$(jq -r '[.hooks | keys[]] | sort | join(",")' "$j")" = "PreToolUse,SubagentStart,SubagentStop" ]
   [ "$(jq -r '.hooks.PreToolUse[0].hooks[0].command' "$j")" = "bash $H/engine/bin/hook.sh pre-tool" ]
   [ -f "$H/engine/bin/hook.sh" ] && [ -f "$H/engine/hooks/hooks.json" ]
   agents >/dev/null

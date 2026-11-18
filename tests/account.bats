@@ -70,7 +70,7 @@ fill() { printf 'protocol=https\nhost=%s\n\n' "$1" | git -C "$REPO" credential f
   "$ROOT/bin/tracker.sh" check --repo "$REPO" >/dev/null 2>&1 || true
   [ "$(cat "$FAKE_GL/token")" = glpat-svc-ana ]
   p account --set svc-ana2 --email ana@agents.example >/dev/null
-  "$ROOT/bin/team.sh" list --repo "$REPO" >/dev/null 2>&1 || true
+  "$ROOT/bin/tracker.sh" check --repo "$REPO" >/dev/null 2>&1 || true
   [ "$(cat "$FAKE_GL/token")" = glpat-svc-ana2 ]
 }
 
@@ -86,19 +86,6 @@ fill() { printf 'protocol=https\nhost=%s\n\n' "$1" | git -C "$REPO" credential f
   [ "$(cat "$FAKE_GH/token")" = gho_svc-bot ]
 }
 
-@test "the tech lead's account joins team.agents when it is set; a developer's own checkout never writes the configuration" {
-  token_file svc-lead 600; token_file svc-ana 600
-  cfg_set '.team.enabled = true'
-  p account --set svc-ana --email ana@agents.example >/dev/null
-  [ "$(yq -o=json -I0 .team.agents "$CFG")" = '[]' ]
-  p set --persona tech-lead >/dev/null
-  run p account --set svc-lead --email lead@agents.example
-  [ "$status" -eq 0 ]
-  [[ "$output" == *"team.agents"* ]] || false
-  p account --set svc-lead --email lead@agents.example >/dev/null
-  [ "$(yq -o=json -I0 .team.agents "$CFG")" = '["svc-lead"]' ]
-}
-
 @test "the tech lead's and the default persona's commits carry their own names" {
   token_file svc-lead 600
   cfg_set '.team.enabled = true'; p set --persona tech-lead >/dev/null
@@ -107,39 +94,6 @@ fill() { printf 'protocol=https\nhost=%s\n\n' "$1" | git -C "$REPO" credential f
   cfg_set '.team.enabled = false'; p set --persona default >/dev/null
   p account --set svc-lead --email lead@agents.example >/dev/null
   [ "$(git -C "$REPO" config --local user.name)" = svc-lead ]
-}
-
-@test "a developer's join block carries its account, and the tech lead adds it to team.agents" {
-  cfg_set '.tracker.provider = "github" | .tracker.host = "github.com" | .team.enabled = true'
-  p account --set svc-ana --email ana@agents.example >/dev/null
-  p join > "$BATS_TEST_TMPDIR/join.json"
-  [ "$(jq -r .account "$BATS_TEST_TMPDIR/join.json")" = svc-ana ]
-  [ "$(jq -r '.token // "none"' "$BATS_TEST_TMPDIR/join.json")" = none ]
-  LEAD="$BATS_TEST_TMPDIR/lead"; mkdir -p "$LEAD"; cp -R "$REPO/.compasso" "$LEAD/"
-  "$ROOT/bin/persona.sh" set --repo "$LEAD" --persona tech-lead >/dev/null
-  touch "$FAKE_GH/labels.txt"
-  "$ROOT/bin/team.sh" add --repo "$LEAD" --join "$BATS_TEST_TMPDIR/join.json" >/dev/null
-  [ "$(yq -o=json -I0 .team.agents "$LEAD/.compasso/project.yaml")" = '["svc-ana"]' ]
-  "$ROOT/bin/team.sh" add --repo "$LEAD" --join "$BATS_TEST_TMPDIR/join.json" >/dev/null 2>&1 || true
-  [ "$(yq -o=json -I0 .team.agents "$LEAD/.compasso/project.yaml")" = '["svc-ana"]' ]
-}
-
-@test "a developer who joined before it had an account joins again with it: the account is recorded, the label kept" {
-  cfg_set '.tracker.provider = "github" | .tracker.host = "github.com" | .team.enabled = true'
-  printf 'dev::ana\n' > "$FAKE_GH/labels.txt"; : > "$FAKE_GH/calls.log"
-  LEAD="$BATS_TEST_TMPDIR/lead"; mkdir -p "$LEAD"; cp -R "$REPO/.compasso" "$LEAD/"
-  "$ROOT/bin/persona.sh" set --repo "$LEAD" --persona tech-lead >/dev/null
-  p account --set svc-ana --email ana@agents.example >/dev/null
-  p join > "$BATS_TEST_TMPDIR/join.json"
-  run "$ROOT/bin/team.sh" add --repo "$LEAD" --join "$BATS_TEST_TMPDIR/join.json"
-  [ "$status" -eq 0 ]
-  [[ "$output" == *"ana is already in the team; its account svc-ana is recorded"* ]] || false
-  [ "$(yq -o=json -I0 .team.agents "$LEAD/.compasso/project.yaml")" = '["svc-ana"]' ]
-  ! grep -q "POST repos/acme/app/labels" "$FAKE_GH/calls.log"
-  jq 'del(.account)' "$BATS_TEST_TMPDIR/join.json" > "$BATS_TEST_TMPDIR/old.json"
-  run "$ROOT/bin/team.sh" add --repo "$LEAD" --join "$BATS_TEST_TMPDIR/old.json"
-  [ "$status" -eq 1 ]
-  [[ "$output" == *"the name ana is taken"* ]] || false
 }
 
 @test "a checkout with no account works as before: no token is set, git is left alone" {

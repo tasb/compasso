@@ -1,344 +1,288 @@
 #!/usr/bin/env bats
 load helper
 
-# The tech lead merges (team projects). GitHub fake; a real git origin holds main and rui's branch
-# story/14-status, whose pull request #31 closes story #14 (in review). The lead works in $REPO,
-# rui in $RUI. rui's run posted its findings report on #31; maria is a person, bot1 an agent.
+# bin/lead.sh: the tech lead's actions - merge, one rework round, the after-MVP list, delivery to
+# staging and the revert of a red main. The fake GitLab keeps merge requests in mr-<n>.json, notes in
+# notes/, issue labels in labels/ and the default branch's pipelines in pipelines.json.
 setup() {
   setup_repo
-  cfg_set '.tracker.provider = "github" | .tracker.host = "github.com" | .team.enabled = true | .stage = "mvp" | .team.agents = ["bot1"]'
-  export FAKE_GH="$BATS_TEST_TMPDIR/gh"; mkdir -p "$FAKE_GH"/{issues,parent,blocked,comments,closing,reviews}; : > "$FAKE_GH/calls.log"
+  cfg_set '.stage = "mvp" | .team.enabled = true | .team.developers = ["ana"] | .people.ask = ["paula"]'
+  export FAKE_GL="$BATS_TEST_TMPDIR/gl"; mkdir -p "$FAKE_GL"; : > "$FAKE_GL/calls.log"
   export PATH="$ROOT/tests/fake:$PATH"
-  echo '[{"number":1,"title":"S20"}]' > "$FAKE_GH/milestones.json"
-  printf 'dev::ana\ndev::rui\nneeds::lead\nneeds::approval\ncompasso::backlog\n' > "$FAKE_GH/labels.txt"
-  cd "$REPO" && git init -q -b main && git config user.email t@t && git config user.name t
-  printf '.compasso/runs/\n' > .gitignore && mkdir -p src && echo a > src/a.js && git add -A && git commit -qm base
-  ORIGIN="$BATS_TEST_TMPDIR/origin.git"; git clone -q --bare "$REPO" "$ORIGIN"; git remote add origin "$ORIGIN"
-  git checkout -q -b story/14-status && printf '1\n2\n3\n' > src/status.js && git add -A && git commit -qm "status filter"
-  git push -q origin story/14-status && git checkout -q main && git branch -q -D story/14-status
-  RUI="$BATS_TEST_TMPDIR/rui"; git clone -q "$ORIGIN" "$RUI"; cp -R "$REPO/.compasso/." "$RUI/.compasso/"
-  "$ROOT/bin/persona.sh" set --repo "$REPO" --persona tech-lead >/dev/null
-  "$ROOT/bin/persona.sh" set --repo "$RUI" --persona developer --name rui >/dev/null
-  issue 6 "Invoice history" '["type::feature"]' '**Goal:** g'
-  issue 14 "Status filter" '["dev::rui","compasso::in-review"]' "$READY"$'**Tests:** unit' 6
-  issue 31 "Status filter" '[]' 'Closes #14'   # the pull request: GitHub keeps its labels and comments as an issue's
-  jq '.pull_request = {}' "$FAKE_GH/issues/31.json" > "$FAKE_GH/tmp" && mv "$FAKE_GH/tmp" "$FAKE_GH/issues/31.json"
-  echo '[{"number":31,"state":"OPEN","merged":false,"headRefName":"story/14-status","baseRefName":"main","url":"https://github.com/acme/app/pull/31","mergeCommit":null}]' > "$FAKE_GH/closing/14.json"
-  RUN="$BATS_TEST_TMPDIR/run"; mkdir -p "$RUN"
-  echo '[{"by":"security","severity":"minor","status":"fixed","verified_by":"security","summary":"verbose error"}]' > "$RUN/findings.json"
-  echo '{"status":"ok","percent":100,"min":80}' > "$RUN/coverage.json"
-  "$ROOT/bin/mr-report.sh" post --repo "$RUI" --run "$RUN" --mr 31 >/dev/null
+  git -C "$REPO" init -q -b main; as lead
+  mr 30 success false
+  printf 'A finding that is not a blocker.\n' > "$BATS_TEST_TMPDIR/f.md"
 }
-issue() { # number title labels-json body [parent]
-  jq -n --argjson n "$1" --arg t "$2" --argjson l "$3" --arg b "$4" \
-    '{number: $n, id: (1000 + $n), node_id: "I_\($n)", title: $t, state: "open", body: $b, labels: ($l | map({name: .})),
-      milestone: {number: 1, title: "S20"}, assignees: [], created_at: "2026-10-05T09:00:00Z", closed_at: null}' > "$FAKE_GH/issues/$1.json"
-  [ -z "${5:-}" ] || echo "$5" > "$FAKE_GH/parent/$1"
+as() { # as lead | as dev <name>
+  local login="svc-${2:-lead}"
+  if [ "$1" = lead ]; then "$ROOT/bin/persona.sh" set --repo "$REPO" --persona tech-lead >/dev/null
+  else "$ROOT/bin/persona.sh" set --repo "$REPO" --persona developer --name "$2" >/dev/null; fi
+  mkdir -p "$COMPASSO_HOME/accounts/gitlab.com"; printf 'glpat-x' > "$COMPASSO_HOME/accounts/gitlab.com/$login"; chmod 600 "$COMPASSO_HOME/accounts/gitlab.com/$login"
+  "$ROOT/bin/persona.sh" account --repo "$REPO" --set "$login" --email "$login@agents.example" >/dev/null
 }
-team() { local r="$1"; shift; "$ROOT/bin/team.sh" "$@" --repo "$r"; }
-labels_of() { jq -c '[.labels[].name] | sort' "$FAKE_GH/issues/$1.json"; }
-review_() { team "$REPO" review --iid 14; }
-reviews() { echo "$1" > "$FAKE_GH/reviews/31.json"; }
-later() { # a person's review, after the lead asked
-  reviews "$(jq -cn --arg s "$1" --arg u "$2" --arg b "${3:-}" '[{id: 7, state: $s, body: $b, user: {login: $u}, author_association: "MEMBER", submitted_at: "2026-10-07T09:00:00Z"}]')"
+mr() { # iid pipeline conflicts
+  printf '{"iid":%s,"head_pipeline":{"status":"%s"},"has_conflicts":%s,"target_branch":"main","web_url":"https://gitlab.example/mr/%s"}' "$1" "$2" "$3" "$1" > "$FAKE_GL/mr-$1.json"
 }
+lead() { "$ROOT/bin/lead.sh" "$1" --repo "$REPO" "${@:2}"; }
 
-@test "review: reads the reports from the pull request and works out the risk from its branch; in mvp nothing waits for a person" {
-  run review_
+@test "merge: a green merge request merges when its pipeline succeeds" {
+  run lead merge --mr 30
   [ "$status" -eq 0 ]
-  [ "$(jq -c '[.mr, .branch, .reports.findings, .gate, .risk.level, .approval]' <<<"$output")" = '[31,"story/14-status",true,"clear","low","not-needed"]' ]
-  [ "$(jq -c .infra <<<"$output")" = '[]' ]
-  [ "$(jq -c .risk.warnings <<<"$output")" = '[]' ]
-  dir="$(jq -r .dir <<<"$output")"
-  grep -q '^+++ b/src/status.js' "$dir/diff.patch"
-  [ "$(jq .changed_lines "$dir/risk.json")" = 3 ]
-  [ "$(jq -r .head <<<"$output")" = "$(git -C "$REPO" rev-parse origin/story/14-status)" ]
-  echo '{"approves":true}' > "$dir/approver.json"
-  review_ >/dev/null
-  [ -f "$dir/approver.json" ]
+  grep -q 'PUT projects/acme%2Fapp/merge_requests/30/merge merge_when_pipeline_succeeds=true' "$FAKE_GL/calls.log"
 }
 
-@test "review: in mvp a sensitive path asks no person, and the tech lead sees the warning" {
-  cfg_set '.risk.sensitive_paths = ["src/**"]'
-  [ "$(review_ | jq -c '[.approval, .risk.warnings]')" = '["not-needed",["src/status.js is a sensitive path (src/**)"]]' ]
-}
-
-@test "review: says whether the branch is behind its target, how its pipeline went, and whether it conflicts" {
-  [ "$(review_ | jq -c '[.behind, .pipeline, .conflicts]')" = '[false,"none",false]' ]
-  echo b > src/b.js && git add -A && git commit -qm "main moves" && git push -q origin main
-  echo '{"check_runs":[{"status":"completed","conclusion":"failure"}]}' > "$FAKE_GH/checks.json"
-  [ "$(review_ | jq -c '[.behind, .pipeline, .conflicts]')" = '[true,"failed",false]' ]
-}
-
-@test "merge: in production only a branch that is up to date with its target, whose pipeline did not fail or is not running, and has no conflicts" {
-  cfg_set '.stage = "production"'
-  echo b > src/b.js && git add -A && git commit -qm "main moves" && git push -q origin main
-  run team "$REPO" merge --iid 14
+@test "merge: a failed pipeline is refused; a conflict goes back to rebase, without a review round" {
+  mr 30 failed false
+  run lead merge --mr 30
   [ "$status" -eq 1 ]
-  [[ "$output" == *"behind main"* ]] || false
-  git fetch -q origin story/14-status && git checkout -q -b story/14-status origin/story/14-status
-  git rebase -q main && git push -q -f origin story/14-status && git checkout -q main
-  for c in failure:failed in_progress:running; do
-    if [ "${c%%:*}" = failure ]; then r='{"status":"completed","conclusion":"failure"}'; else r='{"status":"in_progress","conclusion":null}'; fi
-    echo "{\"check_runs\":[$r]}" > "$FAKE_GH/checks.json"
-    run team "$REPO" merge --iid 14
+  [[ "$output" == *"!30 is not merged: its pipeline failed"* ]] || false
+  mr 30 success true
+  run lead merge --mr 30
+  [ "$status" -eq 0 ]
+  ! grep -q '/merge ' "$FAKE_GL/calls.log" || false
+  grep -q 'PUT projects/acme%2Fapp/merge_requests/30 add_labels=compasso::rework' "$FAKE_GL/calls.log"
+  jq -r '.[0].body' "$FAKE_GL/notes/mr-30.json" | grep -q '^!30 conflicts with main: rebase it onto main'
+  ! grep -q 'compasso:rework -->' "$FAKE_GL/notes/mr-30.json" || false
+}
+
+@test "rework: the first time the blockers go back to the developer, with the rework label" {
+  printf '1. Acceptance 2 is not met: the filter ignores case.\n' > "$BATS_TEST_TMPDIR/b.md"
+  run lead rework --mr 30 --story 5 --body-file "$BATS_TEST_TMPDIR/b.md"
+  [ "$status" -eq 0 ]
+  grep -q 'PUT projects/acme%2Fapp/merge_requests/30 add_labels=compasso::rework' "$FAKE_GL/calls.log"
+  body="$(jq -r '.[0].body' "$FAKE_GL/notes/mr-30.json")"
+  [[ "$body" == "1. Acceptance 2 is not met: the filter ignores case."* ]] || false
+  [[ "$body" == *"remove the compasso::rework label"* ]] || false
+  [[ "$body" == *"<!-- compasso:rework -->" ]] || false
+  ! grep -q 'needs::human' "$FAKE_GL/calls.log" || false
+}
+
+@test "rework: blockers again after a rework go to a person, and the story waits" {
+  printf 'b\n' > "$BATS_TEST_TMPDIR/b.md"
+  lead rework --mr 30 --story 5 --body-file "$BATS_TEST_TMPDIR/b.md" >/dev/null
+  : > "$FAKE_GL/calls.log"
+  run lead rework --mr 30 --story 5 --body-file "$BATS_TEST_TMPDIR/b.md"
+  [ "$status" -eq 0 ]
+  ! grep -q 'add_labels=compasso::rework' "$FAKE_GL/calls.log" || false
+  [ "$(jq length "$FAKE_GL/notes/mr-30.json")" -eq 2 ]
+  head -1 "$FAKE_GL/desc/1.md" | grep -qx '<!-- compasso:ask story=5 key=rework-30 -->'
+  grep -q 'https://gitlab.example/mr/30' "$FAKE_GL/desc/1.md"
+  grep -q 'title=Compasso: !30 was sent back a second time' "$FAKE_GL/calls.log"
+  [ "$(cat "$FAKE_GL/labels/5")" = needs::human ]
+}
+
+@test "later: the after-MVP list is one issue, opened once and added to as comments; the oldest list wins" {
+  run lead later --body-file "$BATS_TEST_TMPDIR/f.md"
+  [ "$status" -eq 0 ]
+  grep -q 'POST projects/acme%2Fapp/issues title=After the MVP issue_type=issue labels=compasso::after-mvp' "$FAKE_GL/calls.log"
+  [ "$(cat "$FAKE_GL/desc/1.md")" = '<!-- compasso:after-mvp list -->' ]
+  [ "$(jq -r '.[0].body' "$FAKE_GL/notes/1.json")" = 'A finding that is not a blocker.' ]
+  jq -n '[{iid: 9, web_url: "u", labels: ["compasso::after-mvp"], description: "<!-- compasso:after-mvp list -->"},
+          {iid: 3, web_url: "u", labels: ["compasso::after-mvp"], description: "<!-- compasso:after-mvp list -->"},
+          {iid: 2, labels: ["compasso::after-mvp"], description: "x\n<!-- compasso:after-mvp story=4 -->"}]' > "$FAKE_GL/issue-query.json"
+  run lead later --body-file "$BATS_TEST_TMPDIR/f.md"
+  [ "$(grep -c 'POST projects/acme%2Fapp/issues ' "$FAKE_GL/calls.log")" -eq 1 ]
+  [ "$(jq length "$FAKE_GL/notes/3.json")" -eq 1 ]
+  [ ! -e "$FAKE_GL/notes/9.json" ] && [ ! -e "$FAKE_GL/notes/2.json" ]
+}
+
+@test "later: titled in the project's language" {
+  cfg_set '.language = "pt-BR"'
+  lead later --body-file "$BATS_TEST_TMPDIR/f.md" >/dev/null
+  grep -q 'issues title=Depois do MVP ' "$FAKE_GL/calls.log"
+}
+
+@test "deliver: people are asked to test on staging, its address first; then the feature is done and closed" {
+  cfg_set '.staging.url = "https://staging.acme.example"'
+  cat > "$BATS_TEST_TMPDIR/d.json" <<'EOF'
+{"need": "Test the CSV export on staging.", "why": ["Its 3 stories are merged and main is green."],
+ "steps": ["Open Reports and click Export.", "Check the file has one row per invoice."], "meanwhile": "The developers build the next feature."}
+EOF
+  run lead deliver --feature 4 --title "Test: CSV export" --from "$BATS_TEST_TMPDIR/d.json"
+  [ "$status" -eq 0 ]
+  head -1 "$FAKE_GL/desc/1.md" | grep -qx '<!-- compasso:ask story= key=deliver-4 -->'
+  grep -qx '1. Open staging: https://staging.acme.example' "$FAKE_GL/desc/1.md"
+  grep -qx '2. Open Reports and click Export.' "$FAKE_GL/desc/1.md"
+  [ "$(cat "$FAKE_GL/labels/4")" = compasso::done ]
+  grep -q 'PUT projects/acme%2Fapp/issues/4 state_event=close' "$FAKE_GL/calls.log"
+  jq -r '.[0].body' "$FAKE_GL/notes/4.json" | grep -q 'people test it in #1'
+}
+
+@test "a developer cannot merge, reopen, add stories or file for after the MVP; mr-label sets only the runner's labels" {
+  as dev ana
+  for c in "mr-merge --mr 30" "reopen --iid 5" "after-mvp --title t --body-file $BATS_TEST_TMPDIR/f.md" "add-story --parent 4 --title t --from $BATS_TEST_TMPDIR/f.md" "harden-feature --title t"; do
+    # shellcheck disable=SC2086
+    run "$ROOT/bin/tracker.sh" $c --repo "$REPO"
+    [ "$status" -ne 0 ]
+  done
+  [ ! -s "$FAKE_GL/calls.log" ]
+  run "$ROOT/bin/tracker.sh" mr-label --repo "$REPO" --mr 30 --remove compasso::rework
+  [ "$status" -eq 0 ]
+  run "$ROOT/bin/tracker.sh" mr-label --repo "$REPO" --mr 30 --add needs::approval
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"mr-label sets only compasso::rework and compasso::fix-main"* ]] || false
+}
+
+story_json() {
+  cat > "$BATS_TEST_TMPDIR/s.json" <<'EOF'
+{"as": "a manager", "want": "to export invoices as CSV", "so_that": "I can file them",
+ "acceptance": ["Given 3 invoices, When I click Export, Then the CSV has 3 rows"],
+ "verify": ["npm test -- export"], "tests": ["e2e"], "depends_on": ["#12"]}
+EOF
+}
+
+@test "story: written straight into the tracker, in the feature's sprint, under it, with its developer and its Feature line" {
+  story_json; mkdir -p "$FAKE_GL/issues"
+  echo '{"iid":4,"id":1004,"title":"Export","state":"opened","issue_type":"issue","milestone":{"id":501,"title":"S2"},"labels":["type::feature","dev::ana"]}' > "$FAKE_GL/issues/4.json"
+  run lead story --feature 4 --title "Export CSV" --from "$BATS_TEST_TMPDIR/s.json"
+  [ "$status" -eq 0 ]
+  [ "$(jq -c '{iid}' <<<"$output")" = '{"iid":1}' ]
+  grep -q 'POST projects/acme%2Fapp/issues title=Export CSV milestone_id=501 issue_type=task labels=dev::ana,compasso::backlog' "$FAKE_GL/calls.log"
+  grep -qx '\*\*Feature:\*\* #4\\' "$FAKE_GL/desc/1.md"
+  grep -q '^\*\*Depends on:\*\* #12' "$FAKE_GL/desc/1.md"
+  grep -qx -- '- \[ \] Given 3 invoices, When I click Export, Then the CSV has 3 rows' "$FAKE_GL/desc/1.md"
+  ! grep -q 'compasso:key' "$FAKE_GL/desc/1.md" || false
+  [ "$(cat "$FAKE_GL/parent/1001")" = 1004 ]
+}
+
+@test "story: a feature with no developer leaves it for the lead to assign; outside a team it is an agent's" {
+  story_json; mkdir -p "$FAKE_GL/issues"
+  echo '{"iid":4,"id":1004,"title":"Export","state":"opened","issue_type":"issue","milestone":null,"labels":["type::feature"]}' > "$FAKE_GL/issues/4.json"
+  lead story --feature 4 --title "Export CSV" --from "$BATS_TEST_TMPDIR/s.json" >/dev/null
+  grep -q 'POST projects/acme%2Fapp/issues title=Export CSV issue_type=task labels= *$' "$FAKE_GL/calls.log"
+  cfg_set '.team.enabled = false'; "$ROOT/bin/persona.sh" set --repo "$REPO" --persona default >/dev/null
+  lead story --feature 4 --title "Export CSV" --from "$BATS_TEST_TMPDIR/s.json" >/dev/null
+  grep -q 'POST projects/acme%2Fapp/issues title=Export CSV issue_type=task labels=owner::agent' "$FAKE_GL/calls.log"
+}
+
+@test "story: one without acceptance, Verify or tests (unit, e2e) is refused before anything is written" {
+  story_json
+  for f in '.acceptance = []' '.verify = []' '.tests = []' '.tests = ["manual"]' '.want = ""'; do
+    jq "$f" "$BATS_TEST_TMPDIR/s.json" > "$BATS_TEST_TMPDIR/bad.json"
+    run lead story --feature 4 --title t --from "$BATS_TEST_TMPDIR/bad.json"
     [ "$status" -eq 1 ]
-    [[ "$output" == *"pipeline ${c#*:}"* ]] || false
+    [[ "$output" == *"lead: the story needs"* ]] || false
   done
-  rm "$FAKE_GH/checks.json"; mkdir -p "$FAKE_GH/pulls"; echo '{"number":31,"mergeable_state":"dirty","head":{"sha":"abc"}}' > "$FAKE_GH/pulls/31.json"
-  run team "$REPO" merge --iid 14
-  [ "$status" -eq 1 ]
-  [[ "$output" == *"conflicts with main"* ]] || false
-  ! grep -q "^PR merge" "$FAKE_GH/calls.log"
+  [ ! -s "$FAKE_GL/calls.log" ]
 }
 
-@test "update: the lead brings a branch that is behind up to date; only the lead" {
-  run team "$REPO" update --iid 14
+@test "story on github: in the feature's milestone, as its sub-issue" {
+  cfg_set '.tracker.provider = "github" | .tracker.host = "github.com"'
+  export FAKE_GH="$BATS_TEST_TMPDIR/gh"; mkdir -p "$FAKE_GH/issues"; : > "$FAKE_GH/calls.log"; echo 20 > "$FAKE_GH/next_number"
+  echo '[{"number":3,"title":"S2","due_on":"2026-11-27T23:59:59Z"}]' > "$FAKE_GH/milestones.json"
+  echo '{"number":4,"id":1004,"title":"Export","state":"open","labels":[{"name":"type::feature"},{"name":"dev::ana"}],"milestone":{"number":3,"title":"S2"},"body":""}' > "$FAKE_GH/issues/4.json"
+  story_json
+  run lead story --feature 4 --title "Export CSV" --from "$BATS_TEST_TMPDIR/s.json"
   [ "$status" -eq 0 ]
-  grep -q "PUT repos/acme/app/pulls/31/update-branch" "$FAKE_GH/calls.log"
-  run team "$RUI" update --iid 14
-  [ "$status" -eq 6 ]
+  [ "$(jq -r '.milestone.number' "$FAKE_GH/issues/20.json")" = 3 ]
+  [ "$(jq -r '.labels | map(.name) | join(",")' "$FAKE_GH/issues/20.json")" = dev::ana,compasso::backlog ]
+  [ "$(cat "$FAKE_GH/parent/20")" = 4 ]
+  jq -r .body "$FAKE_GH/issues/20.json" | grep -q '^\*\*Feature:\*\* #4'
 }
 
-@test "review: a rebase that leaves the change as it was keeps its folder, and the approver's verdict" {
-  dir="$(review_ | jq -r .dir)"
-  echo '{"approves":true}' > "$dir/approver.json"
-  echo b > src/b.js && git add -A && git commit -qm "main moves" && git push -q origin main
-  git fetch -q origin story/14-status && git checkout -q -b story/14-status origin/story/14-status
-  git rebase -q main && git push -q -f origin story/14-status && git checkout -q main
-  [ "$(review_ | jq -r .dir)" = "$dir" ]
-  [ -f "$dir/approver.json" ]
-}
-
-@test "review: each version of the change gets its own folder, so the approver of a rework has a budget of its own" {
-  cfg_set '.stage = "production"'
-  dir="$(review_ | jq -r .dir)"
-  [[ "$dir" == */.compasso/runs/lead-31-"$(git -C "$REPO" diff origin/main...origin/story/14-status | git patch-id --stable | cut -c1-12)" ]] || false
-  "$ROOT/bin/budget.sh" claim --repo "$REPO" --run "$dir" --role approver >/dev/null
-  W="$BATS_TEST_TMPDIR/w"; git clone -q -b story/14-status "$ORIGIN" "$W"
-  (cd "$W" && git config user.email t@t && git config user.name t && echo 4 >> src/status.js && git commit -qam rework && git push -q origin story/14-status)
-  dir2="$(review_ | jq -r .dir)"
-  [ "$dir2" != "$dir" ]
-  run "$ROOT/bin/budget.sh" claim --repo "$REPO" --run "$dir2" --role approver
+@test "hardening: one open feature holds the stories drained from the after-MVP list; it is opened once" {
+  run lead hardening
   [ "$status" -eq 0 ]
+  [ "$(jq -c '{iid}' <<<"$output")" = '{"iid":1}' ]
+  grep -q 'POST projects/acme%2Fapp/issues title=Hardening: after the MVP issue_type=issue labels=type::feature,compasso::building' "$FAKE_GL/calls.log"
+  head -1 "$FAKE_GL/desc/1.md" | grep -qx '<!-- compasso:harden -->'
+  jq -n --rawfile d "$FAKE_GL/desc/1.md" '[{iid: 1, web_url: "u", labels: ["type::feature"], description: $d}]' > "$FAKE_GL/issue-query.json"
+  run lead hardening
+  [ "$(jq -c '{iid}' <<<"$output")" = '{"iid":1}' ]
+  [ "$(grep -c 'POST projects/acme%2Fapp/issues ' "$FAKE_GL/calls.log")" -eq 1 ]
 }
 
-@test "merge: the lead merges what needs no person, as merged without one" {
-  run team "$REPO" merge --iid 14
+@test "hardening on github, and in the project's language" {
+  cfg_set '.tracker.provider = "github" | .tracker.host = "github.com" | .language = "pt-BR"'
+  export FAKE_GH="$BATS_TEST_TMPDIR/gh"; mkdir -p "$FAKE_GH/issues"; : > "$FAKE_GH/calls.log"; echo 20 > "$FAKE_GH/next_number"
+  lead hardening >/dev/null
+  lead hardening >/dev/null
+  [ "$(jq -r .title "$FAKE_GH/issues/20.json")" = "Hardening: depois do MVP" ]
+  [ "$(jq -r '.labels | map(.name) | join(",")' "$FAKE_GH/issues/20.json")" = type::feature,compasso::building ]
+  [ ! -e "$FAKE_GH/issues/21.json" ]
+}
+
+# red-main: a real git history behind a bare origin; the fake GitLab says which commit broke main
+red_world() {
+  O="$BATS_TEST_TMPDIR/origin.git"; git init -q --bare -b main "$O"
+  git -C "$REPO" config user.email lead@agents.example; git -C "$REPO" config user.name lead
+  git -C "$REPO" remote add origin "$O"
+  echo ok > "$REPO/app.txt"; git -C "$REPO" add app.txt; git -C "$REPO" commit -qm base
+  echo broken > "$REPO/bad.txt"; git -C "$REPO" add bad.txt; git -C "$REPO" commit -qm "story 5"
+  BAD="$(git -C "$REPO" rev-parse HEAD)"
+  git -C "$REPO" push -q origin main
+  printf '[{"id":2,"status":"failed","sha":"%s","web_url":"https://gitlab.example/p/2"},{"id":1,"status":"success","sha":"x"}]' "$BAD" > "$FAKE_GL/pipelines.json"
+  mkdir -p "$FAKE_GL/commit-mrs"; echo '[{"iid":30,"state":"merged"}]' > "$FAKE_GL/commit-mrs/$BAD.json"
+  echo '[{"iid":5}]' > "$FAKE_GL/closes.json"
+}
+
+@test "red-main: the commit that broke main is reverted in a fix-main merge request that merges itself; its story reopens" {
+  red_world
+  run lead red-main
   [ "$status" -eq 0 ]
-  grep -q "^PR merge 31" "$FAKE_GH/calls.log"
-  [ "$(labels_of 31)" = '["compasso::auto-merged"]' ]
+  short="$(printf '%s' "$BAD" | cut -c1-8)"
+  [ "$(git -C "$O" show "fix/main-$short:app.txt")" = ok ]
+  ! git -C "$O" cat-file -e "fix/main-$short:bad.txt" 2>/dev/null || false
+  grep -q "POST projects/acme%2Fapp/merge_requests source_branch=fix/main-$short target_branch=main title=Revert $short: main is red" "$FAKE_GL/calls.log"
+  grep -q 'PUT projects/acme%2Fapp/merge_requests/31 add_labels=compasso::fix-main' "$FAKE_GL/calls.log"
+  grep -q 'PUT projects/acme%2Fapp/merge_requests/31/merge merge_when_pipeline_succeeds=true' "$FAKE_GL/calls.log"
+  grep -q 'PUT projects/acme%2Fapp/issues/5 state_event=reopen' "$FAKE_GL/calls.log"
+  [[ "$(cat "$FAKE_GL/labels/5")" == *compasso::backlog* ]] || false
+  jq -r '.[0].body' "$FAKE_GL/notes/5.json" | grep -q 'reverted in !31'
+  [ -z "$(git -C "$REPO" worktree list | sed 1d)" ]
 }
 
-@test "merge: refused without a findings report, with an unresolved security finding, or for an infrastructure change with no cost report" {
-  echo '[]' > "$FAKE_GH/comments/31.json"
-  run team "$REPO" merge --iid 14
-  [ "$status" -eq 1 ]
-  [[ "$output" == *"no findings report"* ]] || false
-  echo '[{"by":"security","severity":"minor","status":"open","summary":"verbose error"}]' > "$RUN/findings.json"
-  "$ROOT/bin/mr-report.sh" post --repo "$RUI" --run "$RUN" --mr 31 >/dev/null
-  [ "$(review_ | jq -r .gate)" = blocked ]
-  run team "$REPO" merge --iid 14
-  [ "$status" -eq 1 ]
-  [[ "$output" == *"open findings block the merge"* ]] || false
-  ! grep -q "^PR merge" "$FAKE_GH/calls.log"
-}
-
-@test "merge: an infrastructure change needs its cost report, and a cost increase needs a person even in mvp" {
-  git fetch -q origin story/14-status && git checkout -q -b story/14-status origin/story/14-status
-  mkdir -p infra && echo 'resource "x" "y" {}' > infra/main.tf && git add -A && git commit -qm infra && git push -q origin story/14-status
-  git checkout -q main
-  run review_
-  [ "$(jq -c '[.infra, .reports.cost, .approval]' <<<"$output")" = '[["infra/main.tf"],false,"needed"]' ]
-  run team "$REPO" merge --iid 14
-  [ "$status" -eq 1 ]
-  [[ "$output" == *"no cost report"* ]] || false
-  jq -n '{result: "increase", monthly_delta: 9, currency: "USD", resources: [], assumptions: [], sources: []}' > "$RUN/cost.json"
-  "$ROOT/bin/mr-report.sh" post --repo "$RUI" --run "$RUN" --mr 31 >/dev/null
-  run review_
-  [ "$(jq -c '[.reports.cost, .approval]' <<<"$output")" = '[true,"needed"]' ]
-  [[ "$(jq -r '.risk.reasons | join(" ")' <<<"$output")" == *"the cost report says increase"* ]] || false
-  run team "$REPO" merge --iid 14
-  [ "$status" -eq 1 ]
-  [[ "$output" == *"a person approves it first"* ]] || false
-}
-
-@test "ask: in production a high-risk change gets needs::approval and a comment with the reasons" {
-  cfg_set '.stage = "production" | .risk.max_changed_lines = 2'
-  [ "$(review_ | jq -r .approval)" = needed ]
-  run team "$REPO" ask --iid 14
+@test "red-main: a merge commit is reverted to its first parent" {
+  red_world
+  git -C "$REPO" reset -q --hard HEAD~1
+  git -C "$REPO" checkout -q -b story/6; echo also-broken > "$REPO/bad6.txt"; git -C "$REPO" add bad6.txt; git -C "$REPO" commit -qm "story 6"
+  git -C "$REPO" checkout -q main; git -C "$REPO" merge -q --no-ff -m "Merge story 6" story/6
+  BAD="$(git -C "$REPO" rev-parse HEAD)"; git -C "$REPO" push -q -f origin main
+  printf '[{"id":2,"status":"failed","sha":"%s","web_url":"https://gitlab.example/p/2"}]' "$BAD" > "$FAKE_GL/pipelines.json"
+  run lead red-main
   [ "$status" -eq 0 ]
-  [ "$(labels_of 31)" = '["needs::approval"]' ]
-  [ "$(jq -r 'last.body' "$FAKE_GH/comments/31.json" | head -1)" = "<!-- compasso:approval -->" ]
-  [[ "$(jq -r 'last.body' "$FAKE_GH/comments/31.json")" == *"3 changed lines, over the 2-line limit"* ]] || false
-  [ "$(review_ | jq -r .approval)" = asked ]
+  short="$(printf '%s' "$BAD" | cut -c1-8)"
+  [ "$(git -C "$O" show "fix/main-$short:app.txt")" = ok ]
+  ! git -C "$O" cat-file -e "fix/main-$short:bad6.txt" 2>/dev/null || false
 }
 
-@test "ask: refused when nothing needs a person" {
-  run team "$REPO" ask --iid 14
-  [ "$status" -eq 1 ]
-  [[ "$output" == *"needs no person"* ]] || false
-}
-
-@test "a person's approval lets the lead merge; an agent's never counts, nor one given before the lead asked" {
-  cfg_set '.stage = "production" | .risk.max_changed_lines = 2'
-  reviews '[{"id": 5, "state": "APPROVED", "body": "", "user": {"login": "maria"}, "author_association": "MEMBER", "submitted_at": "2026-10-01T09:00:00Z"}]'
-  FAKE_GH_AT=2026-10-06T09:00:00Z team "$REPO" ask --iid 14 >/dev/null
-  [ "$(review_ | jq -r .approval)" = asked ]
-  later APPROVED bot1
-  [ "$(review_ | jq -r .approval)" = asked ]
-  run team "$REPO" merge --iid 14
-  [ "$status" -eq 1 ]
-  later APPROVED maria
-  [ "$(review_ | jq -c '[.approval, .approved_by]')" = '["approved",["maria"]]' ]
-  run team "$REPO" merge --iid 14
+@test "red-main: a revert that conflicts, or a revert whose pipeline failed, goes to a person" {
+  red_world
+  echo fixed-later > "$REPO/bad.txt"; git -C "$REPO" commit -qam "later change"; git -C "$REPO" push -q origin main
+  run lead red-main
   [ "$status" -eq 0 ]
-  grep -q "^PR merge 31" "$FAKE_GH/calls.log"
-  [ "$(labels_of 31)" = '[]' ]
-}
-
-@test "a person's request for changes sends the story back to the same developer, on the same pull request" {
-  cfg_set '.stage = "production" | .risk.max_changed_lines = 2'
-  FAKE_GH_AT=2026-10-06T09:00:00Z team "$REPO" ask --iid 14 >/dev/null
-  later CHANGES_REQUESTED maria "Show the status as a badge."
-  run review_
-  [ "$(jq -c '[.approval, .rejection.by, .rejection.text]' <<<"$output")" = '["rejected","maria","Show the status as a badge."]' ]
-  printf 'maria asked for changes on #31: show the status as a badge.' > "$BATS_TEST_TMPDIR/m"
-  run team "$REPO" return --iid 14 --body-file "$BATS_TEST_TMPDIR/m"
+  short="$(printf '%s' "$BAD" | cut -c1-8)"
+  head -1 "$FAKE_GL/desc/1.md" | grep -qx "<!-- compasso:ask story= key=red-main-$short -->"
+  grep -q 'reverting it conflicts' "$FAKE_GL/desc/1.md"
+  ! git -C "$O" rev-parse -q --verify "fix/main-$short" >/dev/null || false
+  ! grep -qE '^(POST|PUT) .*merge_requests' "$FAKE_GL/calls.log" || false
+  run lead red-main --failed-fix 31
   [ "$status" -eq 0 ]
-  [ "$(labels_of 14)" = '["compasso::backlog","dev::rui"]' ]
-  [ "$(labels_of 31)" = '[]' ]
-  [ "$(jq -r 'last.body' "$FAKE_GH/comments/14.json" | head -1)" = "<!-- compasso:msg from=lead to=rui -->" ]
+  grep -q 'its revert !31 failed its pipeline too' "$FAKE_GL/desc/2.md"
 }
 
-@test "on GitHub a person's comment is not a rejection: only a request for changes is" {
-  cfg_set '.stage = "production" | .risk.max_changed_lines = 2'
-  FAKE_GH_AT=2026-10-06T09:00:00Z team "$REPO" ask --iid 14 >/dev/null
-  later COMMENTED maria "Looks fine to me."
-  [ "$(review_ | jq -r .approval)" = asked ]
-}
-
-@test "only the tech lead reviews, asks, updates, sends work back and looks after main" {
-  for c in review ask update; do
-    run team "$RUI" "$c" --iid 14
-    [ "$status" -eq 6 ]
-  done
-  echo x > "$BATS_TEST_TMPDIR/m"
-  run team "$RUI" return --iid 14 --body-file "$BATS_TEST_TMPDIR/m"
-  [ "$status" -eq 6 ]
-  run team "$RUI" main
-  [ "$status" -eq 6 ]
-  run team "$RUI" fix-main --title t --body-file "$BATS_TEST_TMPDIR/m"
-  [ "$status" -eq 6 ]
-}
-
-@test "a story with no open pull request has nothing to review" {
-  echo '[]' > "$FAKE_GH/closing/14.json"
-  run review_
-  [ "$status" -eq 1 ]
-  [[ "$output" == *"#14 has no open pull request"* ]] || false
-}
-
-@test "inbox: the tech lead sees what waits for review and each developer's backlog against the queue" {
-  issue 16 "Export CSV" '["dev::ana","compasso::backlog"]' "$READY"'**Tests:** unit' 6
-  issue 17 "Totals" '[]' "$READY"'**Tests:** unit' 6
-  run team "$REPO" inbox --milestone S20 --json
-  [ "$(jq -c '[.review[] | [.iid, .dev]]' <<<"$output")" = '[[14,"rui"]]' ]
-  [ "$(jq -c '[.queue[] | [.dev, .backlog, .ready, .room, .below_min]]' <<<"$output")" = '[["ana",1,1,14,true],["rui",0,0,15,true]]' ]
-  [ "$(jq -c '[.stage, .nothing]' <<<"$output")" = '["mvp",false]' ]
-  run team "$REPO" inbox --milestone S20
-  [[ "$output" == *"To review: #14 Status filter (rui)"* ]] || false
-  [[ "$output" == *"Backlog (queue 15, at least 5): ana 1 ready of 1, rui 0 ready of 0"* ]] || false
-}
-
-# ---------- mvp: merge on green, main kept green by the tech lead ----------
-
-red_main() { # main's last finished run failed at c2; ana's pull request #29, closing #12, put it there
-  issue 12 "Invoice list" '["dev::ana"]' "$READY"'**Tests:** unit' 6
-  jq -n '{workflow_runs: [{head_sha: "c2", status: "completed", conclusion: "failure", html_url: "https://ci/c2"}]}' > "$FAKE_GH/runs.json"
-  mkdir -p "$FAKE_GH/commit-pulls"; echo '[{"number":29,"merged_at":"2026-10-26T09:00:00Z"}]' > "$FAKE_GH/commit-pulls/c2.json"
-  echo '{"number":29,"title":"Invoice list","state":"MERGED","url":"w","isDraft":false,"headRefName":"story/12-list","baseRefName":"main","author":{"login":"rui"},"closingIssuesReferences":{"nodes":[{"number":12}]}}' > "$FAKE_GH/pr-29.json"
-}
-
-@test "merge: in mvp a branch behind its target, or whose pipeline still runs, is set to merge when it passes; a failure or a conflict still stops it" {
-  echo b > src/b.js && git add -A && git commit -qm "main moves" && git push -q origin main
-  echo '{"check_runs":[{"status":"in_progress","conclusion":null}]}' > "$FAKE_GH/checks.json"
-  run team "$REPO" merge --iid 14
+@test "red-main: nothing to do when main is green" {
+  echo '[{"id":1,"status":"success","sha":"x"}]' > "$FAKE_GL/pipelines.json"
+  run lead red-main
   [ "$status" -eq 0 ]
-  grep -q "^PR merge 31 .*--auto" "$FAKE_GH/calls.log"
-  : > "$FAKE_GH/calls.log"
-  echo '{"check_runs":[{"status":"completed","conclusion":"failure"}]}' > "$FAKE_GH/checks.json"
-  run team "$REPO" merge --iid 14
-  [ "$status" -eq 1 ]
-  [[ "$output" == *"pipeline failed"* ]] || false
-  rm "$FAKE_GH/checks.json"; mkdir -p "$FAKE_GH/pulls"; echo '{"number":31,"mergeable_state":"dirty","head":{"sha":"abc"}}' > "$FAKE_GH/pulls/31.json"
-  run team "$REPO" merge --iid 14
-  [ "$status" -eq 1 ]
-  [[ "$output" == *"conflicts with main"* ]] || false
-  ! grep -q "^PR merge" "$FAKE_GH/calls.log"
+  [[ "$output" == "lead: the default branch is not red" ]] || false
 }
 
-@test "merge: in mvp the story's developer sets its own low-risk change to merge; never another's, one a person must approve, or in production" {
-  run team "$RUI" merge --iid 14
+@test "github: the tech lead merges with auto-merge, reopens, and files the after-MVP list" {
+  cfg_set '.tracker.provider = "github" | .tracker.host = "github.com"'
+  export FAKE_GH="$BATS_TEST_TMPDIR/gh"; mkdir -p "$FAKE_GH/issues"; : > "$FAKE_GH/calls.log"; echo 20 > "$FAKE_GH/next_number"
+  echo '{"number":5,"title":"s","state":"closed","labels":[],"body":""}' > "$FAKE_GH/issues/5.json"
+  echo '{"number":30,"title":"pr","state":"open","labels":[],"body":""}' > "$FAKE_GH/issues/30.json"
+  run lead merge --mr 30
   [ "$status" -eq 0 ]
-  grep -q "^PR merge 31 .*--auto" "$FAKE_GH/calls.log"
-  [ "$(labels_of 31)" = '["compasso::auto-merged"]' ]
-  : > "$FAKE_GH/calls.log"
-  ANA="$BATS_TEST_TMPDIR/ana"; mkdir -p "$ANA"; cp -R "$REPO/.compasso" "$ANA/"
-  "$ROOT/bin/persona.sh" set --repo "$ANA" --persona developer --name ana >/dev/null
-  run team "$ANA" merge --iid 14
-  [ "$status" -eq 6 ]
-  [[ "$output" == *"rui's"* ]] || false
-  # an infrastructure change with no cost report needs a person, even in mvp
-  git fetch -q origin story/14-status && git checkout -q -b story/14-status origin/story/14-status
-  mkdir -p infra && echo 'resource "x" "y" {}' > infra/main.tf && git add -A && git commit -qm infra && git push -q origin story/14-status
-  git checkout -q main
-  run team "$RUI" merge --iid 14
-  [ "$status" -eq 6 ]
-  [[ "$output" == *"the tech lead"* ]] || false
-  cfg_set '.stage = "production"'; cp "$REPO/.compasso/project.yaml" "$RUI/.compasso/project.yaml"
-  run team "$RUI" merge --iid 14
-  [ "$status" -eq 6 ]
-  ! grep -q "^PR merge" "$FAKE_GH/calls.log"
-}
-
-@test "main: green says so; red stops every merge, turns off auto-merge where it was set, and names the change that broke it" {
-  run team "$REPO" main
-  [ "$status" -eq 0 ]
-  [ "$(jq -c '[.red, .pipeline]' <<<"$output")" = '[false,"none"]' ]
-  red_main
-  echo '[{"number":31,"auto_merge":{"merge_method":"merge"}},{"number":33,"auto_merge":null}]' > "$FAKE_GH/pr-query.json"
-  run team "$REPO" main
-  [ "$status" -eq 0 ]
-  [ "$(jq -c '[.red, .web_url, .broken_by.mr, .broken_by.stories, .broken_by.dev, .fix, .disarmed]' <<<"$output")" = '[true,"https://ci/c2",29,[12],"ana",null,[31]]' ]
-  grep -q '^PR merge 31 --repo github.com/acme/app --disable-auto' "$FAKE_GH/calls.log"
-  for r in "$REPO" "$RUI"; do
-    run team "$r" merge --iid 14
-    [ "$status" -eq 1 ]
-    [[ "$output" == *"main is red"* ]] || false
-  done
-  ! grep -q "^PR merge 31 .*--auto" "$FAKE_GH/calls.log"
-}
-
-@test "fix-main: the fix for a red main is filed once, as a blocker bug next to the story that broke it, and merges while main is red" {
-  printf '## Expected\nmain passes again\n' > "$BATS_TEST_TMPDIR/fix.md"; echo 40 > "$FAKE_GH/next_number"
-  run team "$REPO" fix-main --title "Fix main" --body-file "$BATS_TEST_TMPDIR/fix.md"
-  [ "$status" -eq 1 ]
-  [[ "$output" == *"main is not red"* ]] || false
-  red_main
-  run team "$REPO" fix-main --title "Fix main" --body-file "$BATS_TEST_TMPDIR/fix.md"
-  [ "$status" -eq 0 ]
-  [ "$output" = 40 ]
-  [ "$(labels_of 40)" = '["compasso::fix-main","severity::blocker","type::bug"]' ]
-  [ "$(cat "$FAKE_GH/parent/40")" = 12 ]
-  [ "$(team "$REPO" fix-main --title "Fix main" --body-file "$BATS_TEST_TMPDIR/fix.md")" = 40 ]
-  [ ! -e "$FAKE_GH/issues/41.json" ]
-  [ "$(team "$REPO" main | jq -r .fix)" = 40 ]
-  # the fix's own pull request merges while main is red
-  jq '.labels += [{name: "compasso::fix-main"}]' "$FAKE_GH/issues/14.json" > "$FAKE_GH/tmp" && mv "$FAKE_GH/tmp" "$FAKE_GH/issues/14.json"
-  run team "$REPO" merge --iid 14
-  [ "$status" -eq 0 ]
-  # a closed fix that left main red is no fix
-  jq '.state = "closed"' "$FAKE_GH/issues/40.json" > "$FAKE_GH/tmp" && mv "$FAKE_GH/tmp" "$FAKE_GH/issues/40.json"
-  [ "$(team "$REPO" main | jq -r .fix)" = null ]
+  grep -q 'PR merge 30 --repo github.com/acme/app --auto --merge' "$FAKE_GH/calls.log"
+  "$ROOT/bin/tracker.sh" reopen --repo "$REPO" --iid 5 >/dev/null
+  [ "$(jq -r .state "$FAKE_GH/issues/5.json")" = open ]
+  "$ROOT/bin/tracker.sh" mr-label --repo "$REPO" --mr 30 --add compasso::rework >/dev/null
+  [ "$(jq -r '.labels | map(.name) | join(",")' "$FAKE_GH/issues/30.json")" = compasso::rework ]
+  lead later --body-file "$BATS_TEST_TMPDIR/f.md" >/dev/null
+  lead later --body-file "$BATS_TEST_TMPDIR/f.md" >/dev/null
+  [ "$(jq -r .body "$FAKE_GH/issues/20.json")" = '<!-- compasso:after-mvp list -->' ]
+  [ ! -e "$FAKE_GH/issues/21.json" ]
+  [ "$(jq length "$FAKE_GH/comments/20.json")" -eq 2 ]
 }

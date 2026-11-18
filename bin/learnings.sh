@@ -10,7 +10,7 @@
 #   ---
 #   title: <one line>
 #   paths: ["src/billing/**"]        # globs it applies to; [] means everywhere
-#   roles: [security, builder]       # planner tester builder reviewer security approver shipper
+#   roles: [security, developer]     # planner tester developer reviewer security
 #   date: 2026-09-24
 #   source: "#8"                     # where it was learnt
 #   ---
@@ -33,7 +33,7 @@ while [ $# -gt 0 ]; do
   esac
 done
 DIR="$REPO/docs/learnings"
-ROLES="planner tester builder reviewer security approver shipper mutator finops"
+ROLES="planner tester developer builder reviewer security"   # builder: the developer, in lessons written before 4.0
 
 lessons() { [ -d "$DIR" ] && find "$DIR" -maxdepth 1 -name '*.md' | sort; }
 front() { yq --front-matter=extract -o=json '.' "$1" 2>/dev/null; }
