@@ -9,6 +9,14 @@ Two pieces of writing, read against 4.0.0:
 - [How the Claude Code team thinks about verification](https://claude.dev/blog/how-the-claude-code-team-thinks-about-verification/): you delegate only what you can verify; a person defines "done" and reviews the evidence instead of every diff; end-to-end tests first, because they are hard to fool; checks stay out of reach of the changes they judge; every commit says how it was verified, "none" included; a new gate starts in observe mode; tune one reviewer rather than stacking them; a miss becomes a rule only when it recurs, and rules are pruned.
 - [Our Architecture of an AI Software Factory](https://www.supermodular.ai/blog/ai-software-factory-architecture): a control plane decides what runs next and whether its output is accepted, and an executor runs one turn; every deliverable has deterministic checks, and an unknown check is a fail; agents hold no credentials and have no merge tool; a ledger per task and commit trailers trace a revert back to the step that caused it; gates start human and come out one at a time on evidence: promotion is proposed, demotion is automatic.
 
+Read on 2026-11-19, on Proof-Driven Development (PDD):
+
+- [Formally verifying agent-written full-stack web apps with PDD Kit](https://www.microsoft.com/en-us/research/blog/formally-verifying-agent-written-full-stack-web-apps-with-pdd-kit/): the person reviews intent and the spec's clauses, not the proof; each requirement is marked proved, tested, trusted or not promised; each trusted piece gets a contract and a test per clause; one planted bug per clause must be rejected. Verus, so Rust only; in a 5,000-line app only login was proved.
+- [Dafny](https://dafny.org/), and Dafny in web apps ([Midspiral](https://midspiral.com/blog/from-intent-to-proof-dafny-verification-for-web-apps), [lemmafit](https://github.com/midspiral/lemmafit)): domain logic in Dafny compiled to JavaScript; proofs of over 10 minutes; "verification doesn't cover integration"; the model may change the spec.
+- [Formally Verifying the Easy Part](https://brainflow.substack.com/p/formally-verifying-the-easy-part): about a quarter of a web app's code is pure enough to prove, and the real bugs were at the boundary (database precision, an enum, a test that passed on a no-op). [AxDafny](https://arxiv.org/abs/2606.32007): verified is not the same as passing the real tests.
+
+The decision: PDD is not Compasso's base. The GoSales failure was loops and process weight, not wrong logic; proof covers a small part of a web app, depends on the language, and long proof runs inside a job risk the loops again. Its stack-independent ideas go into 4.1 and 4.2, and formal proof becomes an optional lane (4.5), once the pilot shows correctness is the next problem.
+
 4.0.0 already has the shape: `bin/run.sh` and `bin/next.jq` with the tracker are the control plane, each job is a fresh session with a time limit, `needs::human` is the structured question, two failures in a row go to a person, and `events.jsonl` is a ledger.
 
 Two axes, kept apart:
@@ -22,12 +30,16 @@ Two axes, kept apart:
 2. The tracker is the broker: agents' accounts are Developers, and only the tech lead's account (Maintainer) merges to the protected default branch. Setup checks it and says how to fix it.
 3. Commit trailers: `Compasso-Job: build:12` and `Compasso-Verified: verify.sh | none`. A red-main revert names the job that caused it; the report counts unverified commits.
 4. Flaky tests: never skipped, slept on or retried. Fix the cause, or delete the test and say why.
+5. The spec is out of the agent's reach: a change to a feature's acceptance (or to a spec file) goes to a person, like the paths in item 1.
+6. One mutation per acceptance line: the review plants one bug for each line, and the story's tests must catch it. A test that passes on a no-op is found here.
 
 ## 4.2 Verify by running the change
 
 1. Before `deliver`, a job runs the feature's acceptance lines on staging with Playwright (`prototype.image`) and attaches screenshots and traces to the question: the person reviews evidence, and tests by hand only what they want.
 2. In `mvp` too: one end-to-end check per feature, on staging, rather than per merge request. The MVP stays fast and gains a check that is hard to fool.
 3. Guidance for property tests (invariants, round trips) and differential tests (old against new) in rewrites and migrations.
+4. Each acceptance line says how it is checked: `e2e`, `tested`, `trusted` or `not promised`. The deliver question shows them, so the person sees what is promised and how.
+5. What a feature trusts (an outside API, the database, the clock) is listed with its contract, and each contract has a test.
 
 ## 4.3 Gates per step, with a trust ladder
 
@@ -40,6 +52,17 @@ Two axes, kept apart:
 
 1. A tech lead job mines rework comments and reverts; a lesson is written only for a pattern seen at least twice, and lessons that no longer apply are pruned.
 2. In `production`, try one reviewer with a checklist of lessons with diff-readable triggers, and security only on sensitive paths, instead of the reviewer and security on every merge request. Measure against reverts and bugs before switching.
+
+## 4.5 An optional proof lane
+
+Only if the pilot and 4.2 show that wrong logic reaching staging is the next problem.
+
+1. A story may name a pure, critical module to prove (money, permissions, a state machine), in `production` or on `risk.sensitive_paths`: `proof: <module>`.
+2. The person approves its spec (requires and ensures in plain words) before the build; the spec is a protected path.
+3. The pipeline runs the verifier as a deterministic check; an `assume`, `{:verify false}` or trusted body not approved is a fail.
+4. Compasso drives an existing toolchain (Dafny compiled to the project's language, Verus for Rust, lemmafit or PDD Kit) rather than building its own; a proof run counts against `run.job_minutes` and `run.failures` like any job.
+
+Open questions: which stacks (Verus is Rust only; Dafny compiles to JS, Python, Go, Java and C#), who reviews specs without adding to the person's questions, and whether proof belongs in `mvp` at all.
 
 ## Not planned
 
